@@ -41,13 +41,15 @@ The first bootstrap slice provides:
   - `GET /status`
   - `GET /state`
   - `GET /capabilities`
+  - `POST /v1/secrets`
+  - `POST /v1/resolve`
 - CLI-style commands:
   - `secretsbroker serve`
   - `secretsbroker status`
   - `secretsbroker version`
 - package/test/verify scripts following the service-template contract
 
-Secret storage, unlock, policy, audit, provider/source adapters, and resolve/write-back implementations are intentionally future issues. The initial local API/bootstrap contract is documented in `docs/local-api-bootstrap-contract.md`; lifecycle/source-auth state behavior is documented in `docs/lifecycle-states.md`.
+The first local encrypted store and batched resolve MVP is documented in `docs/local-store-resolve.md`. Portable master-key unlock, policy, provider/source adapters, and write-back implementations are intentionally future issues. The initial local API/bootstrap contract is documented in `docs/local-api-bootstrap-contract.md`; lifecycle/source-auth state behavior is documented in `docs/lifecycle-states.md`.
 
 ## Local development
 
@@ -66,6 +68,7 @@ pwsh -NoLogo -NoProfile -File .\scripts\package.ps1
 Run the daemon directly:
 
 ```powershell
+$env:SECRETSBROKER_MASTER_KEY = "local-dev-key"
 go run .\cmd\secretsbroker serve --listen 127.0.0.1:17890
 ```
 

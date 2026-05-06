@@ -158,21 +158,24 @@ Example response:
     "GET /ready",
     "GET /status",
     "GET /state",
-    "GET /capabilities"
+    "GET /capabilities",
+    "POST /v1/secrets",
+    "POST /v1/resolve"
   ],
   "features": [
     "liveness",
     "readiness",
     "status",
     "state",
-    "capabilities"
-  ],
-  "futureFeatures": [
+    "capabilities",
+    "local-encrypted-store",
     "batched-resolve",
-    "write-back",
-    "source-status",
     "typed-errors",
     "audit-redaction"
+  ],
+  "futureFeatures": [
+    "write-back",
+    "source-status"
   ],
   "outcomes": [
     "setup_needed",
@@ -189,7 +192,7 @@ Example response:
 }
 ```
 
-## Planned resolve contract
+## Batched resolve contract
 
 Endpoint:
 

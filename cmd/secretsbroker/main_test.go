@@ -39,7 +39,7 @@ func TestCapabilitiesExposeBootstrapContract(t *testing.T) {
 	assertContains(t, caps.Endpoints, "GET /capabilities")
 	assertContains(t, caps.Endpoints, "GET /ready")
 	assertContains(t, caps.Features, "readiness")
-	assertContains(t, caps.FutureFeatures, "batched-resolve")
+	assertContains(t, caps.Features, "batched-resolve")
 	assertContains(t, caps.Outcomes, "source_auth_required")
 	assertContains(t, caps.Outcomes, "policy_denied")
 }
@@ -48,7 +48,7 @@ func TestReadyEndpointDistinguishesLivenessFromReadiness(t *testing.T) {
 	state := "locked"
 	affectedRefs := []string{"openclaw/anthropic/api_key"}
 	affectedServices := []string{"openclaw"}
-	server := httptest.NewServer(newHandler(runtimeState{state: &state, affectedRefs: &affectedRefs, affectedServices: &affectedServices}))
+	server := httptest.NewServer(newHandler(runtimeState{state: &state, affectedRefs: &affectedRefs, affectedServices: &affectedServices}, nil))
 	defer server.Close()
 
 	res, err := http.Get(server.URL + "/ready")
