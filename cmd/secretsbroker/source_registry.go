@@ -31,7 +31,7 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 	if backend != nil && !backend.locked() {
 		state = "ready"
 	}
-	return SourceRegistry{Sources: []SourceStatus{
+	sources := []SourceStatus{
 		{
 			SourceID:         "local",
 			Kind:             "local-encrypted-store",
@@ -45,7 +45,38 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 			AffectedRefs:     []string{},
 			AffectedServices: []string{},
 		},
-	}}
+	}
+	if backend != nil {
+		for _, source := range backend.sources.enabledSources() {
+			status := SourceStatus{
+				SourceID:         source.SourceID,
+				Kind:             source.Kind,
+				DisplayName:      firstNonEmpty(source.DisplayName, source.SourceID),
+				Enabled:          source.Enabled,
+				Critical:         source.Critical,
+				Priority:         source.Priority,
+				Capabilities:     capabilitiesForSourceKind(source.Kind),
+				Namespaces:       safeList(source.Namespaces),
+				State:            "ready",
+				AffectedRefs:     []string{},
+				AffectedServices: []string{},
+			}
+			if len(status.Namespaces) == 0 {
+				status.Namespaces = []string{"*"}
+			}
+			sources = append(sources, status)
+		}
+	}
+	return SourceRegistry{Sources: sources}
+}
+
+func capabilitiesForSourceKind(kind string) []string {
+	switch kind {
+	case "env", "file", "exec":
+		return []string{"read", "health"}
+	default:
+		return []string{"health"}
+	}
 }
 
 func registerSourceRegistryHandlers(mux *http.ServeMux, backend *localBackend) {
