@@ -5,21 +5,25 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$ROOT/dist"
 OS_NAME=$(uname -s)
 case "$OS_NAME" in
-  Linux*) PLATFORM="linux" ;;
-  Darwin*) PLATFORM="darwin" ;;
+  Linux*) PLATFORM="linux"; GOOS_VALUE="linux" ;;
+  Darwin*) PLATFORM="darwin"; GOOS_VALUE="darwin" ;;
   *) echo "Unsupported OS for package.sh: $OS_NAME" >&2; exit 1 ;;
 esac
-STAGING="$DIST/echo-service-$PLATFORM"
-TAR_PATH="$DIST/echo-service-$PLATFORM.tar.gz"
+STAGING="$DIST/secretsbroker-$PLATFORM"
+TAR_PATH="$DIST/secretsbroker-$PLATFORM.tar.gz"
 
 mkdir -p "$DIST"
 rm -rf "$STAGING"
 mkdir -p "$STAGING"
 
-cp -R "$ROOT/runtime/$PLATFORM" "$STAGING/runtime"
-cp -R "$ROOT/config" "$STAGING/config"
+(
+  cd "$ROOT"
+  GOOS="$GOOS_VALUE" GOARCH=amd64 go build -o "$STAGING/secretsbroker" ./cmd/secretsbroker
+)
 
-chmod +x "$STAGING/runtime/echo-service.sh" 2>/dev/null || true
+cp -R "$ROOT/config" "$STAGING/config"
+cp "$ROOT/service.json" "$STAGING/service.json"
+chmod +x "$STAGING/secretsbroker"
 
 rm -f "$TAR_PATH"
 tar -czf "$TAR_PATH" -C "$STAGING" .
