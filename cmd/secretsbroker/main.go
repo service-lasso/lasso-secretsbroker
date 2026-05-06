@@ -119,6 +119,8 @@ func run(args []string) error {
 		return printStatus(args[1:])
 	case "key":
 		return runKey(args[1:])
+	case "session":
+		return runSession(args[1:])
 	case "version":
 		fmt.Println(version)
 		return nil
@@ -132,12 +134,13 @@ func run(args []string) error {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "Usage: secretsbroker <serve|status|key|version>")
+	fmt.Fprintln(os.Stderr, "Usage: secretsbroker <serve|status|key|session|version>")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  serve   Start the local-first @secretsbroker daemon")
 	fmt.Fprintln(os.Stderr, "  status  Print current broker state JSON")
 	fmt.Fprintln(os.Stderr, "  key     Manage portable master-key foundation")
+	fmt.Fprintln(os.Stderr, "  session Manage local API session/token foundation")
 	fmt.Fprintln(os.Stderr, "  version Print broker version")
 }
 
@@ -250,6 +253,7 @@ func serve(args []string) error {
 	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "local development master key; empty means locked")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
+	apiToken := fs.String("api-token", getenvDefault("SECRETSBROKER_API_TOKEN", ""), "local API token for secret-bearing endpoints")
 	affectedRefs := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_REFS", "")))
 	affectedServices := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_SERVICES", "")))
 	fs.Var(&affectedRefs, "affected-ref", "affected secret ref to report for non-ready states; repeatable")
@@ -272,7 +276,7 @@ func serve(args []string) error {
 		return err
 	}
 
-	server := &http.Server{Handler: newHandler(stateView, backend), ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{Handler: newHandler(stateView, backend, localAPISecurity{token: *apiToken}), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		slog.Info("@secretsbroker listening", "addr", ln.Addr().String(), "state", *state)
 		if err := server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -289,7 +293,7 @@ func serve(args []string) error {
 	return server.Shutdown(shutdownCtx)
 }
 
-func newHandler(state runtimeState, backend *localBackend) http.Handler {
+func newHandler(state runtimeState, backend *localBackend, security localAPISecurity) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, defaultHealth(state.current()))
@@ -312,7 +316,7 @@ func newHandler(state runtimeState, backend *localBackend) http.Handler {
 		writeJSON(w, http.StatusOK, defaultCapabilities())
 	})
 	if backend != nil {
-		registerLocalStoreHandlers(mux, backend)
+		registerLocalStoreHandlers(mux, backend, security)
 	}
 	return mux
 }

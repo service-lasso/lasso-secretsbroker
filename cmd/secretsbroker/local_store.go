@@ -325,10 +325,13 @@ func firstNonEmpty(value, fallback string) string {
 	return fallback
 }
 
-func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend) {
+func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, security localAPISecurity) {
 	mux.HandleFunc("/v1/secrets", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Use POST /v1/secrets.", "invalid_ref", "")
+			return
+		}
+		if !security.require(w, r) {
 			return
 		}
 		var req writeSecretRequest
@@ -352,6 +355,9 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend) {
 	mux.HandleFunc("/v1/resolve", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Use POST /v1/resolve.", "invalid_ref", "")
+			return
+		}
+		if !security.require(w, r) {
 			return
 		}
 		var req resolveRequest
