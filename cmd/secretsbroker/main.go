@@ -227,6 +227,9 @@ func defaultCapabilities() CapabilitiesResponse {
 			"typed-errors",
 			"audit-redaction",
 			"source-status",
+			"env-source",
+			"file-source",
+			"exec-source",
 		},
 		FutureFeatures: []string{
 			"write-back",
@@ -255,6 +258,7 @@ func serve(args []string) error {
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "local development master key; empty means locked")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
 	apiToken := fs.String("api-token", getenvDefault("SECRETSBROKER_API_TOKEN", ""), "local API token for secret-bearing endpoints")
+	sourcesPath := fs.String("sources", getenvDefault("SECRETSBROKER_SOURCES_PATH", ""), "source adapter config path")
 	affectedRefs := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_REFS", "")))
 	affectedServices := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_SERVICES", "")))
 	fs.Var(&affectedRefs, "affected-ref", "affected secret ref to report for non-ready states; repeatable")
@@ -271,6 +275,11 @@ func serve(args []string) error {
 		return err
 	}
 	backend := newLocalBackend(*storePath, *auditPath, material.Value)
+	sources, err := loadSourceConfig(*sourcesPath)
+	if err != nil {
+		return err
+	}
+	backend.sources = sources
 
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {

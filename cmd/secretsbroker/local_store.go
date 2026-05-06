@@ -32,6 +32,7 @@ type localBackend struct {
 	storePath string
 	auditPath string
 	masterKey string
+	sources   sourceConfigFile
 	now       func() time.Time
 }
 
@@ -203,8 +204,18 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 		default:
 			entry, ok := store.Secrets[ref]
 			if !ok {
-				result.Outcome = "missing_ref"
-				result.Message = "Secret ref was not found."
+				sourceResult := b.sources.resolve(ref)
+				if sourceResult.Found {
+					result.Outcome = sourceResult.Outcome
+					result.Message = sourceResult.Message
+					if sourceResult.Outcome == "ready" {
+						result.Value = sourceResult.Value
+						result.Metadata = &SecretMetadata{SourceID: sourceResult.SourceID, Version: "source"}
+					}
+				} else {
+					result.Outcome = "missing_ref"
+					result.Message = "Secret ref was not found."
+				}
 			} else if value, err := b.decrypt(entry.Payload); err != nil {
 				result.Outcome = "degraded"
 				result.Message = "Secret payload could not be decrypted."
