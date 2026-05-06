@@ -37,15 +37,17 @@ The first bootstrap slice provides:
 - minimal Go daemon
 - local HTTP endpoints:
   - `GET /health`
+  - `GET /ready`
   - `GET /status`
   - `GET /state`
+  - `GET /capabilities`
 - CLI-style commands:
   - `secretsbroker serve`
   - `secretsbroker status`
   - `secretsbroker version`
 - package/test/verify scripts following the service-template contract
 
-Secret storage, unlock, policy, audit, provider/source adapters, and resolve/write-back APIs are intentionally future issues.
+Secret storage, unlock, policy, audit, provider/source adapters, and resolve/write-back implementations are intentionally future issues. The initial local API and bootstrap contract is documented in `docs/local-api-bootstrap-contract.md`.
 
 ## Local development
 
