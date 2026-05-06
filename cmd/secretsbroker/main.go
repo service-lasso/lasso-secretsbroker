@@ -214,6 +214,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"GET /capabilities",
 			"POST /v1/secrets",
 			"POST /v1/resolve",
+			"GET /v1/sources/status",
 		},
 		Features: []string{
 			"liveness",
@@ -225,10 +226,10 @@ func defaultCapabilities() CapabilitiesResponse {
 			"batched-resolve",
 			"typed-errors",
 			"audit-redaction",
+			"source-status",
 		},
 		FutureFeatures: []string{
 			"write-back",
-			"source-status",
 		},
 		Outcomes: append([]string(nil), typedOutcomes...),
 	}
@@ -317,6 +318,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 	})
 	if backend != nil {
 		registerLocalStoreHandlers(mux, backend, security)
+		registerSourceRegistryHandlers(mux, backend)
 	}
 	return mux
 }

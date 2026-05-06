@@ -161,7 +161,8 @@ Example response:
     "GET /state",
     "GET /capabilities",
     "POST /v1/secrets",
-    "POST /v1/resolve"
+    "POST /v1/resolve",
+    "GET /v1/sources/status"
   ],
   "features": [
     "liveness",
@@ -172,11 +173,11 @@ Example response:
     "local-encrypted-store",
     "batched-resolve",
     "typed-errors",
-    "audit-redaction"
+    "audit-redaction",
+    "source-status"
   ],
   "futureFeatures": [
-    "write-back",
-    "source-status"
+    "write-back"
   ],
   "outcomes": [
     "setup_needed",
@@ -299,7 +300,7 @@ Planned write-back operations:
 - `invalidate`
 - `reconnect`
 
-## Planned source status contract
+## Source status contract
 
 Endpoint:
 
