@@ -1,14 +1,14 @@
 {
-  "id": "echo-service",
-  "name": "Echo Service",
-  "description": "Minimal sample service used to prove the service-template contract.",
+  "id": "@secretsbroker",
+  "name": "Service Lasso Secrets Broker",
+  "description": "Lean local-first Vault-like secrets broker for Service Lasso bootstrap, service identities, policy, audit, and secret resolution.",
   "enabled": true,
   "version": "0.1.0",
   "logoutput": true,
   "icon": [
     {
       "provider": "lucide",
-      "name": "terminal"
+      "name": "key-round"
     }
   ],
   "servicetype": 50,
@@ -16,7 +16,7 @@
   "logo": [],
   "logs": {
     "default": {
-      "path": "logs/echo-service.log"
+      "path": "logs/secretsbroker.log"
     }
   },
   "meta": {
@@ -28,107 +28,123 @@
     "license": "Apache-2.0",
     "repository": {
       "type": "git",
-      "url": "https://github.com/service-lasso/service-template.git"
+      "url": "https://github.com/service-lasso/lasso-secretsbroker.git"
     },
-    "websiteUrl": "https://github.com/service-lasso/service-template",
-    "documentationUrl": "https://github.com/service-lasso/service-template/blob/main/README.md",
-    "issuesUrl": "https://github.com/service-lasso/service-template/issues",
+    "websiteUrl": "https://github.com/service-lasso/lasso-secretsbroker",
+    "documentationUrl": "https://github.com/service-lasso/lasso-secretsbroker/blob/main/README.md",
+    "issuesUrl": "https://github.com/service-lasso/lasso-secretsbroker/issues",
     "support": {
-      "issuesUrl": "https://github.com/service-lasso/service-template/issues"
+      "issuesUrl": "https://github.com/service-lasso/lasso-secretsbroker/issues"
     },
     "links": {
-      "repository": "https://github.com/service-lasso/service-template",
-      "issues": "https://github.com/service-lasso/service-template/issues",
-      "documentation": "https://github.com/service-lasso/service-template/blob/main/README.md"
+      "repository": "https://github.com/service-lasso/lasso-secretsbroker",
+      "issues": "https://github.com/service-lasso/lasso-secretsbroker/issues",
+      "documentation": "https://github.com/service-lasso/lasso-secretsbroker/blob/main/README.md"
     },
     "tags": [
       "service-lasso",
-      "template",
-      "example-service"
+      "secrets",
+      "broker",
+      "local-first",
+      "vault-like"
     ]
   },
   "artifact": {
     "kind": "archive",
     "source": {
       "type": "github-release",
-      "repo": "service-lasso/service-template",
+      "repo": "service-lasso/lasso-secretsbroker",
       "channel": "latest"
     },
     "platforms": {
       "win32": {
-        "assetName": "echo-service-win32.zip",
+        "assetName": "secretsbroker-win32.zip",
         "archiveType": "zip",
-        "command": "./echo-service.exe",
-        "args": []
+        "command": "./secretsbroker.exe",
+        "args": [
+          "serve"
+        ]
       },
       "darwin": {
-        "assetName": "echo-service-darwin.tar.gz",
+        "assetName": "secretsbroker-darwin.tar.gz",
         "archiveType": "tar.gz",
-        "command": "./echo-service",
-        "args": []
+        "command": "./secretsbroker",
+        "args": [
+          "serve"
+        ]
       },
       "linux": {
-        "assetName": "echo-service-linux.tar.gz",
+        "assetName": "secretsbroker-linux.tar.gz",
         "archiveType": "tar.gz",
-        "command": "./echo-service",
-        "args": []
+        "command": "./secretsbroker",
+        "args": [
+          "serve"
+        ]
       },
       "default": {
-        "assetName": "echo-service-win32.zip",
+        "assetName": "secretsbroker-win32.zip",
         "archiveType": "zip",
-        "command": "./echo-service.exe",
-        "args": []
+        "command": "./secretsbroker.exe",
+        "args": [
+          "serve"
+        ]
       }
     }
   },
   "actions": {
     "install": {
-      "description": "Acquire or unpack the packaged echo-service runtime artifact.",
+      "description": "Acquire or unpack the packaged @secretsbroker runtime artifact.",
       "mode": "converge-install",
       "idempotent": true
     },
     "config": {
-      "description": "Materialize deployment-local echo-service config and env values.",
+      "description": "Materialize deployment-local @secretsbroker config and env values.",
       "mode": "converge-config",
       "idempotent": true
     },
     "update": {
-      "description": "Apply a newer release artifact and reconcile update-time changes before restart.",
+      "description": "Apply a newer @secretsbroker release artifact and reconcile update-time changes before restart.",
       "mode": "converge-update",
       "idempotent": true
     },
     "start": {
-      "description": "Start the sample echo service.",
+      "description": "Start the @secretsbroker daemon.",
       "mode": "runtime-start",
       "idempotent": true
     },
     "stop": {
-      "description": "Stop the sample echo service gracefully.",
+      "description": "Stop the @secretsbroker daemon gracefully.",
       "mode": "runtime-stop",
       "idempotent": true
     },
     "restart": {
-      "description": "Restart the sample echo service after config or update changes.",
+      "description": "Restart @secretsbroker after config or update changes.",
       "mode": "runtime-restart",
       "idempotent": false
     },
     "rollback": {
-      "description": "Restore the previously deployed artifact if an update fails validation.",
+      "description": "Restore the previously deployed @secretsbroker artifact if an update fails validation.",
       "mode": "state-rollback",
       "idempotent": false
     }
   },
   "execconfig": {
-    "serviceorder": 100,
-    "serviceport": 0,
-    "execcwd": "runtime",
-    "executable": "echo-service",
+    "serviceorder": 5,
+    "serviceport": 17890,
+    "execcwd": ".",
+    "executable": "secretsbroker",
+    "args": [
+      "serve"
+    ],
     "env": {
-      "ECHO_MESSAGE": "hello from service-template"
+      "SECRETSBROKER_STATE": "setup_needed",
+      "SECRETSBROKER_LISTEN": "127.0.0.1:17890"
     },
     "depend_on": [],
     "healthcheck": {
-      "type": "process"
+      "type": "http",
+      "url": "http://127.0.0.1:17890/health",
+      "timeoutSeconds": 5
     }
   }
 }

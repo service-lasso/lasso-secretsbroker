@@ -36,9 +36,9 @@ resolved_path = pathlib.Path(sys.argv[2]).resolve()
 resolved_path.parent.mkdir(parents=True, exist_ok=True)
 
 doc = json.loads(contract_path.read_text())
-doc['artifact']['path'] = '../dist/echo-service-linux.tar.gz'
+doc['artifact']['path'] = '../dist/secretsbroker-linux.tar.gz'
 if sys.platform == 'darwin':
-    doc['artifact']['path'] = '../dist/echo-service-darwin.tar.gz'
+    doc['artifact']['path'] = '../dist/secretsbroker-darwin.tar.gz'
 resolved_path.write_text(json.dumps(doc, indent=2) + '\n')
 PY
 

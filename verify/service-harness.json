@@ -1,7 +1,7 @@
 {
-  "serviceId": "echo-service",
+  "serviceId": "@secretsbroker",
   "artifact": {
-    "path": "dist/echo-service-win32.zip",
+    "path": "dist/secretsbroker-win32.zip",
     "kind": "archive"
   },
   "dependencies": [],

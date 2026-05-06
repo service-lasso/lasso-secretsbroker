@@ -41,6 +41,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
       - name: Download released service-lasso-harness binary
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -82,22 +87,22 @@ jobs:
           echo "$BIN_DIR" >> "$GITHUB_PATH"
           echo "SERVICE_LASSO_HARNESS_BIN=$BIN_PATH" >> "$GITHUB_ENV"
 
-      - name: Package starter artifact (Windows)
+      - name: Package Secrets Broker artifact (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: .\scripts\package.ps1
 
-      - name: Package starter artifact (POSIX)
+      - name: Package Secrets Broker artifact (POSIX)
         if: runner.os != 'Windows'
         shell: bash
         run: bash ./scripts/package.sh
 
-      - name: Run starter tests (Windows)
+      - name: Run Secrets Broker tests (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: .\scripts\test.ps1
 
-      - name: Run starter tests (POSIX)
+      - name: Run Secrets Broker tests (POSIX)
         if: runner.os != 'Windows'
         shell: bash
         run: bash ./scripts/test.sh
