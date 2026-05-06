@@ -117,6 +117,8 @@ func run(args []string) error {
 		return serve(args[1:])
 	case "status":
 		return printStatus(args[1:])
+	case "key":
+		return runKey(args[1:])
 	case "version":
 		fmt.Println(version)
 		return nil
@@ -130,11 +132,12 @@ func run(args []string) error {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "Usage: secretsbroker <serve|status|version>")
+	fmt.Fprintln(os.Stderr, "Usage: secretsbroker <serve|status|key|version>")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  serve   Start the local-first @secretsbroker daemon")
 	fmt.Fprintln(os.Stderr, "  status  Print current broker state JSON")
+	fmt.Fprintln(os.Stderr, "  key     Manage portable master-key foundation")
 	fmt.Fprintln(os.Stderr, "  version Print broker version")
 }
 
@@ -246,6 +249,7 @@ func serve(args []string) error {
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
 	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "local development master key; empty means locked")
+	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
 	affectedRefs := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_REFS", "")))
 	affectedServices := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_SERVICES", "")))
 	fs.Var(&affectedRefs, "affected-ref", "affected secret ref to report for non-ready states; repeatable")
@@ -257,7 +261,11 @@ func serve(args []string) error {
 	refs := []string(affectedRefs)
 	services := []string(affectedServices)
 	stateView := runtimeState{state: state, affectedRefs: &refs, affectedServices: &services}
-	backend := newLocalBackend(*storePath, *auditPath, *masterKey)
+	material, err := loadKeyMaterial(*masterKey, *masterKeyFile)
+	if err != nil && !errors.Is(err, errLocked) {
+		return err
+	}
+	backend := newLocalBackend(*storePath, *auditPath, material.Value)
 
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {

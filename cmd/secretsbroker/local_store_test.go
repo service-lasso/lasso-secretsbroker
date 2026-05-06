@@ -36,6 +36,9 @@ func TestLocalBackendWriteSeparatesMetadataAndEncryptedPayload(t *testing.T) {
 	if entry.Payload.Ciphertext == "" || entry.Payload.Nonce == "" {
 		t.Fatalf("encrypted payload missing: %#v", entry.Payload)
 	}
+	if entry.Payload.KeyID != masterKeyID("test-master-key") || entry.Payload.KeyVersion != masterKeyVersion {
+		t.Fatalf("key metadata missing: %#v", entry.Payload)
+	}
 }
 
 func TestLocalBackendResolveBatchOutcomes(t *testing.T) {

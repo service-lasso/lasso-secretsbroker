@@ -55,6 +55,8 @@ Illustrative shape:
       },
       "payload": {
         "alg": "AES-256-GCM",
+        "keyId": "mk-0123456789abcdef",
+        "keyVersion": "v1",
         "nonce": "base64...",
         "ciphertext": "base64..."
       }
@@ -65,15 +67,16 @@ Illustrative shape:
 
 ## Key material
 
-MVP key source:
+MVP key sources:
 
 ```text
 SECRETSBROKER_MASTER_KEY=<development/local key material>
+SECRETSBROKER_MASTER_KEY_FILE=./data/master-key.txt
 ```
 
 No master key means the local store is `locked` for secret read/write/resolve operations.
 
-This is a bootstrap implementation only. Issue #4 will replace/extend this with the portable master-key and OS wrapper unlock foundation.
+Portable master-key identity and key metadata are documented in `docs/portable-master-key.md`. OS wrapper unlock/enrollment remains future scope.
 
 ## Audit log
 
