@@ -46,10 +46,12 @@ The first bootstrap slice provides:
 - CLI-style commands:
   - `secretsbroker serve`
   - `secretsbroker status`
+  - `secretsbroker key status`
+  - `secretsbroker key generate`
   - `secretsbroker version`
 - package/test/verify scripts following the service-template contract
 
-The first local encrypted store and batched resolve MVP is documented in `docs/local-store-resolve.md`. Portable master-key unlock, policy, provider/source adapters, and write-back implementations are intentionally future issues. The initial local API/bootstrap contract is documented in `docs/local-api-bootstrap-contract.md`; lifecycle/source-auth state behavior is documented in `docs/lifecycle-states.md`.
+The first local encrypted store and batched resolve MVP is documented in `docs/local-store-resolve.md`. Portable master-key identity/unlock foundation is documented in `docs/portable-master-key.md`. OS wrapper enrollment, policy, provider/source adapters, and write-back implementations are intentionally future issues. The initial local API/bootstrap contract is documented in `docs/local-api-bootstrap-contract.md`; lifecycle/source-auth state behavior is documented in `docs/lifecycle-states.md`.
 
 ## Local development
 

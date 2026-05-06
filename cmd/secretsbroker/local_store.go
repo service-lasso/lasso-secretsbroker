@@ -58,6 +58,8 @@ type SecretMetadata struct {
 
 type secretPayload struct {
 	Alg        string `json:"alg"`
+	KeyID      string `json:"keyId"`
+	KeyVersion string `json:"keyVersion"`
 	Nonce      string `json:"nonce"`
 	Ciphertext string `json:"ciphertext"`
 }
@@ -281,7 +283,7 @@ func (b *localBackend) encrypt(value string) (secretPayload, error) {
 		return secretPayload{}, err
 	}
 	ciphertext := gcm.Seal(nil, nonce, []byte(value), nil)
-	return secretPayload{Alg: "AES-256-GCM", Nonce: base64.StdEncoding.EncodeToString(nonce), Ciphertext: base64.StdEncoding.EncodeToString(ciphertext)}, nil
+	return secretPayload{Alg: "AES-256-GCM", KeyID: masterKeyID(b.masterKey), KeyVersion: masterKeyVersion, Nonce: base64.StdEncoding.EncodeToString(nonce), Ciphertext: base64.StdEncoding.EncodeToString(ciphertext)}, nil
 }
 
 func (b *localBackend) decrypt(payload secretPayload) (string, error) {
