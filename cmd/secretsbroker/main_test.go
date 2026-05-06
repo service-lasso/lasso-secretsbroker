@@ -46,7 +46,9 @@ func TestCapabilitiesExposeBootstrapContract(t *testing.T) {
 
 func TestReadyEndpointDistinguishesLivenessFromReadiness(t *testing.T) {
 	state := "locked"
-	server := httptest.NewServer(newHandler(&state))
+	affectedRefs := []string{"openclaw/anthropic/api_key"}
+	affectedServices := []string{"openclaw"}
+	server := httptest.NewServer(newHandler(runtimeState{state: &state, affectedRefs: &affectedRefs, affectedServices: &affectedServices}))
 	defer server.Close()
 
 	res, err := http.Get(server.URL + "/ready")
@@ -67,6 +69,14 @@ func TestReadyEndpointDistinguishesLivenessFromReadiness(t *testing.T) {
 	if body.Outcome != "locked" {
 		t.Fatalf("outcome = %q", body.Outcome)
 	}
+	if body.KeyState != "locked" {
+		t.Fatalf("keyState = %q", body.KeyState)
+	}
+	if body.NextAction != "unlock_broker" {
+		t.Fatalf("nextAction = %q", body.NextAction)
+	}
+	assertContains(t, body.AffectedRefs, "openclaw/anthropic/api_key")
+	assertContains(t, body.AffectedServices, "openclaw")
 
 	state = "ready"
 	res, err = http.Get(server.URL + "/ready")
@@ -76,6 +86,50 @@ func TestReadyEndpointDistinguishesLivenessFromReadiness(t *testing.T) {
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("ready status code = %d", res.StatusCode)
+	}
+}
+
+func TestLifecycleStateOutcomesAndActions(t *testing.T) {
+	tests := []struct {
+		state      string
+		ready      bool
+		keyState   string
+		nextAction string
+	}{
+		{state: "setup_needed", ready: false, keyState: "not_initialized", nextAction: "run_setup"},
+		{state: "ready", ready: true, keyState: "available", nextAction: ""},
+		{state: "locked", ready: false, keyState: "locked", nextAction: "unlock_broker"},
+		{state: "source_auth_required", ready: false, keyState: "available", nextAction: "reconnect_source"},
+		{state: "degraded", ready: false, keyState: "available", nextAction: "inspect_sources"},
+		{state: "policy_denied", ready: false, keyState: "available", nextAction: "review_policy"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.state, func(t *testing.T) {
+			got := defaultState(tt.state)
+			if got.Outcome != tt.state {
+				t.Fatalf("outcome = %q", got.Outcome)
+			}
+			if got.Ready != tt.ready {
+				t.Fatalf("ready = %v", got.Ready)
+			}
+			if got.KeyState != tt.keyState {
+				t.Fatalf("keyState = %q", got.KeyState)
+			}
+			if got.NextAction != tt.nextAction {
+				t.Fatalf("nextAction = %q", got.NextAction)
+			}
+		})
+	}
+}
+
+func TestUnknownStateNormalizesToDegraded(t *testing.T) {
+	got := defaultState("surprise")
+	if got.State != "degraded" {
+		t.Fatalf("state = %q", got.State)
+	}
+	if got.NextAction != "inspect_sources" {
+		t.Fatalf("nextAction = %q", got.NextAction)
 	}
 }
 
