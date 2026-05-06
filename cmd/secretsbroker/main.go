@@ -206,6 +206,8 @@ func defaultCapabilities() CapabilitiesResponse {
 			"GET /status",
 			"GET /state",
 			"GET /capabilities",
+			"POST /v1/secrets",
+			"POST /v1/resolve",
 		},
 		Features: []string{
 			"liveness",
@@ -213,13 +215,14 @@ func defaultCapabilities() CapabilitiesResponse {
 			"status",
 			"state",
 			"capabilities",
-		},
-		FutureFeatures: []string{
+			"local-encrypted-store",
 			"batched-resolve",
-			"write-back",
-			"source-status",
 			"typed-errors",
 			"audit-redaction",
+		},
+		FutureFeatures: []string{
+			"write-back",
+			"source-status",
 		},
 		Outcomes: append([]string(nil), typedOutcomes...),
 	}
@@ -240,6 +243,9 @@ func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	listen := fs.String("listen", getenvDefault("SECRETSBROKER_LISTEN", "127.0.0.1:17890"), "listen address")
 	state := fs.String("state", getenvDefault("SECRETSBROKER_STATE", "setup_needed"), "state to report")
+	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
+	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "local development master key; empty means locked")
 	affectedRefs := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_REFS", "")))
 	affectedServices := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_SERVICES", "")))
 	fs.Var(&affectedRefs, "affected-ref", "affected secret ref to report for non-ready states; repeatable")
@@ -251,13 +257,14 @@ func serve(args []string) error {
 	refs := []string(affectedRefs)
 	services := []string(affectedServices)
 	stateView := runtimeState{state: state, affectedRefs: &refs, affectedServices: &services}
+	backend := newLocalBackend(*storePath, *auditPath, *masterKey)
 
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {
 		return err
 	}
 
-	server := &http.Server{Handler: newHandler(stateView), ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{Handler: newHandler(stateView, backend), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		slog.Info("@secretsbroker listening", "addr", ln.Addr().String(), "state", *state)
 		if err := server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -274,7 +281,7 @@ func serve(args []string) error {
 	return server.Shutdown(shutdownCtx)
 }
 
-func newHandler(state runtimeState) http.Handler {
+func newHandler(state runtimeState, backend *localBackend) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, defaultHealth(state.current()))
@@ -296,6 +303,9 @@ func newHandler(state runtimeState) http.Handler {
 	mux.HandleFunc("/capabilities", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, defaultCapabilities())
 	})
+	if backend != nil {
+		registerLocalStoreHandlers(mux, backend)
+	}
 	return mux
 }
 
