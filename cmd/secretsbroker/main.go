@@ -22,6 +22,15 @@ const (
 	serviceID  = "@secretsbroker"
 )
 
+var lifecycleStates = []string{
+	"setup_needed",
+	"locked",
+	"ready",
+	"source_auth_required",
+	"degraded",
+	"policy_denied",
+}
+
 var typedOutcomes = []string{
 	"setup_needed",
 	"locked",
@@ -60,6 +69,8 @@ type StateResponse struct {
 	State            string   `json:"state"`
 	Ready            bool     `json:"ready"`
 	Outcome          string   `json:"outcome"`
+	KeyState         string   `json:"keyState"`
+	NextAction       string   `json:"nextAction"`
 	AffectedRefs     []string `json:"affectedRefs"`
 	AffectedServices []string `json:"affectedServices"`
 }
@@ -132,7 +143,12 @@ func normalizeState(state string) string {
 	if state == "" {
 		return "setup_needed"
 	}
-	return state
+	for _, allowed := range lifecycleStates {
+		if state == allowed {
+			return state
+		}
+	}
+	return "degraded"
 }
 
 func isReadyState(state string) bool {
@@ -160,6 +176,10 @@ func defaultHealth(state string) HealthResponse {
 }
 
 func defaultState(state string) StateResponse {
+	return stateResponse(state, nil, nil)
+}
+
+func stateResponse(state string, affectedRefs []string, affectedServices []string) StateResponse {
 	state = normalizeState(state)
 	return StateResponse{
 		ServiceID:        serviceID,
@@ -167,8 +187,10 @@ func defaultState(state string) StateResponse {
 		State:            state,
 		Ready:            isReadyState(state),
 		Outcome:          state,
-		AffectedRefs:     []string{},
-		AffectedServices: []string{},
+		KeyState:         keyStateFor(state),
+		NextAction:       nextActionFor(state),
+		AffectedRefs:     safeList(affectedRefs),
+		AffectedServices: safeList(affectedServices),
 	}
 }
 
@@ -218,16 +240,24 @@ func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	listen := fs.String("listen", getenvDefault("SECRETSBROKER_LISTEN", "127.0.0.1:17890"), "listen address")
 	state := fs.String("state", getenvDefault("SECRETSBROKER_STATE", "setup_needed"), "state to report")
+	affectedRefs := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_REFS", "")))
+	affectedServices := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_SERVICES", "")))
+	fs.Var(&affectedRefs, "affected-ref", "affected secret ref to report for non-ready states; repeatable")
+	fs.Var(&affectedServices, "affected-service", "affected service id to report for non-ready states; repeatable")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	refs := []string(affectedRefs)
+	services := []string(affectedServices)
+	stateView := runtimeState{state: state, affectedRefs: &refs, affectedServices: &services}
 
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {
 		return err
 	}
 
-	server := &http.Server{Handler: newHandler(state), ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{Handler: newHandler(stateView), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		slog.Info("@secretsbroker listening", "addr", ln.Addr().String(), "state", *state)
 		if err := server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -244,13 +274,13 @@ func serve(args []string) error {
 	return server.Shutdown(shutdownCtx)
 }
 
-func newHandler(state *string) http.Handler {
+func newHandler(state runtimeState) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, defaultHealth(*state))
+		writeJSON(w, http.StatusOK, defaultHealth(state.current()))
 	})
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
-		body := defaultState(*state)
+		body := state.response()
 		code := http.StatusOK
 		if !body.Ready {
 			code = http.StatusServiceUnavailable
@@ -258,15 +288,99 @@ func newHandler(state *string) http.Handler {
 		writeJSON(w, code, body)
 	})
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, defaultStatus(*state))
+		writeJSON(w, http.StatusOK, defaultStatus(state.current()))
 	})
 	mux.HandleFunc("/state", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, defaultState(*state))
+		writeJSON(w, http.StatusOK, state.response())
 	})
 	mux.HandleFunc("/capabilities", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, defaultCapabilities())
 	})
 	return mux
+}
+
+type runtimeState struct {
+	state            *string
+	affectedRefs     *[]string
+	affectedServices *[]string
+}
+
+func (s runtimeState) current() string {
+	if s.state == nil {
+		return "setup_needed"
+	}
+	return *s.state
+}
+
+func (s runtimeState) response() StateResponse {
+	var refs []string
+	if s.affectedRefs != nil {
+		refs = *s.affectedRefs
+	}
+	var services []string
+	if s.affectedServices != nil {
+		services = *s.affectedServices
+	}
+	return stateResponse(s.current(), refs, services)
+}
+
+type multiFlag []string
+
+func (m *multiFlag) String() string { return strings.Join(*m, ",") }
+
+func (m *multiFlag) Set(value string) error {
+	*m = append(*m, splitCSV(value)...)
+	return nil
+}
+
+func splitCSV(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	return safeList(parts)
+}
+
+func safeList(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	clean := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			clean = append(clean, value)
+		}
+	}
+	return clean
+}
+
+func keyStateFor(state string) string {
+	switch normalizeState(state) {
+	case "setup_needed":
+		return "not_initialized"
+	case "locked":
+		return "locked"
+	default:
+		return "available"
+	}
+}
+
+func nextActionFor(state string) string {
+	switch normalizeState(state) {
+	case "setup_needed":
+		return "run_setup"
+	case "locked":
+		return "unlock_broker"
+	case "source_auth_required":
+		return "reconnect_source"
+	case "degraded":
+		return "inspect_sources"
+	case "policy_denied":
+		return "review_policy"
+	default:
+		return ""
+	}
 }
 
 func writeJSON(w http.ResponseWriter, code int, value any) {

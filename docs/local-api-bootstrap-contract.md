@@ -134,6 +134,8 @@ Example response:
   "state": "setup_needed",
   "ready": false,
   "outcome": "setup_needed",
+  "keyState": "not_initialized",
+  "nextAction": "run_setup",
   "affectedRefs": [],
   "affectedServices": []
 }

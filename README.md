@@ -47,7 +47,7 @@ The first bootstrap slice provides:
   - `secretsbroker version`
 - package/test/verify scripts following the service-template contract
 
-Secret storage, unlock, policy, audit, provider/source adapters, and resolve/write-back implementations are intentionally future issues. The initial local API and bootstrap contract is documented in `docs/local-api-bootstrap-contract.md`.
+Secret storage, unlock, policy, audit, provider/source adapters, and resolve/write-back implementations are intentionally future issues. The initial local API/bootstrap contract is documented in `docs/local-api-bootstrap-contract.md`; lifecycle/source-auth state behavior is documented in `docs/lifecycle-states.md`.
 
 ## Local development
 
