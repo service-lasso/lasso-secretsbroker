@@ -37,6 +37,7 @@ The initial daemon exposes loopback HTTP. Named pipe/Unix socket transports shou
 
 - API version is visible in `status` and `capabilities` responses.
 - Secret values are never returned by status/capabilities/state/source-status endpoints.
+- Secret-bearing endpoints require local API token authentication for the loopback HTTP transport.
 - Resolve responses may include secret material only for requested refs allowed by policy.
 - Error responses use the typed error envelope below.
 - Batch APIs must report per-ref outcomes rather than failing the whole batch whenever practical.

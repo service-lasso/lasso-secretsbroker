@@ -48,7 +48,7 @@ func TestReadyEndpointDistinguishesLivenessFromReadiness(t *testing.T) {
 	state := "locked"
 	affectedRefs := []string{"openclaw/anthropic/api_key"}
 	affectedServices := []string{"openclaw"}
-	server := httptest.NewServer(newHandler(runtimeState{state: &state, affectedRefs: &affectedRefs, affectedServices: &affectedServices}, nil))
+	server := httptest.NewServer(newHandler(runtimeState{state: &state, affectedRefs: &affectedRefs, affectedServices: &affectedServices}, nil, localAPISecurity{}))
 	defer server.Close()
 
 	res, err := http.Get(server.URL + "/ready")

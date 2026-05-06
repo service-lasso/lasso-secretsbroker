@@ -11,11 +11,17 @@ import (
 func TestLocalStoreHTTPWriteAndResolve(t *testing.T) {
 	backend := testBackend(t)
 	state := "ready"
-	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend))
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
 	defer server.Close()
 
 	writeBody := []byte(`{"ref":"openclaw/anthropic/api_key","value":"secret-value","metadata":{"sourceId":"local-test"}}`)
-	writeRes, err := http.Post(server.URL+"/v1/secrets", "application/json", bytes.NewReader(writeBody))
+	writeReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/secrets", bytes.NewReader(writeBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeReq.Header.Set("Content-Type", "application/json")
+	writeReq.Header.Set("Authorization", "Bearer test-token")
+	writeRes, err := http.DefaultClient.Do(writeReq)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +38,13 @@ func TestLocalStoreHTTPWriteAndResolve(t *testing.T) {
 	}
 
 	resolveBody := []byte(`{"requestId":"req-1","serviceId":"openclaw","refs":["openclaw/anthropic/api_key"]}`)
-	resolveRes, err := http.Post(server.URL+"/v1/resolve", "application/json", bytes.NewReader(resolveBody))
+	resolveReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/resolve", bytes.NewReader(resolveBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolveReq.Header.Set("Content-Type", "application/json")
+	resolveReq.Header.Set("X-SecretsBroker-Token", "test-token")
+	resolveRes, err := http.DefaultClient.Do(resolveReq)
 	if err != nil {
 		t.Fatal(err)
 	}
