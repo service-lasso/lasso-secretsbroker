@@ -19,11 +19,12 @@ mkdir -p "$STAGING"
 (
   cd "$ROOT"
   GOOS="$GOOS_VALUE" GOARCH=amd64 go build -o "$STAGING/secretsbroker" ./cmd/secretsbroker
+  GOOS="$GOOS_VALUE" GOARCH=amd64 go build -o "$STAGING/secretsbroker-resolve" ./cmd/secretsbroker-resolve
 )
 
 cp -R "$ROOT/config" "$STAGING/config"
 cp "$ROOT/service.json" "$STAGING/service.json"
-chmod +x "$STAGING/secretsbroker"
+chmod +x "$STAGING/secretsbroker" "$STAGING/secretsbroker-resolve"
 
 rm -f "$TAR_PATH"
 tar -czf "$TAR_PATH" -C "$STAGING" .

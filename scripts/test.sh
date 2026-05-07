@@ -37,6 +37,7 @@ go test ./...
 TMP="$ROOT/.tmp/test"
 mkdir -p "$TMP"
 go build -o "$TMP/secretsbroker" ./cmd/secretsbroker
+go build -o "$TMP/secretsbroker-resolve" ./cmd/secretsbroker-resolve
 
 STATUS_JSON="$($TMP/secretsbroker status)"
 STATUS_JSON="$STATUS_JSON" python3 - <<'PY'
