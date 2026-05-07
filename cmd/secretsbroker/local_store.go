@@ -23,9 +23,13 @@ const (
 )
 
 var (
-	errLocked     = errors.New("secrets broker store is locked")
-	errMissingRef = errors.New("secret ref was not found")
-	errInvalidRef = errors.New("invalid secret ref")
+	errLocked             = errors.New("secrets broker store is locked")
+	errMissingRef         = errors.New("secret ref was not found")
+	errInvalidRef         = errors.New("invalid secret ref")
+	errPolicyDenied       = errors.New("write-back policy denied")
+	errIdentityExpired    = errors.New("launch identity expired")
+	errSourceAuthRequired = errors.New("source authentication required")
+	errBackendDegraded    = errors.New("backend degraded")
 )
 
 type localBackend struct {
@@ -77,6 +81,46 @@ type writeSecretResponse struct {
 	Ref        string         `json:"ref"`
 	Outcome    string         `json:"outcome"`
 	Metadata   SecretMetadata `json:"metadata"`
+}
+
+type writebackPolicy struct {
+	AllowedNamespaces []string `json:"allowedNamespaces"`
+	AllowedOperations []string `json:"allowedOperations"`
+}
+
+type writebackIdentity struct {
+	ServiceID string `json:"serviceId"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type generatedSecretCaptureRequest struct {
+	RequestID          string            `json:"requestId"`
+	Identity           writebackIdentity `json:"identity"`
+	Policy             writebackPolicy   `json:"policy"`
+	Operation          string            `json:"operation"`
+	Namespace          string            `json:"namespace"`
+	Ref                string            `json:"ref"`
+	Value              string            `json:"value"`
+	Metadata           map[string]string `json:"metadata"`
+	RefreshRequired    bool              `json:"refreshRequired"`
+	ReconnectRequired  bool              `json:"reconnectRequired"`
+	InvalidateRefs     []string          `json:"invalidateRefs"`
+	SourceAuthRequired bool              `json:"sourceAuthRequired"`
+}
+
+type generatedSecretCaptureResponse struct {
+	ServiceID         string         `json:"serviceId"`
+	APIVersion        string         `json:"apiVersion"`
+	RequestID         string         `json:"requestId,omitempty"`
+	OwnerServiceID    string         `json:"ownerServiceId"`
+	Operation         string         `json:"operation"`
+	Namespace         string         `json:"namespace"`
+	Ref               string         `json:"ref"`
+	Outcome           string         `json:"outcome"`
+	RefreshRequired   bool           `json:"refreshRequired"`
+	ReconnectRequired bool           `json:"reconnectRequired"`
+	InvalidatedRefs   []string       `json:"invalidatedRefs"`
+	Metadata          SecretMetadata `json:"metadata,omitempty"`
 }
 
 type resolveRequest struct {
@@ -174,6 +218,134 @@ func (b *localBackend) writeSecret(req writeSecretRequest) (writeSecretResponse,
 	}
 	_ = b.audit("write", ref, "ready", "", "")
 	return writeSecretResponse{ServiceID: serviceID, APIVersion: apiVersion, Ref: ref, Outcome: "ready", Metadata: metadata}, nil
+}
+
+func normalizeWritebackOperation(operation string) string {
+	operation = strings.TrimSpace(operation)
+	if operation == "" {
+		return "create"
+	}
+	return operation
+}
+
+func validWritebackOperation(operation string) bool {
+	switch operation {
+	case "create", "update", "rotate", "delete":
+		return true
+	default:
+		return false
+	}
+}
+
+func namespaceAllowed(namespace string, allowed []string) bool {
+	for _, candidate := range allowed {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "*" || candidate == namespace {
+			return true
+		}
+	}
+	return false
+}
+
+func operationAllowed(operation string, allowed []string) bool {
+	for _, candidate := range allowed {
+		if strings.TrimSpace(candidate) == operation {
+			return true
+		}
+	}
+	return false
+}
+
+func (b *localBackend) captureGeneratedSecret(req generatedSecretCaptureRequest) (generatedSecretCaptureResponse, error) {
+	operation := normalizeWritebackOperation(req.Operation)
+	namespace := strings.TrimSpace(req.Namespace)
+	ref := strings.Trim(strings.TrimSpace(req.Ref), "/")
+	fullRef := strings.Trim(namespace+"/"+ref, "/")
+	service := strings.TrimSpace(req.Identity.ServiceID)
+	response := generatedSecretCaptureResponse{
+		ServiceID:         serviceID,
+		APIVersion:        apiVersion,
+		RequestID:         req.RequestID,
+		OwnerServiceID:    service,
+		Operation:         operation,
+		Namespace:         namespace,
+		Ref:               fullRef,
+		RefreshRequired:   req.RefreshRequired,
+		ReconnectRequired: req.ReconnectRequired,
+		InvalidatedRefs:   safeList(req.InvalidateRefs),
+	}
+
+	if namespace == "" || !validSecretRef(namespace) || ref == "" || !validSecretRef(fullRef) || !validWritebackOperation(operation) {
+		_ = b.audit("writeback_capture", fullRef, "invalid_ref", service, req.RequestID)
+		response.Outcome = "invalid_ref"
+		return response, errInvalidRef
+	}
+	if service == "" {
+		_ = b.audit("writeback_capture", fullRef, "identity_expired", service, req.RequestID)
+		response.Outcome = "identity_expired"
+		return response, errIdentityExpired
+	}
+	if strings.TrimSpace(req.Identity.ExpiresAt) != "" {
+		expiresAt, err := time.Parse(time.RFC3339, strings.TrimSpace(req.Identity.ExpiresAt))
+		if err != nil || !expiresAt.After(b.now()) {
+			_ = b.audit("writeback_capture", fullRef, "identity_expired", service, req.RequestID)
+			response.Outcome = "identity_expired"
+			return response, errIdentityExpired
+		}
+	}
+	if !namespaceAllowed(namespace, req.Policy.AllowedNamespaces) || !operationAllowed(operation, req.Policy.AllowedOperations) {
+		_ = b.audit("writeback_capture", fullRef, "policy_denied", service, req.RequestID)
+		response.Outcome = "policy_denied"
+		return response, errPolicyDenied
+	}
+	if req.SourceAuthRequired {
+		_ = b.audit("writeback_capture", fullRef, "source_auth_required", service, req.RequestID)
+		response.Outcome = "source_auth_required"
+		return response, errSourceAuthRequired
+	}
+	if b.locked() {
+		_ = b.audit("writeback_capture", fullRef, "locked", service, req.RequestID)
+		response.Outcome = "locked"
+		return response, errLocked
+	}
+	if operation == "delete" {
+		store, err := b.loadStore()
+		if err != nil {
+			_ = b.audit("writeback_capture", fullRef, "degraded", service, req.RequestID)
+			response.Outcome = "degraded"
+			return response, errBackendDegraded
+		}
+		delete(store.Secrets, fullRef)
+		store.UpdatedAt = b.now()
+		if err := b.saveStore(store); err != nil {
+			_ = b.audit("writeback_capture", fullRef, "degraded", service, req.RequestID)
+			response.Outcome = "degraded"
+			return response, errBackendDegraded
+		}
+		_ = b.audit("writeback_capture", fullRef, "ready", service, req.RequestID)
+		response.Outcome = "ready"
+		return response, nil
+	}
+
+	metadata := map[string]string{"sourceId": firstNonEmpty(req.Metadata["sourceId"], "generated:"+service)}
+	written, err := b.writeSecret(writeSecretRequest{Ref: fullRef, Value: req.Value, Metadata: metadata})
+	if err != nil {
+		if errors.Is(err, errLocked) {
+			response.Outcome = "locked"
+			return response, err
+		}
+		if errors.Is(err, errInvalidRef) {
+			response.Outcome = "invalid_ref"
+			return response, err
+		}
+		_ = b.audit("writeback_capture", fullRef, "degraded", service, req.RequestID)
+		response.Outcome = "degraded"
+		return response, errBackendDegraded
+	}
+	_ = b.audit("writeback_capture", fullRef, "ready", service, req.RequestID)
+	response.Outcome = "ready"
+	response.Metadata = written.Metadata
+	return response, nil
 }
 
 func (b *localBackend) resolve(req resolveRequest) resolveResponse {
@@ -360,6 +532,38 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, secur
 			writeAPIError(w, http.StatusServiceUnavailable, "locked", "Secrets Broker local store is locked.", "locked", "unlock_broker")
 		default:
 			writeAPIError(w, http.StatusInternalServerError, "store_error", "Local store write failed.", "degraded", "inspect_sources")
+		}
+	})
+
+	mux.HandleFunc("/v1/writeback", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Use POST /v1/writeback.", "invalid_ref", "")
+			return
+		}
+		if !security.require(w, r) {
+			return
+		}
+		var req generatedSecretCaptureRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_request", "Request body is not valid JSON.", "invalid_ref", "")
+			return
+		}
+		res, err := backend.captureGeneratedSecret(req)
+		switch {
+		case err == nil:
+			writeJSON(w, http.StatusOK, res)
+		case errors.Is(err, errInvalidRef):
+			writeAPIError(w, http.StatusBadRequest, "invalid_ref", "Generated secret write-back ref is invalid.", "invalid_ref", "")
+		case errors.Is(err, errIdentityExpired):
+			writeAPIError(w, http.StatusUnauthorized, "identity_expired", "Launch identity is missing, invalid, or expired.", "identity_expired", "renew_launch_identity")
+		case errors.Is(err, errPolicyDenied):
+			writeAPIError(w, http.StatusForbidden, "policy_denied", "Write-back policy denied this generated secret capture.", "policy_denied", "review_policy")
+		case errors.Is(err, errSourceAuthRequired):
+			writeAPIError(w, http.StatusFailedDependency, "source_auth_required", "Source authentication is required before write-back can proceed.", "source_auth_required", "reconnect_source")
+		case errors.Is(err, errLocked):
+			writeAPIError(w, http.StatusServiceUnavailable, "locked", "Secrets Broker local store is locked.", "locked", "unlock_broker")
+		default:
+			writeAPIError(w, http.StatusServiceUnavailable, "degraded", "Write-back backend is degraded.", "degraded", "inspect_sources")
 		}
 	})
 

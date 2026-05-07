@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,6 +74,108 @@ func TestLocalBackendResolveBatchOutcomes(t *testing.T) {
 		if !strings.Contains(string(auditBytes), want) {
 			t.Fatalf("audit missing %q: %s", want, string(auditBytes))
 		}
+	}
+}
+
+func TestGeneratedSecretCaptureEnforcesWritebackPolicyAndRedactsAudit(t *testing.T) {
+	backend := testBackend(t)
+	res, err := backend.captureGeneratedSecret(generatedSecretCaptureRequest{
+		RequestID:         "req-writeback-1",
+		Identity:          writebackIdentity{ServiceID: "api-service", ExpiresAt: "2026-05-07T00:05:00Z"},
+		Policy:            writebackPolicy{AllowedNamespaces: []string{"services/api-service"}, AllowedOperations: []string{"create", "update", "rotate"}},
+		Operation:         "create",
+		Namespace:         "services/api-service",
+		Ref:               "runtime/API_TOKEN",
+		Value:             "generated-secret-value",
+		RefreshRequired:   true,
+		ReconnectRequired: true,
+		InvalidateRefs:    []string{"services/api-service/runtime/API_TOKEN"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Outcome != "ready" || res.Ref != "services/api-service/runtime/API_TOKEN" {
+		t.Fatalf("capture response = %#v", res)
+	}
+	resolved := backend.resolve(resolveRequest{ServiceID: "api-service", Refs: []string{"services/api-service/runtime/API_TOKEN"}})
+	if resolved.Results[0].Outcome != "ready" || resolved.Results[0].Value != "generated-secret-value" {
+		t.Fatalf("resolved generated secret = %#v", resolved.Results[0])
+	}
+	auditBytes, err := os.ReadFile(backend.auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(auditBytes), "generated-secret-value") {
+		t.Fatalf("audit contains plaintext generated secret: %s", string(auditBytes))
+	}
+	for _, want := range []string{"writeback_capture", "api-service", "ready"} {
+		if !strings.Contains(string(auditBytes), want) {
+			t.Fatalf("audit missing %q: %s", want, string(auditBytes))
+		}
+	}
+}
+
+func TestGeneratedSecretCaptureDistinctFailureOutcomes(t *testing.T) {
+	tests := []struct {
+		name        string
+		backend     func(t *testing.T) *localBackend
+		req         generatedSecretCaptureRequest
+		wantErr     error
+		wantOutcome string
+	}{
+		{
+			name:        "policy denied",
+			backend:     testBackend,
+			req:         generatedSecretCaptureRequest{Identity: writebackIdentity{ServiceID: "api", ExpiresAt: "2026-05-07T00:05:00Z"}, Policy: writebackPolicy{AllowedNamespaces: []string{"other"}, AllowedOperations: []string{"create"}}, Operation: "create", Namespace: "services/api", Ref: "runtime/token", Value: "secret"},
+			wantErr:     errPolicyDenied,
+			wantOutcome: "policy_denied",
+		},
+		{
+			name:        "expired identity",
+			backend:     testBackend,
+			req:         generatedSecretCaptureRequest{Identity: writebackIdentity{ServiceID: "api", ExpiresAt: "2026-05-06T23:59:00Z"}, Policy: writebackPolicy{AllowedNamespaces: []string{"services/api"}, AllowedOperations: []string{"create"}}, Operation: "create", Namespace: "services/api", Ref: "runtime/token", Value: "secret"},
+			wantErr:     errIdentityExpired,
+			wantOutcome: "identity_expired",
+		},
+		{
+			name:        "locked broker",
+			backend:     func(t *testing.T) *localBackend { b := testBackend(t); b.masterKey = ""; return b },
+			req:         generatedSecretCaptureRequest{Identity: writebackIdentity{ServiceID: "api", ExpiresAt: "2026-05-07T00:05:00Z"}, Policy: writebackPolicy{AllowedNamespaces: []string{"services/api"}, AllowedOperations: []string{"create"}}, Operation: "create", Namespace: "services/api", Ref: "runtime/token", Value: "secret"},
+			wantErr:     errLocked,
+			wantOutcome: "locked",
+		},
+		{
+			name:        "source auth required",
+			backend:     testBackend,
+			req:         generatedSecretCaptureRequest{Identity: writebackIdentity{ServiceID: "api", ExpiresAt: "2026-05-07T00:05:00Z"}, Policy: writebackPolicy{AllowedNamespaces: []string{"services/api"}, AllowedOperations: []string{"create"}}, Operation: "create", Namespace: "services/api", Ref: "runtime/token", Value: "secret", SourceAuthRequired: true},
+			wantErr:     errSourceAuthRequired,
+			wantOutcome: "source_auth_required",
+		},
+		{
+			name: "degraded backend",
+			backend: func(t *testing.T) *localBackend {
+				b := testBackend(t)
+				if err := os.MkdirAll(b.storePath, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				return b
+			},
+			req:         generatedSecretCaptureRequest{Identity: writebackIdentity{ServiceID: "api", ExpiresAt: "2026-05-07T00:05:00Z"}, Policy: writebackPolicy{AllowedNamespaces: []string{"services/api"}, AllowedOperations: []string{"create"}}, Operation: "create", Namespace: "services/api", Ref: "runtime/token", Value: "secret"},
+			wantErr:     errBackendDegraded,
+			wantOutcome: "degraded",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := tt.backend(t).captureGeneratedSecret(tt.req)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tt.wantErr)
+			}
+			if res.Outcome != tt.wantOutcome {
+				t.Fatalf("outcome = %q, want %q", res.Outcome, tt.wantOutcome)
+			}
+		})
 	}
 }
 
