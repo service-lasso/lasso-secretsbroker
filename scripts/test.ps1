@@ -24,7 +24,9 @@ try {
   $tmp = Join-Path $root '.tmp\test'
   New-Item -ItemType Directory -Force -Path $tmp | Out-Null
   $exe = Join-Path $tmp 'secretsbroker.exe'
+  $resolverExe = Join-Path $tmp 'secretsbroker-resolve.exe'
   go build -o $exe ./cmd/secretsbroker
+  go build -o $resolverExe ./cmd/secretsbroker-resolve
 
   $status = & $exe status | ConvertFrom-Json
   if ($status.serviceId -ne '@secretsbroker') {

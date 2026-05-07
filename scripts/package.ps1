@@ -14,6 +14,7 @@ try {
   $env:GOOS = 'windows'
   $env:GOARCH = 'amd64'
   go build -o (Join-Path $staging 'secretsbroker.exe') ./cmd/secretsbroker
+  go build -o (Join-Path $staging 'secretsbroker-resolve.exe') ./cmd/secretsbroker-resolve
 }
 finally {
   Pop-Location
