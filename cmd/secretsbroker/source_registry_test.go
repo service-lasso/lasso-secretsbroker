@@ -24,6 +24,24 @@ func TestDefaultSourceRegistryReflectsLocalKeyState(t *testing.T) {
 	}
 }
 
+func TestSourceRegistryMapsVaultAuthStateWithoutTokenLeak(t *testing.T) {
+	backend := newLocalBackend("store.json", "audit.jsonl", "master-key")
+	backend.sources = sourceConfigFile{Sources: []sourceConfig{
+		{SourceID: "vault-prod", Kind: "vault", DisplayName: "Vault prod", Enabled: true, Address: "https://vault.example.com", TokenEnv: "MISSING_VAULT_TOKEN", Namespaces: []string{"prod/*"}},
+	}}
+
+	registry := defaultSourceRegistry(backend)
+	if len(registry.Sources) != 2 {
+		t.Fatalf("sources = %#v", registry.Sources)
+	}
+	vault := registry.Sources[1]
+	if vault.SourceID != "vault-prod" || vault.State != "source_auth_required" {
+		t.Fatalf("vault source = %#v", vault)
+	}
+	assertContains(t, vault.Capabilities, "read")
+	assertContains(t, vault.Namespaces, "prod/*")
+}
+
 func TestSourceStatusEndpointDoesNotRequireSecretToken(t *testing.T) {
 	backend := newLocalBackend("store.json", "audit.jsonl", "master-key")
 	state := "ready"

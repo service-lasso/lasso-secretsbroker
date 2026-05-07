@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,6 +31,9 @@ type sourceConfig struct {
 	Namespaces          []string                   `json:"namespaces"`
 	TrustedDirs         []string                   `json:"trustedDirs"`
 	AllowSymlinkCommand bool                       `json:"allowSymlinkCommand"`
+	Address             string                     `json:"address"`
+	Token               string                     `json:"token"`
+	TokenEnv            string                     `json:"tokenEnv"`
 	Refs                map[string]sourceRefConfig `json:"refs"`
 }
 
@@ -40,6 +45,7 @@ type sourceRefConfig struct {
 	TimeoutMs      int      `json:"timeoutMs"`
 	MaxStdoutBytes int      `json:"maxStdoutBytes"`
 	UnsafeStdout   bool     `json:"unsafeStdout"`
+	Field          string   `json:"field"`
 }
 
 type sourceResolveResult struct {
@@ -101,6 +107,8 @@ func (s sourceConfig) resolve(ref string, refCfg sourceRefConfig) sourceResolveR
 		return resolveFile(refCfg)
 	case "exec":
 		return s.resolveExec(refCfg)
+	case "vault", "openbao":
+		return s.resolveVault(refCfg)
 	default:
 		return sourceResolveResult{Outcome: "invalid_ref", Message: fmt.Sprintf("Unsupported source kind %q.", s.Kind)}
 	}
@@ -170,6 +178,86 @@ func (s sourceConfig) resolveExec(refCfg sourceRefConfig) sourceResolveResult {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Exec source returned empty value."}
 	}
 	return sourceResolveResult{Outcome: "ready", Value: value}
+}
+
+func (s sourceConfig) resolveVault(refCfg sourceRefConfig) sourceResolveResult {
+	if strings.TrimSpace(s.Address) == "" || strings.TrimSpace(refCfg.Path) == "" || strings.TrimSpace(refCfg.Field) == "" {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Vault/OpenBao source mapping requires address, path, and field."}
+	}
+	token := firstNonEmpty(s.Token, os.Getenv(s.TokenEnv))
+	if strings.TrimSpace(token) == "" {
+		return sourceResolveResult{Outcome: "source_auth_required", Message: "Vault/OpenBao token is missing."}
+	}
+	url := strings.TrimRight(s.Address, "/") + "/v1/" + strings.TrimLeft(refCfg.Path, "/")
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Vault/OpenBao URL is invalid."}
+	}
+	req.Header.Set("X-Vault-Token", token)
+	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 3000)) * time.Millisecond}
+	res, err := client.Do(req)
+	if err != nil {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "Vault/OpenBao source is unavailable."}
+	}
+	defer res.Body.Close()
+	switch res.StatusCode {
+	case http.StatusUnauthorized:
+		return sourceResolveResult{Outcome: "source_auth_required", Message: "Vault/OpenBao token is unauthorized or expired."}
+	case http.StatusForbidden:
+		return sourceResolveResult{Outcome: "policy_denied", Message: "Vault/OpenBao policy denied access."}
+	case http.StatusNotFound:
+		return sourceResolveResult{Outcome: "missing_ref", Message: "Vault/OpenBao path or field was not found."}
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		if vaultResponseSealed(res.Body, firstPositive(refCfg.MaxStdoutBytes, 65536)) {
+			return sourceResolveResult{Outcome: "locked", Message: "Vault/OpenBao source is sealed."}
+		}
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "Vault/OpenBao source returned a non-success status."}
+	}
+	limit := int64(firstPositive(refCfg.MaxStdoutBytes, 65536))
+	body, err := io.ReadAll(io.LimitReader(res.Body, limit+1))
+	if err != nil || int64(len(body)) > limit {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "Vault/OpenBao response could not be read safely."}
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "Vault/OpenBao response was not JSON."}
+	}
+	value, ok := vaultField(payload, refCfg.Field)
+	if !ok || strings.TrimSpace(value) == "" {
+		return sourceResolveResult{Outcome: "missing_ref", Message: "Vault/OpenBao field was not found."}
+	}
+	return sourceResolveResult{Outcome: "ready", Value: value}
+}
+
+func vaultResponseSealed(body io.Reader, maxBytes int) bool {
+	limit := int64(firstPositive(maxBytes, 65536))
+	bytes, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil || int64(len(bytes)) > limit {
+		return false
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(bytes, &payload); err != nil {
+		return false
+	}
+	sealed, _ := payload["sealed"].(bool)
+	return sealed
+}
+
+func vaultField(payload map[string]any, field string) (string, bool) {
+	data, ok := payload["data"].(map[string]any)
+	if !ok {
+		return "", false
+	}
+	if nested, ok := data["data"].(map[string]any); ok {
+		data = nested
+	}
+	value, ok := data[field]
+	if !ok {
+		return "", false
+	}
+	text, ok := value.(string)
+	return text, ok
 }
 
 func validateExecConfig(source sourceConfig, refCfg sourceRefConfig) error {

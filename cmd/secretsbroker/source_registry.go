@@ -1,6 +1,10 @@
 package main
 
-import "net/http"
+import (
+	"net/http"
+	"os"
+	"strings"
+)
 
 type SourceRegistry struct {
 	Sources []SourceStatus `json:"sources"`
@@ -57,7 +61,7 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 				Priority:         source.Priority,
 				Capabilities:     capabilitiesForSourceKind(source.Kind),
 				Namespaces:       safeList(source.Namespaces),
-				State:            "ready",
+				State:            sourceRegistryState(source),
 				AffectedRefs:     []string{},
 				AffectedServices: []string{},
 			}
@@ -70,9 +74,22 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 	return SourceRegistry{Sources: sources}
 }
 
+func sourceRegistryState(source sourceConfig) string {
+	switch source.Kind {
+	case "vault", "openbao":
+		if strings.TrimSpace(source.Address) == "" {
+			return "invalid_ref"
+		}
+		if strings.TrimSpace(firstNonEmpty(source.Token, os.Getenv(source.TokenEnv))) == "" {
+			return "source_auth_required"
+		}
+	}
+	return "ready"
+}
+
 func capabilitiesForSourceKind(kind string) []string {
 	switch kind {
-	case "env", "file", "exec":
+	case "env", "file", "exec", "vault", "openbao":
 		return []string{"read", "health"}
 	default:
 		return []string{"health"}
