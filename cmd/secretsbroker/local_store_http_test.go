@@ -8,6 +8,36 @@ import (
 	"testing"
 )
 
+func TestHTTPGeneratedSecretWritebackCapture(t *testing.T) {
+	backend := testBackend(t)
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	body := []byte(`{"requestId":"req-writeback-http","identity":{"serviceId":"api-service","expiresAt":"2026-05-07T00:05:00Z"},"policy":{"allowedNamespaces":["services/api-service"],"allowedOperations":["create","update"]},"operation":"create","namespace":"services/api-service","ref":"runtime/API_TOKEN","value":"generated-http-secret","refreshRequired":true}`)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/writeback", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-token")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("writeback status = %d", res.StatusCode)
+	}
+	var captured generatedSecretCaptureResponse
+	if err := json.NewDecoder(res.Body).Decode(&captured); err != nil {
+		t.Fatal(err)
+	}
+	if captured.Outcome != "ready" || !captured.RefreshRequired || captured.Ref != "services/api-service/runtime/API_TOKEN" {
+		t.Fatalf("writeback response = %#v", captured)
+	}
+}
+
 func TestLocalStoreHTTPWriteAndResolve(t *testing.T) {
 	backend := testBackend(t)
 	state := "ready"

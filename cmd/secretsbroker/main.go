@@ -213,6 +213,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"GET /state",
 			"GET /capabilities",
 			"POST /v1/secrets",
+			"POST /v1/writeback",
 			"POST /v1/resolve",
 			"GET /v1/sources/status",
 		},
@@ -230,9 +231,11 @@ func defaultCapabilities() CapabilitiesResponse {
 			"env-source",
 			"file-source",
 			"exec-source",
+			"write-back-policy",
+			"generated-secret-capture",
 		},
 		FutureFeatures: []string{
-			"write-back",
+			"external-backend-write-back",
 		},
 		Outcomes: append([]string(nil), typedOutcomes...),
 	}
