@@ -49,11 +49,12 @@ type sourceRefConfig struct {
 }
 
 type sourceResolveResult struct {
-	Found    bool
-	Value    string
-	SourceID string
-	Outcome  string
-	Message  string
+	Found     bool
+	Value     string
+	SourceID  string
+	Outcome   string
+	Message   string
+	Lifecycle SourceLifecycle
 }
 
 func loadSourceConfig(path string) (sourceConfigFile, error) {
@@ -94,9 +95,10 @@ func (cfg sourceConfigFile) resolve(ref string) sourceResolveResult {
 		result := source.resolve(ref, refCfg)
 		result.Found = true
 		result.SourceID = source.SourceID
+		result.Lifecycle = normalizeSourceLifecycle(result.Outcome)
 		return result
 	}
-	return sourceResolveResult{Found: false, Outcome: "missing_ref", Message: "Secret ref was not found."}
+	return sourceResolveResult{Found: false, Outcome: "missing_ref", Message: "Secret ref was not found.", Lifecycle: normalizeSourceLifecycle("missing_ref")}
 }
 
 func (s sourceConfig) resolve(ref string, refCfg sourceRefConfig) sourceResolveResult {
