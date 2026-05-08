@@ -49,6 +49,8 @@ func runKey(args []string) error {
 		return printKeyStatus(args[1:])
 	case "generate":
 		return printGeneratedKey()
+	case "rotate":
+		return runKeyRotate(args[1:])
 	default:
 		return fmt.Errorf("unknown key command %q", args[0])
 	}

@@ -119,6 +119,8 @@ func run(args []string) error {
 		return printStatus(args[1:])
 	case "key":
 		return runKey(args[1:])
+	case "backup":
+		return runBackup(args[1:])
 	case "session":
 		return runSession(args[1:])
 	case "version":
@@ -134,12 +136,13 @@ func run(args []string) error {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "Usage: secretsbroker <serve|status|key|session|version>")
+	fmt.Fprintln(os.Stderr, "Usage: secretsbroker <serve|status|key|backup|session|version>")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  serve   Start the local-first @secretsbroker daemon")
 	fmt.Fprintln(os.Stderr, "  status  Print current broker state JSON")
 	fmt.Fprintln(os.Stderr, "  key     Manage portable master-key foundation")
+	fmt.Fprintln(os.Stderr, "  backup  Create or restore encrypted local-store backup artifacts")
 	fmt.Fprintln(os.Stderr, "  session Manage local API session/token foundation")
 	fmt.Fprintln(os.Stderr, "  version Print broker version")
 }
@@ -216,6 +219,8 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/writeback",
 			"POST /v1/resolve",
 			"GET /v1/sources/status",
+			"CLI secretsbroker backup create|restore",
+			"CLI secretsbroker key rotate",
 		},
 		Features: []string{
 			"liveness",
@@ -233,6 +238,8 @@ func defaultCapabilities() CapabilitiesResponse {
 			"exec-source",
 			"write-back-policy",
 			"generated-secret-capture",
+			"encrypted-backup-restore",
+			"master-key-rotation",
 		},
 		FutureFeatures: []string{
 			"external-backend-write-back",
