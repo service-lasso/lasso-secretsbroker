@@ -122,6 +122,8 @@ func run(args []string) error {
 		return runKey(args[1:])
 	case "backup":
 		return runBackup(args[1:])
+	case "admin":
+		return runAdmin(args[1:])
 	case "session":
 		return runSession(args[1:])
 	case "version":
@@ -137,13 +139,14 @@ func run(args []string) error {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "Usage: secretsbroker <serve|status|key|backup|session|version>")
+	fmt.Fprintln(os.Stderr, "Usage: secretsbroker <serve|status|key|backup|admin|session|version>")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  serve   Start the local-first @secretsbroker daemon")
 	fmt.Fprintln(os.Stderr, "  status  Print current broker state JSON")
 	fmt.Fprintln(os.Stderr, "  key     Manage portable master-key lifecycle, local wrapper, and rotation")
 	fmt.Fprintln(os.Stderr, "  backup  Create or restore encrypted local-store backup artifacts")
+	fmt.Fprintln(os.Stderr, "  admin   Headless admin CLI for status, metadata search, reveal, provider, migration, and audit workflows")
 	fmt.Fprintln(os.Stderr, "  session Manage local API session/token foundation")
 	fmt.Fprintln(os.Stderr, "  version Print broker version")
 }
@@ -232,6 +235,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/management/secrets/policy/preview|apply",
 			"CLI secretsbroker backup create|restore",
 			"CLI secretsbroker key initialize|unlock|import|rewrap|wrapper-status|rotate",
+			"CLI secretsbroker admin status|secrets|providers|migration|audit",
 		},
 		Features: []string{
 			"liveness",
@@ -260,6 +264,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"master-key-initialize-unlock-import-rewrap",
 			"os-wrapper-status",
 			"master-key-rotation",
+			"headless-admin-cli",
 		},
 		FutureFeatures: []string{
 			"external-backend-write-back",
