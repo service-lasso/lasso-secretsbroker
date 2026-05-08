@@ -87,35 +87,37 @@ Output:
 
 This command intentionally prints the generated key once. Operators should store it in a secure out-of-band location until OS-wrapper enrollment exists.
 
-## Planned local wrapper enrollment
+## Local wrapper enrollment
 
-Future implementation should add OS-backed local wrapper commands:
+Issue #39 adds the first implemented local wrapper lifecycle commands:
 
 ```text
+secretsbroker key initialize --master-key-file <file>
+secretsbroker key unlock --master-key-file <file>
 secretsbroker key import --master-key-file <file>
-secretsbroker key enroll-local
-secretsbroker key rewrap-local
-secretsbroker key lock
-secretsbroker key unlock
+secretsbroker key rewrap --master-key-file <file>
+secretsbroker key wrapper-status
 ```
 
-Recommended wrappers:
+The detailed contract is documented in `docs/master-key-lifecycle.md`.
 
-- Windows: DPAPI user/machine scope, with explicit scope metadata
-- macOS: Keychain item scoped to the service identity
-- Linux: protected file or secret-service/libsecret integration, with strict permissions
+Wrapper metadata records the intended provider:
 
-The OS wrapper stores/protects a local copy of the same portable master key. The ciphertext format remains platform-independent.
+- Windows: DPAPI user scope metadata
+- macOS: Keychain service item metadata
+- Linux: protected file user-scope metadata
+
+The local wrapper stores/protects a local copy of the same portable master key for the current OS/user/machine. The encrypted vault payload format remains platform-independent.
 
 ## Copied vault flow
 
 1. Copy encrypted store file to new machine.
 2. Start broker without local wrapper/key.
 3. Broker reports `locked`.
-4. Operator imports portable master key.
-5. Broker verifies key id against existing payload metadata.
-6. Operator enrolls/re-wraps local machine wrapper.
-7. Broker reports `ready`.
+4. Operator runs `secretsbroker key import --master-key-file <file>` with the portable master key.
+5. Broker validates the key format and verifies it against existing payload metadata/decryption.
+6. Broker writes or refreshes the local wrapper for the current OS/user/machine.
+7. Broker reports `ready` with status/metadata only.
 
 ## Recovery shares
 

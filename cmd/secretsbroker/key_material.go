@@ -49,6 +49,16 @@ func runKey(args []string) error {
 		return printKeyStatus(args[1:])
 	case "generate":
 		return printGeneratedKey()
+	case "initialize":
+		return runKeyInitialize(args[1:])
+	case "unlock":
+		return runKeyUnlock(args[1:])
+	case "import":
+		return runKeyImport(args[1:])
+	case "rewrap":
+		return runKeyRewrap(args[1:])
+	case "wrapper-status":
+		return runKeyWrapperStatus(args[1:])
 	case "rotate":
 		return runKeyRotate(args[1:])
 	default:
