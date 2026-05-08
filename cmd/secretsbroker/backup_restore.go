@@ -201,6 +201,10 @@ func (b *localBackend) restoreBackup(path string) (backupRestoreResponse, error)
 		_ = b.audit("backup_restore", "", "invalid_ref", "", "")
 		return backupRestoreResponse{}, err
 	}
+	if artifact.StoreKeyID != "" && artifact.StoreKeyID != masterKeyID(b.masterKey) {
+		_ = b.audit("backup_restore", "", "locked", "", "")
+		return backupRestoreResponse{}, errInvalidBackupKey
+	}
 	if err := b.verifyStoreDecryptable(artifact.Store); err != nil {
 		_ = b.audit("backup_restore", "", "locked", "", "")
 		return backupRestoreResponse{}, errInvalidBackupKey

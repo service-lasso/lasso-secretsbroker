@@ -70,6 +70,25 @@ func TestRestoreWithWrongOrMissingKeyFailsSafely(t *testing.T) {
 	}
 }
 
+func TestRestoreWithWrongKeyRejectsEmptyBackupByKeyID(t *testing.T) {
+	backend := testBackend(t)
+	backupPath := filepath.Join(t.TempDir(), "empty-backup.json")
+	created, err := backend.createBackup(backupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.SecretCount != 0 || created.StoreKeyID != masterKeyID("test-master-key") {
+		t.Fatalf("empty backup response = %#v", created)
+	}
+	wrongKey := newLocalBackend(filepath.Join(t.TempDir(), "wrong-empty-store.json"), filepath.Join(t.TempDir(), "wrong-empty-audit.jsonl"), "wrong-master-key")
+	if _, err := wrongKey.restoreBackup(backupPath); !errors.Is(err, errInvalidBackupKey) {
+		t.Fatalf("wrong key empty restore err = %v", err)
+	}
+	if _, err := os.Stat(wrongKey.storePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("wrong-key empty restore should not write store, stat err = %v", err)
+	}
+}
+
 func TestKeyRotationReencryptsStoreAndPreservesResolvability(t *testing.T) {
 	backend := testBackend(t)
 	_, err := backend.writeSecret(writeSecretRequest{Ref: "services/api/SESSION_KEY", Value: "session-secret"})
