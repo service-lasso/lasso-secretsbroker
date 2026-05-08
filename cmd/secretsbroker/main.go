@@ -42,6 +42,7 @@ var typedOutcomes = []string{
 	"invalid_ref",
 	"source_unavailable",
 	"identity_expired",
+	"disabled",
 }
 
 type Status struct {

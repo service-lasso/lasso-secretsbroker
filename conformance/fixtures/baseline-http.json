@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "contract": "secretsbroker.parity.v1",
+  "serviceId": "@secretsbroker",
+  "apiVersion": "secretsbroker.local/v1",
+  "cases": [
+    {
+      "name": "status-ready-shape",
+      "kind": "http",
+      "method": "GET",
+      "path": "/status",
+      "requiresAuth": false,
+      "expectedStatus": 200,
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "state": "ready",
+        "ready": true,
+        "localFirst": true,
+        "backend": "local"
+      },
+      "redactionForbidden": [
+        "local-api-token",
+        "secret-value",
+        "portable-master-key"
+      ]
+    },
+    {
+      "name": "capabilities-advertise-disabled-outcome",
+      "kind": "http",
+      "method": "GET",
+      "path": "/capabilities",
+      "requiresAuth": false,
+      "expectedStatus": 200,
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "outcomes": [
+          "disabled"
+        ]
+      },
+      "redactionForbidden": [
+        "local-api-token",
+        "secret-value",
+        "portable-master-key"
+      ]
+    },
+    {
+      "name": "resolve-ready-local-secret",
+      "kind": "http",
+      "method": "POST",
+      "path": "/v1/resolve",
+      "requiresAuth": true,
+      "request": {
+        "requestId": "req-parity-resolve",
+        "workspaceId": "workspace-dev",
+        "serviceId": "openclaw",
+        "purpose": "runtime-env",
+        "refs": [
+          "openclaw/openai/api_key"
+        ]
+      },
+      "expectedStatus": 200,
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "requestId": "req-parity-resolve",
+        "results": [
+          {
+            "ref": "openclaw/openai/api_key",
+            "outcome": "ready",
+            "metadata": {
+              "sourceId": "local"
+            }
+          }
+        ]
+      },
+      "redactionForbidden": [
+        "local-api-token",
+        "portable-master-key"
+      ]
+    },
+    {
+      "name": "writeback-policy-denied-error",
+      "kind": "http",
+      "method": "POST",
+      "path": "/v1/writeback",
+      "requiresAuth": true,
+      "request": {
+        "requestId": "req-parity-writeback-denied",
+        "identity": {
+          "serviceId": "api-service",
+          "expiresAt": "2026-05-07T00:05:00Z"
+        },
+        "policy": {
+          "allowedNamespaces": [
+            "services/api-service"
+          ],
+          "allowedOperations": [
+            "create"
+          ]
+        },
+        "operation": "create",
+        "namespace": "services/other-service",
+        "ref": "runtime/API_TOKEN",
+        "value": "generated-secret-value"
+      },
+      "expectedStatus": 403,
+      "expectedResponse": {
+        "error": {
+          "code": "policy_denied",
+          "outcome": "policy_denied",
+          "nextAction": "review_policy",
+          "affectedRefs": [],
+          "affectedServices": []
+        }
+      },
+      "redactionForbidden": [
+        "generated-secret-value",
+        "local-api-token",
+        "portable-master-key"
+      ]
+    },
+    {
+      "name": "source-status-disabled-lifecycle",
+      "kind": "http",
+      "method": "GET",
+      "path": "/v1/sources/status",
+      "requiresAuth": false,
+      "expectedStatus": 200,
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "sources": [
+          {
+            "sourceId": "disabled-source",
+            "kind": "env",
+            "state": "disabled",
+            "outcome": "disabled",
+            "nextAction": "enable_source",
+            "retryable": false,
+            "lifecycle": {
+              "state": "disabled",
+              "outcome": "disabled",
+              "nextAction": "enable_source",
+              "retryable": false
+            }
+          }
+        ]
+      },
+      "redactionForbidden": [
+        "disabled-secret-value",
+        "local-api-token",
+        "portable-master-key"
+      ]
+    }
+  ]
+}
