@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
@@ -94,11 +95,22 @@ func (s localAPISecurity) require(w http.ResponseWriter, r *http.Request) bool {
 	if got == "" {
 		got = strings.TrimSpace(r.Header.Get("X-SecretsBroker-Token"))
 	}
-	if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(expected)) != 1 {
+	if got == "" || !constantTimeTokenEqual(got, expected) {
 		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "A valid local API token is required.", "policy_denied", "authenticate_local_session")
 		return false
 	}
 	return true
+}
+
+func constantTimeTokenEqual(got, expected string) bool {
+	got = strings.TrimSpace(got)
+	expected = strings.TrimSpace(expected)
+	if got == "" || expected == "" {
+		return false
+	}
+	gotHash := sha256.Sum256([]byte(got))
+	expectedHash := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(gotHash[:], expectedHash[:]) == 1
 }
 
 func bearerToken(header string) string {

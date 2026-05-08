@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	localStoreVersion = 1
-	localStoreSource  = "local"
+	localStoreVersion            = 1
+	localStoreSource             = "local"
+	maxSecretBearingRequestBytes = 1 << 20
 )
 
 var (
@@ -529,8 +530,8 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, secur
 			return
 		}
 		var req writeSecretRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "invalid_request", "Request body is not valid JSON.", "invalid_ref", "")
+		if err := decodeSecretBearingJSON(w, r, &req); err != nil {
+			writeDecodeError(w, err)
 			return
 		}
 		res, err := backend.writeSecret(req)
@@ -555,8 +556,8 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, secur
 			return
 		}
 		var req generatedSecretCaptureRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "invalid_request", "Request body is not valid JSON.", "invalid_ref", "")
+		if err := decodeSecretBearingJSON(w, r, &req); err != nil {
+			writeDecodeError(w, err)
 			return
 		}
 		res, err := backend.captureGeneratedSecret(req)
@@ -587,12 +588,26 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, secur
 			return
 		}
 		var req resolveRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "invalid_request", "Request body is not valid JSON.", "invalid_ref", "")
+		if err := decodeSecretBearingJSON(w, r, &req); err != nil {
+			writeDecodeError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, backend.resolve(req))
 	})
+}
+
+func decodeSecretBearingJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxSecretBearingRequestBytes)
+	return json.NewDecoder(r.Body).Decode(dst)
+}
+
+func writeDecodeError(w http.ResponseWriter, err error) {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		writeAPIError(w, http.StatusRequestEntityTooLarge, "request_too_large", "Request body exceeds the local API size limit.", "policy_denied", "reduce_request_size")
+		return
+	}
+	writeAPIError(w, http.StatusBadRequest, "invalid_request", "Request body is not valid JSON.", "invalid_ref", "")
 }
 
 func writeAPIError(w http.ResponseWriter, status int, code, message, outcome, nextAction string) {

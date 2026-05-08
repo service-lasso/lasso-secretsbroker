@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -35,6 +37,36 @@ func TestHTTPGeneratedSecretWritebackCapture(t *testing.T) {
 	}
 	if captured.Outcome != "ready" || !captured.RefreshRequired || captured.Ref != "services/api-service/runtime/API_TOKEN" {
 		t.Fatalf("writeback response = %#v", captured)
+	}
+}
+
+func TestSecretBearingEndpointRejectsOversizedBodyWithoutLeakingToken(t *testing.T) {
+	backend := testBackend(t)
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	body := `{"ref":"openclaw/anthropic/api_key","value":"` + strings.Repeat("x", maxSecretBearingRequestBytes) + `"}`
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/secrets", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-token")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized status = %d", res.StatusCode)
+	}
+	payload, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(payload, []byte("test-token")) || bytes.Contains(payload, []byte(strings.Repeat("x", 64))) {
+		t.Fatalf("oversized error leaked sensitive input: %s", payload)
 	}
 }
 

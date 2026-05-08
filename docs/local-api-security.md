@@ -52,6 +52,10 @@ X-SecretsBroker-Token: <token>
 
 If no token is configured, secret-bearing endpoints return `503 security_not_configured` rather than accepting unauthenticated access.
 
+Token checks trim whitespace, hash both presented and expected tokens, and then compare fixed-size digests in constant time. This avoids length-dependent token comparison behavior while keeping responses generic.
+
+Secret-bearing endpoints cap request bodies at 1 MiB before JSON decode. Oversized requests return `413 request_too_large` with a safe fixed message; request content and bearer tokens are not echoed.
+
 ## CLI helpers
 
 Generate a local development token:
@@ -92,6 +96,21 @@ No server token configured:
     "message": "Secret-bearing endpoints require SECRETSBROKER_API_TOKEN or --api-token.",
     "outcome": "policy_denied",
     "nextAction": "configure_api_token",
+    "affectedRefs": [],
+    "affectedServices": []
+  }
+}
+```
+
+Oversized body:
+
+```json
+{
+  "error": {
+    "code": "request_too_large",
+    "message": "Request body exceeds the local API size limit.",
+    "outcome": "policy_denied",
+    "nextAction": "reduce_request_size",
     "affectedRefs": [],
     "affectedServices": []
   }
