@@ -37,6 +37,18 @@ func TestLocalAPISecurityRequiresConfiguredToken(t *testing.T) {
 	}
 }
 
+func TestConstantTimeTokenEqualTrimsAndRejectsMismatches(t *testing.T) {
+	if !constantTimeTokenEqual(" secret-token ", "secret-token") {
+		t.Fatalf("trimmed matching tokens should pass")
+	}
+	if constantTimeTokenEqual("secret-token-extra", "secret-token") {
+		t.Fatalf("different length token should reject")
+	}
+	if constantTimeTokenEqual("", "secret-token") {
+		t.Fatalf("empty token should reject")
+	}
+}
+
 func TestLocalAPISecurityAcceptsBearerAndRejectsWrongToken(t *testing.T) {
 	sec := localAPISecurity{token: "secret-token"}
 	badReq := httptest.NewRequest(http.MethodPost, "/v1/resolve", nil)
