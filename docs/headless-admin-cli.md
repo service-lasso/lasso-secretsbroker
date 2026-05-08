@@ -1,7 +1,7 @@
 # Secrets Broker Headless Admin CLI
 
-Status: implemented contract slice  
-Issue: #40  
+Status: implemented contract slice
+Issue: #40
 Service id: `@secretsbroker`
 
 ## Purpose
