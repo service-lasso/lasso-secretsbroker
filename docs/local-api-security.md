@@ -14,6 +14,7 @@ This slice establishes the first local access boundary for the loopback HTTP dev
 Secret-bearing endpoints require a local API token:
 
 - `POST /v1/secrets`
+- `POST /v1/writeback`
 - `POST /v1/resolve`
 
 Safe bootstrap/status endpoints remain unauthenticated:
