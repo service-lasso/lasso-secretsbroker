@@ -62,7 +62,7 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 		},
 	}
 	if backend != nil {
-		for _, source := range backend.sources.enabledSources() {
+		for _, source := range backend.sources.Sources {
 			lifecycle := sourceRegistryLifecycle(source)
 			status := SourceStatus{
 				SourceID:         source.SourceID,

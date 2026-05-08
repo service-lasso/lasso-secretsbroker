@@ -44,6 +44,7 @@ func TestSourceRegistryMapsVaultAuthStateWithoutTokenLeak(t *testing.T) {
 
 func TestSourceStatusEndpointDoesNotRequireSecretToken(t *testing.T) {
 	backend := newLocalBackend("store.json", "audit.jsonl", "master-key")
+	backend.sources = sourceConfigFile{Sources: []sourceConfig{{SourceID: "disabled-source", Kind: "env", Enabled: false, Refs: map[string]sourceRefConfig{"disabled/ref": {Env: "SHOULD_NOT_LEAK"}}}}}
 	state := "ready"
 	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{}))
 	defer server.Close()
@@ -60,7 +61,10 @@ func TestSourceStatusEndpointDoesNotRequireSecretToken(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body.Sources) != 1 || body.Sources[0].SourceID != "local" || body.Sources[0].State != "connected" || body.Sources[0].Outcome != "ready" {
+	if len(body.Sources) != 2 || body.Sources[0].SourceID != "local" || body.Sources[0].State != "connected" || body.Sources[0].Outcome != "ready" {
 		t.Fatalf("body = %#v", body)
+	}
+	if body.Sources[1].SourceID != "disabled-source" || body.Sources[1].State != "disabled" || body.Sources[1].NextAction != "enable_source" {
+		t.Fatalf("disabled body = %#v", body.Sources[1])
 	}
 }

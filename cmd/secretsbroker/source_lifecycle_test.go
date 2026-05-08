@@ -58,6 +58,7 @@ func TestSourceRegistryExposesSafeLifecycleMetadata(t *testing.T) {
 	backend.sources = sourceConfigFile{Sources: []sourceConfig{
 		{SourceID: "env-source", Kind: "env", Enabled: true, Namespaces: []string{"services/api"}, Refs: map[string]sourceRefConfig{"services/api/SECRET": {Env: "REGISTRY_ENV_SECRET"}}},
 		{SourceID: "vault-auth", Kind: "vault", Enabled: true, Address: "https://vault.invalid", TokenEnv: "MISSING_VAULT_TOKEN", Refs: map[string]sourceRefConfig{"vault/ref": {Path: "secret/data/ref", Field: "value"}}},
+		{SourceID: "disabled-source", Kind: "env", Enabled: false, Refs: map[string]sourceRefConfig{"disabled/ref": {Env: "REGISTRY_ENV_SECRET"}}},
 		{SourceID: "bad-source", Kind: "unknown", Enabled: true},
 	}}
 	registry := defaultSourceRegistry(backend)
@@ -73,6 +74,9 @@ func TestSourceRegistryExposesSafeLifecycleMetadata(t *testing.T) {
 	}
 	if byID["vault-auth"].State != "auth_required" || byID["vault-auth"].NextAction != "reconnect_source" {
 		t.Fatalf("vault status = %#v", byID["vault-auth"])
+	}
+	if byID["disabled-source"].State != "disabled" || byID["disabled-source"].Outcome != "disabled" || byID["disabled-source"].NextAction != "enable_source" {
+		t.Fatalf("disabled status = %#v", byID["disabled-source"])
 	}
 	if byID["bad-source"].State != "config_error" || byID["bad-source"].NextAction != "fix_source_mapping" {
 		t.Fatalf("bad status = %#v", byID["bad-source"])
