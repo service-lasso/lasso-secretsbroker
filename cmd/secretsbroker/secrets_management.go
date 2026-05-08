@@ -379,6 +379,8 @@ func outcomeForError(err error) string {
 		return "source_auth_required"
 	case errors.Is(err, errBackendDegraded):
 		return "degraded"
+	case errors.Is(err, errUnsupportedProvider):
+		return "unsupported"
 	default:
 		return "degraded"
 	}
