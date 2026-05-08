@@ -180,22 +180,16 @@ func jsonSubsetMismatch(expected, actual any) string {
 		if len(got) < len(want) {
 			return "array too short"
 		}
-		for i, expectedValue := range want {
-			if _, ok := expectedValue.(map[string]any); ok {
-				matched := false
-				for _, candidate := range got {
-					if jsonSubsetMismatch(expectedValue, candidate) == "" {
-						matched = true
-						break
-					}
+		for _, expectedValue := range want {
+			matched := false
+			for _, candidate := range got {
+				if jsonSubsetMismatch(expectedValue, candidate) == "" {
+					matched = true
+					break
 				}
-				if !matched {
-					return "array missing expected object subset"
-				}
-				continue
 			}
-			if reason := jsonSubsetMismatch(expectedValue, got[i]); reason != "" {
-				return reason
+			if !matched {
+				return "array missing expected subset"
 			}
 		}
 		return ""

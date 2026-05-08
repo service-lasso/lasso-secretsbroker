@@ -26,6 +26,26 @@
       ]
     },
     {
+      "name": "capabilities-advertise-disabled-outcome",
+      "kind": "http",
+      "method": "GET",
+      "path": "/capabilities",
+      "requiresAuth": false,
+      "expectedStatus": 200,
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "outcomes": [
+          "disabled"
+        ]
+      },
+      "redactionForbidden": [
+        "local-api-token",
+        "secret-value",
+        "portable-master-key"
+      ]
+    },
+    {
       "name": "resolve-ready-local-secret",
       "kind": "http",
       "method": "POST",
