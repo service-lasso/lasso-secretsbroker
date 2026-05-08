@@ -12,14 +12,14 @@ func TestDefaultSourceRegistryReflectsLocalKeyState(t *testing.T) {
 	if len(locked.Sources) != 1 {
 		t.Fatalf("sources = %d", len(locked.Sources))
 	}
-	if locked.Sources[0].SourceID != "local" || locked.Sources[0].State != "locked" {
+	if locked.Sources[0].SourceID != "local" || locked.Sources[0].State != "reconnect_required" || locked.Sources[0].Outcome != "locked" {
 		t.Fatalf("locked source = %#v", locked.Sources[0])
 	}
 	assertContains(t, locked.Sources[0].Capabilities, "read")
 	assertContains(t, locked.Sources[0].Namespaces, "*")
 
 	ready := defaultSourceRegistry(newLocalBackend("store.json", "audit.jsonl", "master-key"))
-	if ready.Sources[0].State != "ready" {
+	if ready.Sources[0].State != "connected" || ready.Sources[0].Outcome != "ready" {
 		t.Fatalf("ready source = %#v", ready.Sources[0])
 	}
 }
@@ -35,7 +35,7 @@ func TestSourceRegistryMapsVaultAuthStateWithoutTokenLeak(t *testing.T) {
 		t.Fatalf("sources = %#v", registry.Sources)
 	}
 	vault := registry.Sources[1]
-	if vault.SourceID != "vault-prod" || vault.State != "source_auth_required" {
+	if vault.SourceID != "vault-prod" || vault.State != "auth_required" || vault.Outcome != "source_auth_required" {
 		t.Fatalf("vault source = %#v", vault)
 	}
 	assertContains(t, vault.Capabilities, "read")
@@ -60,7 +60,7 @@ func TestSourceStatusEndpointDoesNotRequireSecretToken(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body.Sources) != 1 || body.Sources[0].SourceID != "local" || body.Sources[0].State != "ready" {
+	if len(body.Sources) != 1 || body.Sources[0].SourceID != "local" || body.Sources[0].State != "connected" || body.Sources[0].Outcome != "ready" {
 		t.Fatalf("body = %#v", body)
 	}
 }

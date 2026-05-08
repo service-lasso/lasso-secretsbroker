@@ -151,6 +151,8 @@ type auditEvent struct {
 	Operation string    `json:"operation"`
 	Ref       string    `json:"ref,omitempty"`
 	Outcome   string    `json:"outcome"`
+	State     string    `json:"state,omitempty"`
+	SourceID  string    `json:"sourceId,omitempty"`
 	ServiceID string    `json:"serviceId,omitempty"`
 	RequestID string    `json:"requestId,omitempty"`
 }
@@ -380,6 +382,7 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 				if sourceResult.Found {
 					result.Outcome = sourceResult.Outcome
 					result.Message = sourceResult.Message
+					_ = b.auditSourceLifecycle(ref, sourceResult, req.ServiceID, req.RequestID)
 					if sourceResult.Outcome == "ready" {
 						result.Value = sourceResult.Value
 						result.Metadata = &SecretMetadata{SourceID: sourceResult.SourceID, Version: "source"}
@@ -438,6 +441,14 @@ func (b *localBackend) saveStore(store localStoreFile) error {
 }
 
 func (b *localBackend) audit(operation, ref, outcome, requestServiceID, requestID string) error {
+	return b.writeAuditEvent(auditEvent{TS: b.now(), Operation: operation, Ref: ref, Outcome: outcome, ServiceID: requestServiceID, RequestID: requestID})
+}
+
+func (b *localBackend) auditSourceLifecycle(ref string, result sourceResolveResult, requestServiceID, requestID string) error {
+	return b.writeAuditEvent(auditEvent{TS: b.now(), Operation: "source_lifecycle", Ref: ref, Outcome: result.Outcome, State: result.Lifecycle.State, SourceID: result.SourceID, ServiceID: requestServiceID, RequestID: requestID})
+}
+
+func (b *localBackend) writeAuditEvent(event auditEvent) error {
 	if strings.TrimSpace(b.auditPath) == "" {
 		return nil
 	}
@@ -449,7 +460,7 @@ func (b *localBackend) audit(operation, ref, outcome, requestServiceID, requestI
 		return err
 	}
 	defer file.Close()
-	return json.NewEncoder(file).Encode(auditEvent{TS: b.now(), Operation: operation, Ref: ref, Outcome: outcome, ServiceID: requestServiceID, RequestID: requestID})
+	return json.NewEncoder(file).Encode(event)
 }
 
 func (b *localBackend) encrypt(value string) (secretPayload, error) {
