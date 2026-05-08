@@ -142,7 +142,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  serve   Start the local-first @secretsbroker daemon")
 	fmt.Fprintln(os.Stderr, "  status  Print current broker state JSON")
-	fmt.Fprintln(os.Stderr, "  key     Manage portable master-key foundation")
+	fmt.Fprintln(os.Stderr, "  key     Manage portable master-key lifecycle, local wrapper, and rotation")
 	fmt.Fprintln(os.Stderr, "  backup  Create or restore encrypted local-store backup artifacts")
 	fmt.Fprintln(os.Stderr, "  session Manage local API session/token foundation")
 	fmt.Fprintln(os.Stderr, "  version Print broker version")
@@ -231,7 +231,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/management/secrets/reset/dry-run|apply",
 			"POST /v1/management/secrets/policy/preview|apply",
 			"CLI secretsbroker backup create|restore",
-			"CLI secretsbroker key rotate",
+			"CLI secretsbroker key initialize|unlock|import|rewrap|wrapper-status|rotate",
 		},
 		Features: []string{
 			"liveness",
@@ -257,6 +257,8 @@ func defaultCapabilities() CapabilitiesResponse {
 			"write-back-policy",
 			"generated-secret-capture",
 			"encrypted-backup-restore",
+			"master-key-initialize-unlock-import-rewrap",
+			"os-wrapper-status",
 			"master-key-rotation",
 		},
 		FutureFeatures: []string{

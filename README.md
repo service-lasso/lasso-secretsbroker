@@ -51,6 +51,11 @@ The first bootstrap slice provides:
   - `secretsbroker status`
   - `secretsbroker key status`
   - `secretsbroker key generate`
+  - `secretsbroker key initialize`
+  - `secretsbroker key unlock`
+  - `secretsbroker key import`
+  - `secretsbroker key rewrap`
+  - `secretsbroker key wrapper-status`
   - `secretsbroker key rotate`
   - `secretsbroker backup create`
   - `secretsbroker backup restore`
@@ -59,7 +64,7 @@ The first bootstrap slice provides:
   - `secretsbroker version`
 - package/test/verify scripts following the service-template contract
 
-The first local encrypted store and batched resolve MVP is documented in `docs/local-store-resolve.md`. Portable master-key identity/unlock foundation is documented in `docs/portable-master-key.md`; encrypted backup, restore, and key rotation are documented in `docs/backup-restore-rotation.md`. Local API token/session security is documented in `docs/local-api-security.md`. The provider/source registry model is documented in `docs/provider-source-registry.md`; env/file/exec source adapters are documented in `docs/env-file-exec-sources.md`; Vault/OpenBao source support is documented in `docs/vault-openbao-source.md`. The initial generated secret write-back/capture policy is documented in `docs/writeback-policy.md`. The OpenClaw SecretRef exec resolver is documented in `docs/openclaw-secretref-resolver.md`. OS wrapper enrollment and durable policy storage are intentionally future issues. The initial local API/bootstrap contract is documented in `docs/local-api-bootstrap-contract.md`; lifecycle/source-auth state behavior is documented in `docs/lifecycle-states.md`. Cross-language Node/Go compatibility expectations and reusable fixture format are documented in `docs/parity-contract.md`, with baseline fixtures under `conformance/fixtures/`.
+The first local encrypted store and batched resolve MVP is documented in `docs/local-store-resolve.md`. Portable master-key identity/unlock foundation is documented in `docs/portable-master-key.md`; the implemented initialize/unlock/import/re-wrap lifecycle is documented in `docs/master-key-lifecycle.md`; encrypted backup, restore, and key rotation are documented in `docs/backup-restore-rotation.md`. Local API token/session security is documented in `docs/local-api-security.md`. The provider/source registry model is documented in `docs/provider-source-registry.md`; env/file/exec source adapters are documented in `docs/env-file-exec-sources.md`; Vault/OpenBao source support is documented in `docs/vault-openbao-source.md`. The initial generated secret write-back/capture policy is documented in `docs/writeback-policy.md`. The OpenClaw SecretRef exec resolver is documented in `docs/openclaw-secretref-resolver.md`. OS wrapper enrollment and durable policy storage are intentionally future issues. The initial local API/bootstrap contract is documented in `docs/local-api-bootstrap-contract.md`; lifecycle/source-auth state behavior is documented in `docs/lifecycle-states.md`. Cross-language Node/Go compatibility expectations and reusable fixture format are documented in `docs/parity-contract.md`, with baseline fixtures under `conformance/fixtures/`.
 
 ## Local development
 
