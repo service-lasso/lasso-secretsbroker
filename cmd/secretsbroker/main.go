@@ -220,6 +220,10 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/writeback",
 			"POST /v1/resolve",
 			"GET /v1/sources/status",
+			"GET /v1/providers/capabilities",
+			"GET /v1/providers/config/status",
+			"POST /v1/providers/config/validate|apply",
+			"POST /v1/providers/migration/dry-run|apply",
 			"GET /v1/management/secrets",
 			"GET /v1/management/secrets/value-search",
 			"POST /v1/management/secrets/reveal",
@@ -240,6 +244,9 @@ func defaultCapabilities() CapabilitiesResponse {
 			"typed-errors",
 			"audit-redaction",
 			"source-status",
+			"provider-config-status",
+			"provider-config-validation",
+			"provider-migration-dry-run-apply",
 			"secrets-management-metadata-search",
 			"secrets-management-value-search-metadata-only",
 			"secrets-management-controlled-reveal",
@@ -350,6 +357,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		registerLocalStoreHandlers(mux, backend, security)
 		registerSourceRegistryHandlers(mux, backend)
 		registerSecretsManagementHandlers(mux, backend, security)
+		registerProviderConfigMigrationHandlers(mux, backend, security)
 	}
 	return mux
 }
