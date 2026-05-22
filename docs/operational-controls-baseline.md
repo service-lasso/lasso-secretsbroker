@@ -198,4 +198,4 @@ These slices should be separate issues because they can be designed, implemented
 - Plaintext spreadsheet-style editing.
 - Provider credential management UI beyond credential-ref metadata.
 - Enterprise-only Vault/OpenBao feature parity as a requirement for local mode.
-- MFA, HSM, FIPS, and automated credential rotation implementation. Those remain roadmap items behind the stable broker contract.
+- MFA, HSM, FIPS, and automated credential rotation implementation. Classification and unblock criteria are tracked in `docs/advanced-capabilities-roadmap.md`.
