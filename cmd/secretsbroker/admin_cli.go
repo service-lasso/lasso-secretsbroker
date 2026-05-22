@@ -7,7 +7,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +19,7 @@ type adminCommonOptions struct {
 	MasterKey     string
 	MasterKeyFile string
 	SourcesPath   string
+	EventsPath    string
 }
 
 type adminStatusResponse struct {
@@ -61,6 +64,8 @@ func executeAdmin(args []string, out io.Writer) error {
 		return runAdminAudit(args[1:], out)
 	case "telemetry":
 		return runAdminTelemetry(args[1:], out)
+	case "events":
+		return runAdminEvents(args[1:], out)
 	default:
 		return fmt.Errorf("unknown admin command %q", args[0])
 	}
@@ -269,11 +274,76 @@ func runAdminTelemetry(args []string, out io.Writer) error {
 	return encodeAdminJSON(out, res)
 }
 
+func runAdminEvents(args []string, out io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("unknown admin events command %q", "")
+	}
+	if args[0] != "list" {
+		return fmt.Errorf("unknown admin events command %q", args[0])
+	}
+	fs, opts := newAdminFlagSet("admin events list")
+	since := fs.String("since", "", "RFC3339 lower time bound")
+	until := fs.String("until", "", "RFC3339 upper time bound")
+	serviceID := fs.String("service-id", "", "service id filter")
+	providerID := fs.String("provider-id", "", "provider id filter")
+	operation := fs.String("operation", "", "operation filter")
+	outcome := fs.String("outcome", "", "outcome filter")
+	severity := fs.String("severity", "", "severity filter")
+	family := fs.String("family", "", "event family filter")
+	refPrefix := fs.String("ref-prefix", "", "safe ref prefix filter")
+	refHash := fs.String("ref-hash", "", "ref hash filter")
+	limit := fs.Int("limit", defaultOperationalEventLimit, "event page size")
+	cursor := fs.Int("cursor", 0, "event page cursor")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	finalizeAdminEventPath(opts)
+	values := url.Values{}
+	values.Set("limit", strconv.Itoa(*limit))
+	values.Set("cursor", strconv.Itoa(*cursor))
+	for key, value := range map[string]string{
+		"since":      *since,
+		"until":      *until,
+		"serviceId":  *serviceID,
+		"providerId": *providerID,
+		"operation":  *operation,
+		"outcome":    *outcome,
+		"severity":   *severity,
+		"family":     *family,
+		"refPrefix":  *refPrefix,
+		"refHash":    *refHash,
+	} {
+		if strings.TrimSpace(value) != "" {
+			values.Set(key, value)
+		}
+	}
+	filters, err := parseEventFilters(values)
+	if err != nil {
+		return err
+	}
+	res, err := buildEventsResponse(opts.EventsPath, filters)
+	if err != nil {
+		_ = encodeAdminJSON(out, res)
+		return err
+	}
+	return encodeAdminJSON(out, res)
+}
+
+func finalizeAdminEventPath(opts *adminCommonOptions) {
+	if strings.TrimSpace(os.Getenv("SECRETSBROKER_EVENTS_PATH")) != "" {
+		return
+	}
+	if opts.EventsPath == defaultEventsPath(defaultAuditPath()) {
+		opts.EventsPath = defaultEventsPath(opts.AuditPath)
+	}
+}
+
 func newAdminFlagSet(name string) (*flag.FlagSet, *adminCommonOptions) {
 	opts := &adminCommonOptions{}
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.StringVar(&opts.StorePath, "store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
 	fs.StringVar(&opts.AuditPath, "audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	fs.StringVar(&opts.EventsPath, "events", getenvDefault("SECRETSBROKER_EVENTS_PATH", defaultEventsPath(opts.AuditPath)), "operational events JSONL path")
 	fs.StringVar(&opts.MasterKey, "master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "portable master key")
 	fs.StringVar(&opts.MasterKeyFile, "master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
 	fs.StringVar(&opts.SourcesPath, "sources", getenvDefault("SECRETSBROKER_SOURCES_PATH", ""), "source adapter config path")
@@ -281,11 +351,13 @@ func newAdminFlagSet(name string) (*flag.FlagSet, *adminCommonOptions) {
 }
 
 func backendFromAdminOptions(opts *adminCommonOptions) (*localBackend, keyMaterial, error) {
+	finalizeAdminEventPath(opts)
 	material, err := loadKeyMaterial(opts.MasterKey, opts.MasterKeyFile)
 	if err != nil && !errors.Is(err, errLocked) {
 		return nil, material, err
 	}
 	backend := newLocalBackend(opts.StorePath, opts.AuditPath, material.Value)
+	backend.eventPath = opts.EventsPath
 	sources, sourceErr := loadSourceConfig(opts.SourcesPath)
 	if sourceErr != nil {
 		return nil, material, sourceErr

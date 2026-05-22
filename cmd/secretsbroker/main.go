@@ -226,6 +226,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"GET /v1/providers/capabilities",
 			"GET /v1/providers/config/status",
 			"GET /v1/telemetry",
+			"GET /v1/events",
 			"POST /v1/providers/config/validate|apply",
 			"POST /v1/providers/migration/dry-run|apply",
 			"GET /v1/management/secrets",
@@ -236,7 +237,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/management/secrets/policy/preview|apply",
 			"CLI secretsbroker backup create|restore",
 			"CLI secretsbroker key initialize|unlock|import|rewrap|wrapper-status|rotate",
-			"CLI secretsbroker admin status|secrets|providers|migration|audit",
+			"CLI secretsbroker admin status|secrets|providers|migration|audit|events",
 		},
 		Features: []string{
 			"liveness",
@@ -252,6 +253,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"provider-config-status",
 			"provider-config-validation",
 			"redacted-telemetry",
+			"bounded-operational-events",
 			"provider-migration-dry-run-apply",
 			"secrets-management-metadata-search",
 			"secrets-management-value-search-metadata-only",
@@ -293,6 +295,7 @@ func serve(args []string) error {
 	state := fs.String("state", getenvDefault("SECRETSBROKER_STATE", "setup_needed"), "state to report")
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
 	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	eventsPath := fs.String("events", getenvDefault("SECRETSBROKER_EVENTS_PATH", defaultEventsPath(*auditPath)), "operational events JSONL path")
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "local development master key; empty means locked")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
 	apiToken := fs.String("api-token", getenvDefault("SECRETSBROKER_API_TOKEN", ""), "local API token for secret-bearing endpoints")
@@ -304,6 +307,16 @@ func serve(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	eventsPathValue := *eventsPath
+	eventsPathExplicit := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "events" {
+			eventsPathExplicit = true
+		}
+	})
+	if !eventsPathExplicit && strings.TrimSpace(os.Getenv("SECRETSBROKER_EVENTS_PATH")) == "" {
+		eventsPathValue = defaultEventsPath(*auditPath)
+	}
 
 	refs := []string(affectedRefs)
 	services := []string(affectedServices)
@@ -313,6 +326,7 @@ func serve(args []string) error {
 		return err
 	}
 	backend := newLocalBackend(*storePath, *auditPath, material.Value)
+	backend.eventPath = eventsPathValue
 	sources, err := loadSourceConfig(*sourcesPath)
 	if err != nil {
 		return err
@@ -369,6 +383,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		registerSecretsManagementHandlers(mux, backend, security)
 		registerProviderConfigMigrationHandlers(mux, backend, security)
 		registerTelemetryHandlers(mux, backend)
+		registerEventsHandlers(mux, backend)
 	}
 	return mux
 }

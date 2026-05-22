@@ -150,6 +150,14 @@ Filtering requirements:
 - Invalid filters fail safely with typed errors.
 - Value search and credential search are not event-filter features.
 
+Implemented first slice:
+
+- Audit metadata now feeds a bounded local operational event store with deterministic retention of the most recent 200 events.
+- GET /v1/events returns metadata-only events with filters for since, until, serviceId, providerId, operation, outcome, severity, family, refPrefix, and refHash.
+- secretsbroker admin events list exposes the same bounded event reader for headless administration.
+- Event responses expose safe ref prefixes and refHash; they do not include raw refs, raw values, provider credentials, tokens, private keys, cookies, passwords, environment values, provider response bodies, or credential search results.
+- Event filters use bounded page sizes with cursor pagination, and invalid filters return typed invalid_event_filter errors.
+
 ## Lockout model
 
 Lockout scopes should be narrow enough to avoid turning one bad caller into a whole-broker outage.
