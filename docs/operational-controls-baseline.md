@@ -60,6 +60,16 @@ Baseline semantics:
 - Policy evaluation returns `allowed`, `denied`, or `unknown`; `unknown` is denied.
 - Policy denial responses include safe metadata: service id, operation, outcome, and next action. They do not include the requested value or credential material.
 
+Implemented first slice:
+
+- The broker has a service-manifest policy evaluator for the optional `secrets` section.
+- Supported operation families are `resolve`, `writeback`, and management operations mapped to `manage`.
+- Patterns support exact refs, `*`, and prefix wildcards ending in `/*`.
+- Runtime `resolve` and `writeback` decisions deny `services/<id>/...` refs when the presented service identity does not match `<id>`.
+- `POST /v1/resolve` and `POST /v1/writeback` enforce the supplied manifest policy when the request includes `secrets`.
+- Existing launch-time write-back grants remain enforced; a supplied manifest policy is an additional fail-closed gate.
+- Denied resolve/write-back responses do not echo raw secret values or generated replacement material.
+
 ## Audit model
 
 Audit events are append-only JSONL records in local mode and provider-backed records in enterprise/provider mode when available. Records should use a stable schema:

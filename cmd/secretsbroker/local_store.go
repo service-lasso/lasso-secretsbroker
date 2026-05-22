@@ -95,18 +95,19 @@ type writebackIdentity struct {
 }
 
 type generatedSecretCaptureRequest struct {
-	RequestID          string            `json:"requestId"`
-	Identity           writebackIdentity `json:"identity"`
-	Policy             writebackPolicy   `json:"policy"`
-	Operation          string            `json:"operation"`
-	Namespace          string            `json:"namespace"`
-	Ref                string            `json:"ref"`
-	Value              string            `json:"value"`
-	Metadata           map[string]string `json:"metadata"`
-	RefreshRequired    bool              `json:"refreshRequired"`
-	ReconnectRequired  bool              `json:"reconnectRequired"`
-	InvalidateRefs     []string          `json:"invalidateRefs"`
-	SourceAuthRequired bool              `json:"sourceAuthRequired"`
+	RequestID          string                `json:"requestId"`
+	Identity           writebackIdentity     `json:"identity"`
+	Policy             writebackPolicy       `json:"policy"`
+	Secrets            *serviceSecretsPolicy `json:"secrets,omitempty"`
+	Operation          string                `json:"operation"`
+	Namespace          string                `json:"namespace"`
+	Ref                string                `json:"ref"`
+	Value              string                `json:"value"`
+	Metadata           map[string]string     `json:"metadata"`
+	RefreshRequired    bool                  `json:"refreshRequired"`
+	ReconnectRequired  bool                  `json:"reconnectRequired"`
+	InvalidateRefs     []string              `json:"invalidateRefs"`
+	SourceAuthRequired bool                  `json:"sourceAuthRequired"`
 }
 
 type generatedSecretCaptureResponse struct {
@@ -125,11 +126,12 @@ type generatedSecretCaptureResponse struct {
 }
 
 type resolveRequest struct {
-	RequestID   string   `json:"requestId"`
-	WorkspaceID string   `json:"workspaceId"`
-	ServiceID   string   `json:"serviceId"`
-	Purpose     string   `json:"purpose"`
-	Refs        []string `json:"refs"`
+	RequestID   string                `json:"requestId"`
+	WorkspaceID string                `json:"workspaceId"`
+	ServiceID   string                `json:"serviceId"`
+	Purpose     string                `json:"purpose"`
+	Secrets     *serviceSecretsPolicy `json:"secrets,omitempty"`
+	Refs        []string              `json:"refs"`
 }
 
 type resolveResponse struct {
@@ -296,6 +298,15 @@ func (b *localBackend) captureGeneratedSecret(req generatedSecretCaptureRequest)
 			return response, errIdentityExpired
 		}
 	}
+	if req.Secrets != nil {
+		decision := evaluateServiceSecretsPolicy(service, "writeback", fullRef, req.Secrets)
+		_ = b.audit("policy_decision", fullRef, decision.Outcome, service, req.RequestID)
+		if decision.Outcome != "allowed" {
+			_ = b.audit("writeback_capture", fullRef, "policy_denied", service, req.RequestID)
+			response.Outcome = "policy_denied"
+			return response, errPolicyDenied
+		}
+	}
 	if !namespaceAllowed(namespace, req.Policy.AllowedNamespaces) || !operationAllowed(operation, req.Policy.AllowedOperations) {
 		_ = b.audit("writeback_capture", fullRef, "policy_denied", service, req.RequestID)
 		response.Outcome = "policy_denied"
@@ -370,6 +381,11 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 		case !validSecretRef(ref):
 			result.Outcome = "invalid_ref"
 			result.Message = "Secret ref is invalid."
+		case req.Secrets != nil && evaluateServiceSecretsPolicy(req.ServiceID, "resolve", ref, req.Secrets).Outcome != "allowed":
+			decision := evaluateServiceSecretsPolicy(req.ServiceID, "resolve", ref, req.Secrets)
+			_ = b.audit("policy_decision", ref, decision.Outcome, req.ServiceID, req.RequestID)
+			result.Outcome = "policy_denied"
+			result.Message = "Service secret policy denied resolve."
 		case b.locked():
 			result.Outcome = "locked"
 			result.Message = "Secrets Broker local store is locked."
