@@ -96,6 +96,77 @@ Dry-run validates ref, policy, backend state, and audit requirements. Apply requ
 
 Dry-run validates reset/rotate readiness. Apply stores caller-provided replacement material (or a future provider-generated value) without returning the raw value.
 
+### `POST /v1/management/secrets/rotation/dry-run`
+
+Metadata-only credential rotation planning. The first broker-side slice is dry-run only: it reports local encrypted-store rotation/reset readiness and provider capability results, but it does not generate replacement material, mutate secrets, call external provider apply APIs, or return raw values.
+
+Request:
+
+```json
+{
+  "requestId": "req-rotation-1",
+  "serviceId": "@serviceadmin",
+  "operationId": "rotation-campaign-2026-05-23-a",
+  "refs": [
+    "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+  ],
+  "reason": "operator rotation planning"
+}
+```
+
+Response:
+
+```json
+{
+  "serviceId": "@secretsbroker",
+  "apiVersion": "secretsbroker.local/v1",
+  "requestId": "req-rotation-1",
+  "operationId": "rotation-campaign-2026-05-23-a",
+  "operation": "credential_rotation",
+  "mode": "dry-run",
+  "outcome": "dry_run_ready",
+  "applied": false,
+  "requiresConfirmation": true,
+  "auditStatus": "audit_ready",
+  "staleAfterSeconds": 300,
+  "nextAction": "confirm_with_operation_id_audit_reason_and_fresh_plan",
+  "results": [
+    {
+      "ref": "services/@serviceadmin/runtime/SESSION_SIGNING_KEY",
+      "sourceId": "local-test",
+      "providerKind": "local-encrypted-store",
+      "ownerServiceId": "@serviceadmin",
+      "capability": "rotate/reset",
+      "capabilityResult": "supported",
+      "policyResult": "allowed",
+      "auditRequirement": "required",
+      "risk": "medium",
+      "expectedAction": "generate_or_accept_replacement_inside_broker",
+      "outcome": "dry_run_ready",
+      "nextAction": "confirm_with_operation_id_audit_reason_and_fresh_plan",
+      "operationId": "rotation-campaign-2026-05-23-a",
+      "idempotencyKey": "rotation-campaign-2026-05-23-a:sha256:..."
+    }
+  ],
+  "summary": {
+    "selectedCount": 1,
+    "readyCount": 1,
+    "deniedCount": 0,
+    "unsupportedCount": 0,
+    "blockedCount": 0,
+    "highRiskCount": 0
+  },
+  "affectedRefs": [
+    "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+  ],
+  "affectedServices": [
+    "@serviceadmin"
+  ]
+}
+```
+
+Provider-backed refs are represented as metadata-only capability results. A provider/source that does not currently advertise rotate/reset support returns `unsupported` with `nextAction: "inspect_provider_capabilities"`. Unknown policy, audit, provider auth, or broker state fails closed and must be rechecked with a fresh dry-run before any later apply path.
+
 ### `POST /v1/management/secrets/policy/preview`
 ### `POST /v1/management/secrets/policy/apply`
 

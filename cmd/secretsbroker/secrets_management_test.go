@@ -134,6 +134,50 @@ func TestManagedDryRunApplyAndPolicyContractsDoNotReturnRawValues(t *testing.T) 
 	}
 }
 
+func TestRotationDryRunPlansLocalRefsAndPartialDenialsMetadataOnly(t *testing.T) {
+	backend := managedTestBackend(t)
+	readyRef := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	deniedRef := "services/deny/runtime/DENY_ME"
+	writeManagedTestSecret(t, backend, readyRef, managedSecretValue)
+	writeManagedTestSecret(t, backend, deniedRef, "rotation-deny-fixture-value")
+
+	plan, err := backend.rotationDryRun(rotationDryRunRequest{RequestID: "req-rotation-plan", ServiceID: "@serviceadmin", OperationID: "rotate-campaign-a", Refs: []string{deniedRef, readyRef}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Outcome != "partial_failure" || plan.Applied || !plan.RequiresConfirmation || plan.StaleAfterSeconds != rotationPlanStaleAfterSeconds {
+		t.Fatalf("rotation plan = %#v", plan)
+	}
+	if plan.Summary.SelectedCount != 2 || plan.Summary.ReadyCount != 1 || plan.Summary.DeniedCount != 1 {
+		t.Fatalf("rotation summary = %#v", plan.Summary)
+	}
+	if plan.Results[0].Ref != readyRef || plan.Results[0].CapabilityResult != "supported" || plan.Results[0].PolicyResult != "allowed" || plan.Results[0].IdempotencyKey == "" {
+		t.Fatalf("ready rotation item = %#v", plan.Results[0])
+	}
+	if plan.Results[1].Ref != deniedRef || plan.Results[1].Outcome != "policy_denied" || plan.Results[1].PolicyResult != "denied" {
+		t.Fatalf("denied rotation item = %#v", plan.Results[1])
+	}
+	assertNoSecretMaterial(t, mustManagedJSON(t, plan), managedSecretValue, "rotation-deny-fixture-value", "replacement-value")
+}
+
+func TestRotationDryRunReportsProviderCapabilityWithoutRawValues(t *testing.T) {
+	backend := managedTestBackend(t)
+	backend.sources = sourceConfigFile{Sources: []sourceConfig{{
+		SourceID: "file-source", Kind: "file", Enabled: true, Refs: map[string]sourceRefConfig{
+			"services/file/runtime/FILE_ONLY_REF": {Path: "C:/not-used"},
+		},
+	}}}
+
+	plan, err := backend.rotationDryRun(rotationDryRunRequest{RequestID: "req-file-rotation", ServiceID: "@serviceadmin", OperationID: "rotate-file-source", Refs: []string{"services/file/runtime/FILE_ONLY_REF"}})
+	if err == nil || plan.Outcome != "unsupported" || plan.Summary.UnsupportedCount != 1 {
+		t.Fatalf("provider capability plan = %#v err=%v", plan, err)
+	}
+	if len(plan.Results) != 1 || plan.Results[0].ProviderKind != "file" || plan.Results[0].CapabilityResult != "unsupported" || plan.Results[0].NextAction != "inspect_provider_capabilities" {
+		t.Fatalf("provider rotation item = %#v", plan.Results)
+	}
+	assertNoSecretMaterial(t, mustManagedJSON(t, plan), "file-source-token", "replacement-value")
+}
+
 func TestManagedHTTPContractAndFailClosedErrors(t *testing.T) {
 	backend := managedTestBackend(t)
 	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
@@ -189,6 +233,35 @@ func TestManagedHTTPContractAndFailClosedErrors(t *testing.T) {
 		t.Fatalf("missing status=%d body=%s", missingRes.StatusCode, missing)
 	}
 	assertNoSecretMaterial(t, missing, managedSecretValue)
+}
+
+func TestRotationDryRunHTTPContractIsMetadataOnly(t *testing.T) {
+	backend := managedTestBackend(t)
+	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	writeManagedTestSecret(t, backend, ref, managedSecretValue)
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	body := []byte(`{"requestId":"req-http-rotation","serviceId":"@serviceadmin","operationId":"rotation-http-a","refs":["` + ref + `"],"reason":"operator approved"}`)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/management/secrets/rotation/dry-run", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-token")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := readClose(t, res.Body)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("rotation dry-run status=%d body=%s", res.StatusCode, got)
+	}
+	if !bytes.Contains(got, []byte(`"operation":"credential_rotation"`)) || !bytes.Contains(got, []byte(`"outcome":"dry_run_ready"`)) {
+		t.Fatalf("rotation dry-run body=%s", got)
+	}
+	assertNoSecretMaterial(t, got, managedSecretValue, "replacement-value")
 }
 
 func TestManagedListLockedFailsClosed(t *testing.T) {
