@@ -42,6 +42,7 @@ var typedOutcomes = []string{
 	"invalid_ref",
 	"source_unavailable",
 	"identity_expired",
+	"lockout_active",
 	"disabled",
 }
 
@@ -92,13 +93,16 @@ type ErrorEnvelope struct {
 }
 
 type APIError struct {
-	Code             string   `json:"code"`
-	Message          string   `json:"message"`
-	Outcome          string   `json:"outcome"`
-	RequestID        string   `json:"requestId,omitempty"`
-	NextAction       string   `json:"nextAction,omitempty"`
-	AffectedRefs     []string `json:"affectedRefs"`
-	AffectedServices []string `json:"affectedServices"`
+	Code              string   `json:"code"`
+	Message           string   `json:"message"`
+	Outcome           string   `json:"outcome"`
+	RequestID         string   `json:"requestId,omitempty"`
+	NextAction        string   `json:"nextAction,omitempty"`
+	AffectedRefs      []string `json:"affectedRefs"`
+	AffectedServices  []string `json:"affectedServices"`
+	LockoutActive     bool     `json:"lockoutActive,omitempty"`
+	LockoutScope      string   `json:"lockoutScope,omitempty"`
+	RetryAfterSeconds int      `json:"retryAfterSeconds,omitempty"`
 }
 
 func main() {
@@ -254,6 +258,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"provider-config-validation",
 			"redacted-telemetry",
 			"bounded-operational-events",
+			"scoped-local-api-lockout",
 			"provider-migration-dry-run-apply",
 			"secrets-management-metadata-search",
 			"secrets-management-value-search-metadata-only",
@@ -378,6 +383,12 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		writeJSON(w, http.StatusOK, defaultCapabilities())
 	})
 	if backend != nil {
+		if security.lockouts == nil {
+			security.lockouts = newLockoutStore(nil)
+		}
+		if security.audit == nil {
+			security.audit = backend.audit
+		}
 		registerLocalStoreHandlers(mux, backend, security)
 		registerSourceRegistryHandlers(mux, backend)
 		registerSecretsManagementHandlers(mux, backend, security)

@@ -83,7 +83,11 @@ func generateSessionToken() (string, error) {
 	return "sbk_" + base64.RawURLEncoding.EncodeToString(bytes), nil
 }
 
-type localAPISecurity struct{ token string }
+type localAPISecurity struct {
+	token    string
+	lockouts *lockoutStore
+	audit    func(operation, ref, outcome, requestServiceID, requestID string) error
+}
 
 func (s localAPISecurity) require(w http.ResponseWriter, r *http.Request) bool {
 	expected := strings.TrimSpace(s.token)
@@ -91,15 +95,49 @@ func (s localAPISecurity) require(w http.ResponseWriter, r *http.Request) bool {
 		writeAPIError(w, http.StatusServiceUnavailable, "security_not_configured", "Secret-bearing endpoints require SECRETSBROKER_API_TOKEN or --api-token.", "policy_denied", "configure_api_token")
 		return false
 	}
+	scope := localAPILockoutScope(r)
+	if decision := s.lockouts.active(scope); decision.Active {
+		s.auditOutcome("local_api_lockout", "lockout_active")
+		writeLockoutAPIError(w, decision)
+		return false
+	}
 	got := bearerToken(r.Header.Get("Authorization"))
 	if got == "" {
 		got = strings.TrimSpace(r.Header.Get("X-SecretsBroker-Token"))
 	}
 	if got == "" || !constantTimeTokenEqual(got, expected) {
+		s.auditOutcome("local_api_auth", "unauthorized")
+		decision, started := s.lockouts.recordFailure(scope)
+		if started {
+			s.auditOutcome("local_api_lockout", "lockout_active")
+			writeLockoutAPIError(w, decision)
+			return false
+		}
 		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "A valid local API token is required.", "policy_denied", "authenticate_local_session")
 		return false
 	}
+	s.lockouts.recordSuccess(scope)
 	return true
+}
+
+func (s localAPISecurity) auditOutcome(operation, outcome string) {
+	if s.audit != nil {
+		_ = s.audit(operation, "", outcome, "@operator", "")
+	}
+}
+
+func writeLockoutAPIError(w http.ResponseWriter, decision lockoutDecision) {
+	writeJSON(w, http.StatusLocked, ErrorEnvelope{Error: APIError{
+		Code:              "lockout_active",
+		Message:           "Local API authentication is temporarily locked for this scope.",
+		Outcome:           "policy_denied",
+		NextAction:        "wait_or_clear_lockout",
+		AffectedRefs:      []string{},
+		AffectedServices:  []string{},
+		LockoutActive:     true,
+		LockoutScope:      decision.Scope,
+		RetryAfterSeconds: decision.RetryAfterSeconds,
+	}})
 }
 
 func constantTimeTokenEqual(got, expected string) bool {
