@@ -97,6 +97,13 @@ Required redaction:
 - No event may include raw `value`, credential payloads, auth headers, bearer tokens, private keys, cookies, environment dumps, or provider response bodies.
 - Audit failure blocks reveal/apply unless the operation is explicitly marked non-secret-bearing and safe to continue.
 
+Implemented first slice:
+
+- Local audit JSONL records are normalized with `requestId`, `operation`, `serviceId`, `actorKind`, `ref`, `refHash`, `providerId` where applicable, `outcome`, `reasonCode`, and `auditStatus`.
+- Audit fields are trimmed, control characters are stripped, and long metadata fields are bounded before persistence.
+- `secretsbroker admin audit export --ref-hash-only` omits raw refs from exported events while preserving `refHash` for correlation.
+- Tests cover metadata-only audit export and prove secret payload values/master-key material are not serialized.
+
 ## Telemetry model
 
 Telemetry is operational health data, not audit evidence. It should be safe to expose to Service Lasso and Service Admin without elevated secret access.

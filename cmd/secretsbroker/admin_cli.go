@@ -31,12 +31,13 @@ type adminStatusResponse struct {
 }
 
 type adminAuditExportResponse struct {
-	ServiceID  string       `json:"serviceId"`
-	APIVersion string       `json:"apiVersion"`
-	Outcome    string       `json:"outcome"`
-	Operation  string       `json:"operation,omitempty"`
-	Ref        string       `json:"ref,omitempty"`
-	Events     []auditEvent `json:"events"`
+	ServiceID   string       `json:"serviceId"`
+	APIVersion  string       `json:"apiVersion"`
+	Outcome     string       `json:"outcome"`
+	Operation   string       `json:"operation,omitempty"`
+	Ref         string       `json:"ref,omitempty"`
+	RefHashOnly bool         `json:"refHashOnly,omitempty"`
+	Events      []auditEvent `json:"events"`
 }
 
 func runAdmin(args []string) error {
@@ -237,10 +238,11 @@ func runAdminAudit(args []string, out io.Writer) error {
 	fs, opts := newAdminFlagSet("admin audit export")
 	operation := fs.String("operation", "", "operation filter")
 	ref := fs.String("ref", "", "ref filter")
+	refHashOnly := fs.Bool("ref-hash-only", false, "omit raw refs from exported audit events and keep refHash only")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
-	res, err := exportAuditEvents(opts.AuditPath, *operation, *ref)
+	res, err := exportAuditEvents(opts.AuditPath, *operation, *ref, *refHashOnly)
 	if err != nil {
 		_ = encodeAdminJSON(out, res)
 		return err
@@ -289,8 +291,8 @@ func normalizeAdminState(state string, backend *localBackend, material keyMateri
 	return "ready"
 }
 
-func exportAuditEvents(path, operation, ref string) (adminAuditExportResponse, error) {
-	res := adminAuditExportResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "ready", Operation: strings.TrimSpace(operation), Ref: strings.TrimSpace(ref), Events: []auditEvent{}}
+func exportAuditEvents(path, operation, ref string, refHashOnly bool) (adminAuditExportResponse, error) {
+	res := adminAuditExportResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "ready", Operation: strings.TrimSpace(operation), Ref: strings.TrimSpace(ref), RefHashOnly: refHashOnly, Events: []auditEvent{}}
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return res, nil
@@ -312,6 +314,10 @@ func exportAuditEvents(path, operation, ref string) (adminAuditExportResponse, e
 		}
 		if res.Ref != "" && event.Ref != res.Ref {
 			continue
+		}
+		event = normalizeAuditEvent(event)
+		if refHashOnly {
+			event.Ref = ""
 		}
 		res.Events = append(res.Events, event)
 	}
