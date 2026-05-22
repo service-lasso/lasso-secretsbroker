@@ -184,6 +184,15 @@ Baseline behavior:
 - emit audit and event records for lockout start and clear
 - provide an admin clear command that requires local API auth and audit reason
 
+Implemented first slice:
+
+- Secret-bearing local API token failures are tracked in memory by narrow local API client scope.
+- Three invalid token attempts for the same local API scope start a five-minute cooldown.
+- Active lockout responses return metadata only: `lockoutActive`, `lockoutScope`, `retryAfterSeconds`, outcome, and next action.
+- Lockout and auth-failure audit/events use operation/outcome metadata only and do not persist presented tokens, expected tokens, request bodies, or secret values.
+- Safe read-only status, readiness, capabilities, telemetry, and event endpoints remain available during local API lockout.
+- Provider/source, service-identity, management apply/reveal denial, and audited admin-clear persistence are follow-up slices under #66.
+
 ## API/backend mapping
 
 | Control | API/backend requirement |
