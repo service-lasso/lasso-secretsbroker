@@ -258,6 +258,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"env-source",
 			"file-source",
 			"exec-source",
+			"service-json-secret-policy",
 			"write-back-policy",
 			"generated-secret-capture",
 			"encrypted-backup-restore",

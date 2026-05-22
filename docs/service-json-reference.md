@@ -346,6 +346,34 @@ Sample:
 
 ## Other important manifest aspects
 
+### `secrets`
+
+`secrets` declares the secret refs a service is allowed to use. The broker treats this section as desired policy input and still requires the caller's runtime identity to match the service.
+
+Example:
+
+```json
+"secrets": {
+  "resolve": [
+    "services/echo-service/runtime/*"
+  ],
+  "writeback": [
+    "services/echo-service/generated/*"
+  ],
+  "manage": []
+}
+```
+
+Current broker semantics:
+
+- `resolve` gates runtime secret resolution.
+- `writeback` gates generated secret capture in addition to launch-time write-back grants.
+- `manage` gates reveal/edit/reset/migration/policy operations and remains subject to local API auth, audit reason, and operation-specific checks.
+- Patterns are metadata matchers: exact refs, `*`, or prefix wildcards ending in `/*`.
+- Runtime `resolve` and `writeback` decisions deny `services/<id>/...` refs when the presented service identity does not match `<id>`.
+- Missing or malformed policy evaluates to `unknown` or `denied` and must fail closed when policy enforcement is requested.
+- Policy decisions and denial responses are metadata-only; they must not include raw values, provider credentials, tokens, environment dumps, or generated replacement material.
+
 ### Environment generation
 Current broader Service Lasso direction includes:
 - explicit service-local env via `env`
