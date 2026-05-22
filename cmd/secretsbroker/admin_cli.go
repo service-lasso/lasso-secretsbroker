@@ -59,6 +59,8 @@ func executeAdmin(args []string, out io.Writer) error {
 		return runAdminMigration(args[1:], out)
 	case "audit":
 		return runAdminAudit(args[1:], out)
+	case "telemetry":
+		return runAdminTelemetry(args[1:], out)
 	default:
 		return fmt.Errorf("unknown admin command %q", args[0])
 	}
@@ -243,6 +245,23 @@ func runAdminAudit(args []string, out io.Writer) error {
 		return err
 	}
 	res, err := exportAuditEvents(opts.AuditPath, *operation, *ref, *refHashOnly)
+	if err != nil {
+		_ = encodeAdminJSON(out, res)
+		return err
+	}
+	return encodeAdminJSON(out, res)
+}
+
+func runAdminTelemetry(args []string, out io.Writer) error {
+	fs, opts := newAdminFlagSet("admin telemetry")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	backend, _, err := backendFromAdminOptions(opts)
+	if err != nil && !errors.Is(err, errLocked) {
+		return err
+	}
+	res, err := buildTelemetryResponse(backend)
 	if err != nil {
 		_ = encodeAdminJSON(out, res)
 		return err

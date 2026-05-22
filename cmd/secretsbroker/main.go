@@ -225,6 +225,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"GET /v1/sources/status",
 			"GET /v1/providers/capabilities",
 			"GET /v1/providers/config/status",
+			"GET /v1/telemetry",
 			"POST /v1/providers/config/validate|apply",
 			"POST /v1/providers/migration/dry-run|apply",
 			"GET /v1/management/secrets",
@@ -250,6 +251,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"source-status",
 			"provider-config-status",
 			"provider-config-validation",
+			"redacted-telemetry",
 			"provider-migration-dry-run-apply",
 			"secrets-management-metadata-search",
 			"secrets-management-value-search-metadata-only",
@@ -366,6 +368,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		registerSourceRegistryHandlers(mux, backend)
 		registerSecretsManagementHandlers(mux, backend, security)
 		registerProviderConfigMigrationHandlers(mux, backend, security)
+		registerTelemetryHandlers(mux, backend)
 	}
 	return mux
 }
