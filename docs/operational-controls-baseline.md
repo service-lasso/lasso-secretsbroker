@@ -120,6 +120,13 @@ Baseline metrics:
 
 Telemetry labels must be low-cardinality and safe. Use service ids, provider ids, operation names, outcomes, and state names. Use ref prefix groups or hashes only when necessary; do not label with raw values or unbounded refs.
 
+Implemented first slice:
+
+- `GET /v1/telemetry` returns read-only metadata counters for operation/outcome pairs, policy decisions, local API auth failures recorded in audit metadata, source states, provider states, and audit-record status/outcome pairs.
+- `secretsbroker admin telemetry` prints the same metadata-only telemetry shape for headless consumers.
+- The first slice intentionally reports duration histograms as an empty array until operation-duration timing is recorded by the broker paths.
+- Telemetry uses `refHash`-only audit reads internally and does not serialize raw refs, secret values, provider credentials, bearer tokens, private keys, cookies, passwords, environment values, or provider response bodies.
+
 ## Events and filtering
 
 Events represent operator-relevant state transitions and decisions. The broker should maintain a bounded recent event store and expose filtered reads.
