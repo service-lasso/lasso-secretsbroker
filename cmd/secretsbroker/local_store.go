@@ -37,6 +37,7 @@ var (
 type localBackend struct {
 	storePath string
 	auditPath string
+	eventPath string
 	masterKey string
 	sources   sourceConfigFile
 	now       func() time.Time
@@ -167,11 +168,25 @@ type auditEvent struct {
 }
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
-	return &localBackend{storePath: storePath, auditPath: auditPath, masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }}
+	return &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }}
 }
 
 func defaultStorePath() string { return filepath.Join("data", "secretsbroker-store.json") }
 func defaultAuditPath() string { return filepath.Join("data", "secretsbroker-audit.jsonl") }
+func defaultEventsPath(auditPath string) string {
+	auditPath = strings.TrimSpace(auditPath)
+	if auditPath == "" {
+		return ""
+	}
+	if filepath.Clean(auditPath) == filepath.Clean(defaultAuditPath()) {
+		return filepath.Join("data", "secretsbroker-events.jsonl")
+	}
+	ext := filepath.Ext(auditPath)
+	if ext == "" {
+		return auditPath + "-events"
+	}
+	return strings.TrimSuffix(auditPath, ext) + "-events" + ext
+}
 
 func (b *localBackend) locked() bool { return strings.TrimSpace(b.masterKey) == "" }
 
@@ -484,7 +499,10 @@ func (b *localBackend) writeAuditEvent(event auditEvent) error {
 		return err
 	}
 	defer file.Close()
-	return json.NewEncoder(file).Encode(event)
+	if err := json.NewEncoder(file).Encode(event); err != nil {
+		return err
+	}
+	return b.writeOperationalEvent(event)
 }
 
 func normalizeAuditEvent(event auditEvent) auditEvent {
