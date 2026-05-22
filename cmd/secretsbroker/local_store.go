@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -150,14 +151,19 @@ type resolveResult struct {
 }
 
 type auditEvent struct {
-	TS        time.Time `json:"ts"`
-	Operation string    `json:"operation"`
-	Ref       string    `json:"ref,omitempty"`
-	Outcome   string    `json:"outcome"`
-	State     string    `json:"state,omitempty"`
-	SourceID  string    `json:"sourceId,omitempty"`
-	ServiceID string    `json:"serviceId,omitempty"`
-	RequestID string    `json:"requestId,omitempty"`
+	TS          time.Time `json:"ts"`
+	RequestID   string    `json:"requestId,omitempty"`
+	Operation   string    `json:"operation"`
+	ServiceID   string    `json:"serviceId,omitempty"`
+	ActorKind   string    `json:"actorKind"`
+	Ref         string    `json:"ref,omitempty"`
+	RefHash     string    `json:"refHash,omitempty"`
+	ProviderID  string    `json:"providerId,omitempty"`
+	SourceID    string    `json:"sourceId,omitempty"`
+	Outcome     string    `json:"outcome"`
+	ReasonCode  string    `json:"reasonCode"`
+	State       string    `json:"state,omitempty"`
+	AuditStatus string    `json:"auditStatus"`
 }
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
@@ -469,6 +475,7 @@ func (b *localBackend) writeAuditEvent(event auditEvent) error {
 	if strings.TrimSpace(b.auditPath) == "" {
 		return nil
 	}
+	event = normalizeAuditEvent(event)
 	if err := os.MkdirAll(filepath.Dir(b.auditPath), 0o700); err != nil {
 		return err
 	}
@@ -478,6 +485,76 @@ func (b *localBackend) writeAuditEvent(event auditEvent) error {
 	}
 	defer file.Close()
 	return json.NewEncoder(file).Encode(event)
+}
+
+func normalizeAuditEvent(event auditEvent) auditEvent {
+	event.Operation = scrubAuditField(event.Operation)
+	event.Ref = scrubAuditField(event.Ref)
+	event.Outcome = scrubAuditField(event.Outcome)
+	event.State = scrubAuditField(event.State)
+	event.SourceID = scrubAuditField(event.SourceID)
+	event.ServiceID = scrubAuditField(event.ServiceID)
+	event.RequestID = scrubAuditField(event.RequestID)
+	event.ProviderID = scrubAuditField(event.ProviderID)
+	event.ReasonCode = scrubAuditField(event.ReasonCode)
+	event.ActorKind = scrubAuditField(event.ActorKind)
+	event.AuditStatus = scrubAuditField(event.AuditStatus)
+	if event.Operation == "" {
+		event.Operation = "unknown"
+	}
+	if event.Outcome == "" {
+		event.Outcome = "degraded"
+	}
+	if event.ReasonCode == "" {
+		event.ReasonCode = event.Outcome
+	}
+	if event.ActorKind == "" {
+		event.ActorKind = actorKindForAudit(event.ServiceID)
+	}
+	if event.AuditStatus == "" {
+		event.AuditStatus = "audit_recorded"
+	}
+	if event.Ref != "" && event.RefHash == "" {
+		event.RefHash = hashAuditRef(event.Ref)
+	}
+	if event.ProviderID == "" && strings.HasPrefix(event.Operation, "provider_") && event.Ref != "" {
+		event.ProviderID = event.Ref
+	}
+	return event
+}
+
+func scrubAuditField(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.Map(func(r rune) rune {
+		switch r {
+		case '\r', '\n', '\t':
+			return ' '
+		}
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, value)
+	if len(value) > 256 {
+		return value[:256]
+	}
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func hashAuditRef(ref string) string {
+	sum := sha256.Sum256([]byte(ref))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func actorKindForAudit(serviceID string) string {
+	switch strings.TrimSpace(serviceID) {
+	case "":
+		return "system"
+	case "@operator":
+		return "operator"
+	default:
+		return "service"
+	}
 }
 
 func (b *localBackend) encrypt(value string) (secretPayload, error) {
