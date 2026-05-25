@@ -42,6 +42,7 @@ var typedOutcomes = []string{
 	"invalid_ref",
 	"source_unavailable",
 	"identity_expired",
+	"lockout_active",
 	"disabled",
 }
 
@@ -92,13 +93,16 @@ type ErrorEnvelope struct {
 }
 
 type APIError struct {
-	Code             string   `json:"code"`
-	Message          string   `json:"message"`
-	Outcome          string   `json:"outcome"`
-	RequestID        string   `json:"requestId,omitempty"`
-	NextAction       string   `json:"nextAction,omitempty"`
-	AffectedRefs     []string `json:"affectedRefs"`
-	AffectedServices []string `json:"affectedServices"`
+	Code              string   `json:"code"`
+	Message           string   `json:"message"`
+	Outcome           string   `json:"outcome"`
+	RequestID         string   `json:"requestId,omitempty"`
+	NextAction        string   `json:"nextAction,omitempty"`
+	AffectedRefs      []string `json:"affectedRefs"`
+	AffectedServices  []string `json:"affectedServices"`
+	LockoutActive     bool     `json:"lockoutActive,omitempty"`
+	LockoutScope      string   `json:"lockoutScope,omitempty"`
+	RetryAfterSeconds int      `json:"retryAfterSeconds,omitempty"`
 }
 
 func main() {
@@ -225,6 +229,8 @@ func defaultCapabilities() CapabilitiesResponse {
 			"GET /v1/sources/status",
 			"GET /v1/providers/capabilities",
 			"GET /v1/providers/config/status",
+			"GET /v1/telemetry",
+			"GET /v1/events",
 			"POST /v1/providers/config/validate|apply",
 			"POST /v1/providers/migration/dry-run|apply",
 			"GET /v1/management/secrets",
@@ -232,10 +238,11 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/management/secrets/reveal",
 			"POST /v1/management/secrets/edit/dry-run|apply",
 			"POST /v1/management/secrets/reset/dry-run|apply",
+			"POST /v1/management/secrets/rotation/dry-run",
 			"POST /v1/management/secrets/policy/preview|apply",
 			"CLI secretsbroker backup create|restore",
 			"CLI secretsbroker key initialize|unlock|import|rewrap|wrapper-status|rotate",
-			"CLI secretsbroker admin status|secrets|providers|migration|audit",
+			"CLI secretsbroker admin status|secrets|providers|migration|audit|events",
 		},
 		Features: []string{
 			"liveness",
@@ -250,14 +257,19 @@ func defaultCapabilities() CapabilitiesResponse {
 			"source-status",
 			"provider-config-status",
 			"provider-config-validation",
+			"redacted-telemetry",
+			"bounded-operational-events",
+			"scoped-local-api-lockout",
 			"provider-migration-dry-run-apply",
 			"secrets-management-metadata-search",
 			"secrets-management-value-search-metadata-only",
 			"secrets-management-controlled-reveal",
 			"secrets-management-dry-run-apply",
+			"credential-rotation-dry-run",
 			"env-source",
 			"file-source",
 			"exec-source",
+			"service-json-secret-policy",
 			"write-back-policy",
 			"generated-secret-capture",
 			"encrypted-backup-restore",
@@ -290,6 +302,7 @@ func serve(args []string) error {
 	state := fs.String("state", getenvDefault("SECRETSBROKER_STATE", "setup_needed"), "state to report")
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
 	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	eventsPath := fs.String("events", getenvDefault("SECRETSBROKER_EVENTS_PATH", defaultEventsPath(*auditPath)), "operational events JSONL path")
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "local development master key; empty means locked")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
 	apiToken := fs.String("api-token", getenvDefault("SECRETSBROKER_API_TOKEN", ""), "local API token for secret-bearing endpoints")
@@ -301,6 +314,16 @@ func serve(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	eventsPathValue := *eventsPath
+	eventsPathExplicit := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "events" {
+			eventsPathExplicit = true
+		}
+	})
+	if !eventsPathExplicit && strings.TrimSpace(os.Getenv("SECRETSBROKER_EVENTS_PATH")) == "" {
+		eventsPathValue = defaultEventsPath(*auditPath)
+	}
 
 	refs := []string(affectedRefs)
 	services := []string(affectedServices)
@@ -310,6 +333,7 @@ func serve(args []string) error {
 		return err
 	}
 	backend := newLocalBackend(*storePath, *auditPath, material.Value)
+	backend.eventPath = eventsPathValue
 	sources, err := loadSourceConfig(*sourcesPath)
 	if err != nil {
 		return err
@@ -361,10 +385,19 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		writeJSON(w, http.StatusOK, defaultCapabilities())
 	})
 	if backend != nil {
+		if security.lockouts == nil {
+			security.lockouts = newLockoutStore(nil)
+		}
+		if security.audit == nil {
+			security.audit = backend.audit
+		}
 		registerLocalStoreHandlers(mux, backend, security)
 		registerSourceRegistryHandlers(mux, backend)
 		registerSecretsManagementHandlers(mux, backend, security)
+		registerRotationHandlers(mux, backend, security)
 		registerProviderConfigMigrationHandlers(mux, backend, security)
+		registerTelemetryHandlers(mux, backend)
+		registerEventsHandlers(mux, backend)
 	}
 	return mux
 }

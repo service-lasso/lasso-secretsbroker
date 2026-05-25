@@ -55,6 +55,8 @@ If no token is configured, secret-bearing endpoints return `503 security_not_con
 
 Token checks trim whitespace, hash both presented and expected tokens, and then compare fixed-size digests in constant time. This avoids length-dependent token comparison behavior while keeping responses generic.
 
+Repeated invalid local API tokens are tracked by local API client scope. Three invalid attempts for the same scope start a five-minute cooldown for secret-bearing endpoints. The lockout response includes safe metadata only and does not echo the presented token or expected token.
+
 Secret-bearing endpoints cap request bodies at 1 MiB before JSON decode. Oversized requests return `413 request_too_large` with a safe fixed message; request content and bearer tokens are not echoed.
 
 ## CLI helpers
@@ -84,6 +86,24 @@ Missing/invalid token:
     "nextAction": "authenticate_local_session",
     "affectedRefs": [],
     "affectedServices": []
+  }
+}
+```
+
+Active lockout:
+
+```json
+{
+  "error": {
+    "code": "lockout_active",
+    "message": "Local API authentication is temporarily locked for this scope.",
+    "outcome": "policy_denied",
+    "nextAction": "wait_or_clear_lockout",
+    "affectedRefs": [],
+    "affectedServices": [],
+    "lockoutActive": true,
+    "lockoutScope": "local_api:127.0.0.1",
+    "retryAfterSeconds": 300
   }
 }
 ```
@@ -133,6 +153,7 @@ Planned session model:
 - per-service/ref policy checks before resolve/write-back
 - lease/renew/revoke for runtime identities where applicable
 - audit events for allow/deny/resolve/write-back without plaintext values
+- durable audited lockout clear workflow for management clients
 
 ## Non-goals for this slice
 

@@ -126,6 +126,25 @@ func TestAdminCLIProviderValidationMigrationAndAuditAreScrubbed(t *testing.T) {
 	if len(exported.Events) == 0 || exported.Events[0].Operation != "management_reveal" {
 		t.Fatalf("audit export = %#v", exported)
 	}
+	if exported.Events[0].RefHash == "" || exported.Events[0].ReasonCode != "ready" || exported.Events[0].ActorKind != "operator" || exported.Events[0].AuditStatus != "audit_recorded" {
+		t.Fatalf("audit event missing normalized metadata: %#v", exported.Events[0])
+	}
+
+	var hashOnly bytes.Buffer
+	if err := executeAdmin([]string{"audit", "export", "--operation", "management_reveal", "--ref-hash-only", "--audit", backend.auditPath}, &hashOnly); err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecretMaterial(t, hashOnly.Bytes(), adminCLISecretValue, "test-master-key")
+	if bytes.Contains(hashOnly.Bytes(), []byte(ref)) {
+		t.Fatalf("hash-only audit export exposed raw ref: %s", hashOnly.String())
+	}
+	var hashOnlyExport adminAuditExportResponse
+	if err := json.Unmarshal(hashOnly.Bytes(), &hashOnlyExport); err != nil {
+		t.Fatal(err)
+	}
+	if len(hashOnlyExport.Events) == 0 || hashOnlyExport.Events[0].Ref != "" || hashOnlyExport.Events[0].RefHash == "" {
+		t.Fatalf("hash-only audit export = %#v", hashOnlyExport)
+	}
 }
 
 func TestAdminCLILockedListFailsClosed(t *testing.T) {

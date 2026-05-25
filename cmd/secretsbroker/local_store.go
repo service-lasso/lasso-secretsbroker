@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,6 +37,7 @@ var (
 type localBackend struct {
 	storePath string
 	auditPath string
+	eventPath string
 	masterKey string
 	sources   sourceConfigFile
 	now       func() time.Time
@@ -95,18 +97,19 @@ type writebackIdentity struct {
 }
 
 type generatedSecretCaptureRequest struct {
-	RequestID          string            `json:"requestId"`
-	Identity           writebackIdentity `json:"identity"`
-	Policy             writebackPolicy   `json:"policy"`
-	Operation          string            `json:"operation"`
-	Namespace          string            `json:"namespace"`
-	Ref                string            `json:"ref"`
-	Value              string            `json:"value"`
-	Metadata           map[string]string `json:"metadata"`
-	RefreshRequired    bool              `json:"refreshRequired"`
-	ReconnectRequired  bool              `json:"reconnectRequired"`
-	InvalidateRefs     []string          `json:"invalidateRefs"`
-	SourceAuthRequired bool              `json:"sourceAuthRequired"`
+	RequestID          string                `json:"requestId"`
+	Identity           writebackIdentity     `json:"identity"`
+	Policy             writebackPolicy       `json:"policy"`
+	Secrets            *serviceSecretsPolicy `json:"secrets,omitempty"`
+	Operation          string                `json:"operation"`
+	Namespace          string                `json:"namespace"`
+	Ref                string                `json:"ref"`
+	Value              string                `json:"value"`
+	Metadata           map[string]string     `json:"metadata"`
+	RefreshRequired    bool                  `json:"refreshRequired"`
+	ReconnectRequired  bool                  `json:"reconnectRequired"`
+	InvalidateRefs     []string              `json:"invalidateRefs"`
+	SourceAuthRequired bool                  `json:"sourceAuthRequired"`
 }
 
 type generatedSecretCaptureResponse struct {
@@ -125,11 +128,12 @@ type generatedSecretCaptureResponse struct {
 }
 
 type resolveRequest struct {
-	RequestID   string   `json:"requestId"`
-	WorkspaceID string   `json:"workspaceId"`
-	ServiceID   string   `json:"serviceId"`
-	Purpose     string   `json:"purpose"`
-	Refs        []string `json:"refs"`
+	RequestID   string                `json:"requestId"`
+	WorkspaceID string                `json:"workspaceId"`
+	ServiceID   string                `json:"serviceId"`
+	Purpose     string                `json:"purpose"`
+	Secrets     *serviceSecretsPolicy `json:"secrets,omitempty"`
+	Refs        []string              `json:"refs"`
 }
 
 type resolveResponse struct {
@@ -148,22 +152,41 @@ type resolveResult struct {
 }
 
 type auditEvent struct {
-	TS        time.Time `json:"ts"`
-	Operation string    `json:"operation"`
-	Ref       string    `json:"ref,omitempty"`
-	Outcome   string    `json:"outcome"`
-	State     string    `json:"state,omitempty"`
-	SourceID  string    `json:"sourceId,omitempty"`
-	ServiceID string    `json:"serviceId,omitempty"`
-	RequestID string    `json:"requestId,omitempty"`
+	TS          time.Time `json:"ts"`
+	RequestID   string    `json:"requestId,omitempty"`
+	Operation   string    `json:"operation"`
+	ServiceID   string    `json:"serviceId,omitempty"`
+	ActorKind   string    `json:"actorKind"`
+	Ref         string    `json:"ref,omitempty"`
+	RefHash     string    `json:"refHash,omitempty"`
+	ProviderID  string    `json:"providerId,omitempty"`
+	SourceID    string    `json:"sourceId,omitempty"`
+	Outcome     string    `json:"outcome"`
+	ReasonCode  string    `json:"reasonCode"`
+	State       string    `json:"state,omitempty"`
+	AuditStatus string    `json:"auditStatus"`
 }
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
-	return &localBackend{storePath: storePath, auditPath: auditPath, masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }}
+	return &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }}
 }
 
 func defaultStorePath() string { return filepath.Join("data", "secretsbroker-store.json") }
 func defaultAuditPath() string { return filepath.Join("data", "secretsbroker-audit.jsonl") }
+func defaultEventsPath(auditPath string) string {
+	auditPath = strings.TrimSpace(auditPath)
+	if auditPath == "" {
+		return ""
+	}
+	if filepath.Clean(auditPath) == filepath.Clean(defaultAuditPath()) {
+		return filepath.Join("data", "secretsbroker-events.jsonl")
+	}
+	ext := filepath.Ext(auditPath)
+	if ext == "" {
+		return auditPath + "-events"
+	}
+	return strings.TrimSuffix(auditPath, ext) + "-events" + ext
+}
 
 func (b *localBackend) locked() bool { return strings.TrimSpace(b.masterKey) == "" }
 
@@ -296,6 +319,15 @@ func (b *localBackend) captureGeneratedSecret(req generatedSecretCaptureRequest)
 			return response, errIdentityExpired
 		}
 	}
+	if req.Secrets != nil {
+		decision := evaluateServiceSecretsPolicy(service, "writeback", fullRef, req.Secrets)
+		_ = b.audit("policy_decision", fullRef, decision.Outcome, service, req.RequestID)
+		if decision.Outcome != "allowed" {
+			_ = b.audit("writeback_capture", fullRef, "policy_denied", service, req.RequestID)
+			response.Outcome = "policy_denied"
+			return response, errPolicyDenied
+		}
+	}
 	if !namespaceAllowed(namespace, req.Policy.AllowedNamespaces) || !operationAllowed(operation, req.Policy.AllowedOperations) {
 		_ = b.audit("writeback_capture", fullRef, "policy_denied", service, req.RequestID)
 		response.Outcome = "policy_denied"
@@ -370,6 +402,11 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 		case !validSecretRef(ref):
 			result.Outcome = "invalid_ref"
 			result.Message = "Secret ref is invalid."
+		case req.Secrets != nil && evaluateServiceSecretsPolicy(req.ServiceID, "resolve", ref, req.Secrets).Outcome != "allowed":
+			decision := evaluateServiceSecretsPolicy(req.ServiceID, "resolve", ref, req.Secrets)
+			_ = b.audit("policy_decision", ref, decision.Outcome, req.ServiceID, req.RequestID)
+			result.Outcome = "policy_denied"
+			result.Message = "Service secret policy denied resolve."
 		case b.locked():
 			result.Outcome = "locked"
 			result.Message = "Secrets Broker local store is locked."
@@ -453,6 +490,7 @@ func (b *localBackend) writeAuditEvent(event auditEvent) error {
 	if strings.TrimSpace(b.auditPath) == "" {
 		return nil
 	}
+	event = normalizeAuditEvent(event)
 	if err := os.MkdirAll(filepath.Dir(b.auditPath), 0o700); err != nil {
 		return err
 	}
@@ -461,7 +499,80 @@ func (b *localBackend) writeAuditEvent(event auditEvent) error {
 		return err
 	}
 	defer file.Close()
-	return json.NewEncoder(file).Encode(event)
+	if err := json.NewEncoder(file).Encode(event); err != nil {
+		return err
+	}
+	return b.writeOperationalEvent(event)
+}
+
+func normalizeAuditEvent(event auditEvent) auditEvent {
+	event.Operation = scrubAuditField(event.Operation)
+	event.Ref = scrubAuditField(event.Ref)
+	event.Outcome = scrubAuditField(event.Outcome)
+	event.State = scrubAuditField(event.State)
+	event.SourceID = scrubAuditField(event.SourceID)
+	event.ServiceID = scrubAuditField(event.ServiceID)
+	event.RequestID = scrubAuditField(event.RequestID)
+	event.ProviderID = scrubAuditField(event.ProviderID)
+	event.ReasonCode = scrubAuditField(event.ReasonCode)
+	event.ActorKind = scrubAuditField(event.ActorKind)
+	event.AuditStatus = scrubAuditField(event.AuditStatus)
+	if event.Operation == "" {
+		event.Operation = "unknown"
+	}
+	if event.Outcome == "" {
+		event.Outcome = "degraded"
+	}
+	if event.ReasonCode == "" {
+		event.ReasonCode = event.Outcome
+	}
+	if event.ActorKind == "" {
+		event.ActorKind = actorKindForAudit(event.ServiceID)
+	}
+	if event.AuditStatus == "" {
+		event.AuditStatus = "audit_recorded"
+	}
+	if event.Ref != "" && event.RefHash == "" {
+		event.RefHash = hashAuditRef(event.Ref)
+	}
+	if event.ProviderID == "" && strings.HasPrefix(event.Operation, "provider_") && event.Ref != "" {
+		event.ProviderID = event.Ref
+	}
+	return event
+}
+
+func scrubAuditField(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.Map(func(r rune) rune {
+		switch r {
+		case '\r', '\n', '\t':
+			return ' '
+		}
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, value)
+	if len(value) > 256 {
+		return value[:256]
+	}
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func hashAuditRef(ref string) string {
+	sum := sha256.Sum256([]byte(ref))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func actorKindForAudit(serviceID string) string {
+	switch strings.TrimSpace(serviceID) {
+	case "":
+		return "system"
+	case "@operator":
+		return "operator"
+	default:
+		return "service"
+	}
 }
 
 func (b *localBackend) encrypt(value string) (secretPayload, error) {
