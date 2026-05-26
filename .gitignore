@@ -3,3 +3,4 @@
 dist/
 output/
 verify/service-harness.ci.json
+.work-agent/
