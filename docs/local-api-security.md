@@ -57,6 +57,15 @@ Token checks trim whitespace, hash both presented and expected tokens, and then 
 
 Repeated invalid local API tokens are tracked by local API client scope. Three invalid attempts for the same scope start a five-minute cooldown for secret-bearing endpoints. The lockout response includes safe metadata only and does not echo the presented token or expected token.
 
+Repeated policy-denied management reveal/apply attempts are also tracked with narrow scopes:
+
+- `management:reveal:<serviceId>:<ref>`
+- `management:edit:<serviceId>:<ref>`
+- `management:reset:<serviceId>:<ref>`
+- `management:policy:<serviceId>:<ref>`
+
+Three denied attempts for the same management operation/ref/service start the same five-minute cooldown. The cooldown blocks that exact reveal/apply scope while unrelated refs, unrelated operations, and read-only status/list/dry-run surfaces remain available.
+
 Secret-bearing endpoints cap request bodies at 1 MiB before JSON decode. Oversized requests return `413 request_too_large` with a safe fixed message; request content and bearer tokens are not echoed.
 
 ## CLI helpers
@@ -107,6 +116,31 @@ Active lockout:
   }
 }
 ```
+
+Management reveal/apply lockout response:
+
+```json
+{
+  "serviceId": "@secretsbroker",
+  "apiVersion": "secretsbroker.local/v1",
+  "requestId": "req-edit",
+  "ref": "services/@serviceadmin/runtime/API_TOKEN",
+  "operation": "edit",
+  "mode": "apply",
+  "outcome": "lockout_active",
+  "applied": false,
+  "requiresConfirmation": false,
+  "auditStatus": "audit_pending",
+  "nextAction": "wait_or_clear_lockout",
+  "affectedRefs": ["services/@serviceadmin/runtime/API_TOKEN"],
+  "affectedServices": ["@serviceadmin"],
+  "lockoutActive": true,
+  "lockoutScope": "management:edit:@serviceadmin:services/@serviceadmin/runtime/API_TOKEN",
+  "retryAfterSeconds": 300
+}
+```
+
+The management lockout response never includes raw secret values, submitted replacement values, provider credentials, local API tokens, auth headers, private keys, cookies, passwords, or environment values.
 
 No server token configured:
 

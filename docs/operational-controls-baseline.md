@@ -191,7 +191,14 @@ Implemented first slice:
 - Active lockout responses return metadata only: `lockoutActive`, `lockoutScope`, `retryAfterSeconds`, outcome, and next action.
 - Lockout and auth-failure audit/events use operation/outcome metadata only and do not persist presented tokens, expected tokens, request bodies, or secret values.
 - Safe read-only status, readiness, capabilities, telemetry, and event endpoints remain available during local API lockout.
-- Provider/source, service-identity, management apply/reveal denial, and audited admin-clear persistence are follow-up slices under #66.
+
+Implemented management-denial slice:
+
+- Policy-denied management reveal/edit/reset/policy apply attempts are tracked in memory by operation, requesting service id, and safe ref handle.
+- Three denied attempts for the same management scope start a five-minute cooldown for that exact reveal/apply operation.
+- Active management lockout responses return metadata only: `lockoutActive`, `lockoutScope`, `retryAfterSeconds`, outcome, and next action.
+- Unrelated refs, unrelated management operations, and safe read-only status/list/dry-run surfaces remain available during the cooldown.
+- Provider/source, service-identity, and audited admin-clear persistence are follow-up slices under #66.
 
 ## API/backend mapping
 
