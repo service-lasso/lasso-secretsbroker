@@ -127,16 +127,23 @@ func (s localAPISecurity) auditOutcome(operation, outcome string) {
 }
 
 func writeLockoutAPIError(w http.ResponseWriter, decision lockoutDecision) {
+	writeScopedLockoutAPIError(w, decision.Scope, decision.RetryAfterSeconds, "Local API authentication is temporarily locked for this scope.")
+}
+
+func writeScopedLockoutAPIError(w http.ResponseWriter, scope string, retryAfterSeconds int, message string) {
+	if strings.TrimSpace(message) == "" {
+		message = "Operation is temporarily locked for this scope."
+	}
 	writeJSON(w, http.StatusLocked, ErrorEnvelope{Error: APIError{
 		Code:              "lockout_active",
-		Message:           "Local API authentication is temporarily locked for this scope.",
+		Message:           message,
 		Outcome:           "policy_denied",
 		NextAction:        "wait_or_clear_lockout",
 		AffectedRefs:      []string{},
 		AffectedServices:  []string{},
 		LockoutActive:     true,
-		LockoutScope:      decision.Scope,
-		RetryAfterSeconds: decision.RetryAfterSeconds,
+		LockoutScope:      scope,
+		RetryAfterSeconds: retryAfterSeconds,
 	}})
 }
 

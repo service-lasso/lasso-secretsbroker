@@ -198,7 +198,14 @@ Implemented management-denial slice:
 - Three denied attempts for the same management scope start a five-minute cooldown for that exact reveal/apply operation.
 - Active management lockout responses return metadata only: `lockoutActive`, `lockoutScope`, `retryAfterSeconds`, outcome, and next action.
 - Unrelated refs, unrelated management operations, and safe read-only status/list/dry-run surfaces remain available during the cooldown.
-- Provider/source, service-identity, and audited admin-clear persistence are follow-up slices under #66.
+
+Implemented write-back identity/source-auth slice:
+
+- Repeated write-back launch identity failures, write-back policy denials, and source/provider auth-required outcomes are tracked in memory by family, operation, service id, and safe ref handle.
+- Three failures for the same write-back scope start a five-minute cooldown for that exact write-back operation.
+- Active write-back lockout responses return metadata only: `lockoutActive`, `lockoutScope`, `retryAfterSeconds`, outcome, and next action.
+- Unrelated refs, unrelated operations, local status endpoints, and safe management list/search surfaces remain available during the cooldown.
+- Durable audited admin-clear persistence and broader provider-specific credential lockout surfaces are follow-up slices under #66.
 
 ## API/backend mapping
 

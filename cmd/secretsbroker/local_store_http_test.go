@@ -40,6 +40,44 @@ func TestHTTPGeneratedSecretWritebackCapture(t *testing.T) {
 	}
 }
 
+func TestHTTPGeneratedSecretWritebackLockoutResponseIsMetadataOnly(t *testing.T) {
+	backend := testBackend(t)
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	body := []byte(`{"requestId":"req-writeback-http-lockout","identity":{"serviceId":"api-service","expiresAt":"2026-05-07T00:05:00Z"},"policy":{"allowedNamespaces":["services/api-service"],"allowedOperations":["create"]},"operation":"create","namespace":"services/api-service","ref":"runtime/API_TOKEN","value":"generated-http-secret","sourceAuthRequired":true}`)
+	for i := 1; i <= localAPILockoutThreshold; i++ {
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/writeback", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer test-token")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, readErr := io.ReadAll(res.Body)
+		res.Body.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if i < localAPILockoutThreshold {
+			if res.StatusCode != http.StatusFailedDependency {
+				t.Fatalf("attempt %d status=%d body=%s", i, res.StatusCode, payload)
+			}
+			continue
+		}
+		if res.StatusCode != http.StatusLocked || !bytes.Contains(payload, []byte(`"lockoutActive":true`)) || !bytes.Contains(payload, []byte(`"lockoutScope":"writeback:source_auth:create:api-service:services/api-service/runtime/API_TOKEN"`)) {
+			t.Fatalf("lockout status=%d body=%s", res.StatusCode, payload)
+		}
+		if bytes.Contains(payload, []byte("generated-http-secret")) || bytes.Contains(payload, []byte("test-token")) {
+			t.Fatalf("writeback lockout response leaked sensitive input: %s", payload)
+		}
+	}
+}
+
 func TestSecretBearingEndpointRejectsOversizedBodyWithoutLeakingToken(t *testing.T) {
 	backend := testBackend(t)
 	state := "ready"
