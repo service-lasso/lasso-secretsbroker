@@ -117,6 +117,10 @@ func eventFamily(audit auditEvent) string {
 		return "audit_unavailable"
 	}
 	switch {
+	case audit.Operation == "lockout_clear":
+		return "lockout_cleared"
+	case strings.Contains(audit.Operation, "lockout"):
+		return "lockout_started"
 	case audit.Operation == "policy_decision":
 		return "policy_decision"
 	case audit.Operation == "source_lifecycle" && audit.Outcome == "ready":
@@ -142,7 +146,7 @@ func eventFamily(audit auditEvent) string {
 
 func eventSeverity(outcome string) string {
 	switch outcome {
-	case "ready", "allowed":
+	case "ready", "allowed", "cleared", "not_found":
 		return "info"
 	case "degraded", "invalid_ref", "identity_expired":
 		return "error"

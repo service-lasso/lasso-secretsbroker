@@ -43,6 +43,8 @@ var typedOutcomes = []string{
 	"source_unavailable",
 	"identity_expired",
 	"lockout_active",
+	"cleared",
+	"not_found",
 	"disabled",
 }
 
@@ -231,6 +233,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"GET /v1/providers/config/status",
 			"GET /v1/telemetry",
 			"GET /v1/events",
+			"POST /v1/management/lockouts/clear",
 			"POST /v1/providers/config/validate|apply",
 			"POST /v1/providers/migration/dry-run|apply",
 			"GET /v1/management/secrets",
@@ -260,6 +263,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"redacted-telemetry",
 			"bounded-operational-events",
 			"scoped-local-api-lockout",
+			"audited-lockout-clear",
 			"provider-migration-dry-run-apply",
 			"secrets-management-metadata-search",
 			"secrets-management-value-search-metadata-only",
@@ -398,6 +402,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		registerProviderConfigMigrationHandlers(mux, backend, security)
 		registerTelemetryHandlers(mux, backend)
 		registerEventsHandlers(mux, backend)
+		registerLockoutManagementHandlers(mux, backend, security)
 	}
 	return mux
 }

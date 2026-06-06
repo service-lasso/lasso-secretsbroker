@@ -102,6 +102,17 @@ func (s *lockoutStore) recordSuccess(scope string) {
 	delete(s.entries, scope)
 }
 
+func (s *lockoutStore) clear(scope string) bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, existed := s.entries[scope]
+	delete(s.entries, scope)
+	return existed
+}
+
 func (s *lockoutStore) activeLocked(scope string, now time.Time) lockoutDecision {
 	entry, ok := s.entries[scope]
 	if !ok {

@@ -205,7 +205,13 @@ Implemented write-back identity/source-auth slice:
 - Three failures for the same write-back scope start a five-minute cooldown for that exact write-back operation.
 - Active write-back lockout responses return metadata only: `lockoutActive`, `lockoutScope`, `retryAfterSeconds`, outcome, and next action.
 - Unrelated refs, unrelated operations, local status endpoints, and safe management list/search surfaces remain available during the cooldown.
-- Durable audited admin-clear persistence and broader provider-specific credential lockout surfaces are follow-up slices under #66.
+
+Implemented management clear slice:
+
+- `POST /v1/management/lockouts/clear` clears a requested lockout scope after validating the local API token and requiring an audit reason.
+- Valid local API tokens are allowed to clear a local API lockout even while that exact scope is active; invalid tokens remain denied.
+- Clear responses and emitted events are metadata-only and include scope, outcome, audit status, and next action without raw secret values, presented tokens, expected tokens, auth headers, private keys, cookies, passwords, or environment values.
+- Durable audited admin-clear persistence and broader provider-specific credential lockout surfaces remain follow-up slices.
 
 ## API/backend mapping
 
@@ -245,7 +251,8 @@ These slices should be separate issues because they can be designed, implemented
 3. Broker redacted telemetry endpoint/CLI: [lasso-secretsbroker#64](https://github.com/service-lasso/lasso-secretsbroker/issues/64).
 4. Broker bounded event store and metadata filtering API: [lasso-secretsbroker#65](https://github.com/service-lasso/lasso-secretsbroker/issues/65).
 5. Broker scoped lockout state and audited clear workflow: [lasso-secretsbroker#66](https://github.com/service-lasso/lasso-secretsbroker/issues/66).
-6. Service Admin operational controls surfaces for policy, audit, telemetry, events, and lockout once the broker contracts exist: [lasso-serviceadmin#118](https://github.com/service-lasso/lasso-serviceadmin/issues/118).
+6. Broker management lockout clear endpoint: [lasso-secretsbroker#79](https://github.com/service-lasso/lasso-secretsbroker/issues/79).
+7. Service Admin operational controls surfaces for policy, audit, telemetry, events, and lockout once the broker contracts exist: [lasso-serviceadmin#118](https://github.com/service-lasso/lasso-serviceadmin/issues/118).
 
 ## Out of scope
 
