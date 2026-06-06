@@ -66,6 +66,14 @@ Repeated policy-denied management reveal/apply attempts are also tracked with na
 
 Three denied attempts for the same management operation/ref/service start the same five-minute cooldown. The cooldown blocks that exact reveal/apply scope while unrelated refs, unrelated operations, and read-only status/list/dry-run surfaces remain available.
 
+Repeated write-back failures for launch identity, write-back policy, and provider/source auth state are tracked with similarly narrow scopes:
+
+- `writeback:identity:<operation>:<serviceId>:<ref>`
+- `writeback:policy:<operation>:<serviceId>:<ref>`
+- `writeback:source_auth:<operation>:<serviceId>:<ref>`
+
+Three failures for the same write-back operation/ref/service start a five-minute cooldown for that exact write-back scope. The cooldown does not block unrelated refs, unrelated operations, local status endpoints, management list/search surfaces, or other services.
+
 Secret-bearing endpoints cap request bodies at 1 MiB before JSON decode. Oversized requests return `413 request_too_large` with a safe fixed message; request content and bearer tokens are not echoed.
 
 ## CLI helpers
@@ -141,6 +149,26 @@ Management reveal/apply lockout response:
 ```
 
 The management lockout response never includes raw secret values, submitted replacement values, provider credentials, local API tokens, auth headers, private keys, cookies, passwords, or environment values.
+
+Write-back lockout response:
+
+```json
+{
+  "error": {
+    "code": "lockout_active",
+    "message": "Write-back is temporarily locked for this scope.",
+    "outcome": "policy_denied",
+    "nextAction": "wait_or_clear_lockout",
+    "affectedRefs": [],
+    "affectedServices": [],
+    "lockoutActive": true,
+    "lockoutScope": "writeback:source_auth:create:api-service:services/api-service/runtime/API_TOKEN",
+    "retryAfterSeconds": 300
+  }
+}
+```
+
+The write-back lockout response never includes generated replacement values, source/provider credentials, local API tokens, auth headers, private keys, cookies, passwords, environment values, or raw provider output.
 
 No server token configured:
 

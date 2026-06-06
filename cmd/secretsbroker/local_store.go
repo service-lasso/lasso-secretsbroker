@@ -127,6 +127,9 @@ type generatedSecretCaptureResponse struct {
 	ReconnectRequired bool           `json:"reconnectRequired"`
 	InvalidatedRefs   []string       `json:"invalidatedRefs"`
 	Metadata          SecretMetadata `json:"metadata,omitempty"`
+	LockoutActive     bool           `json:"lockoutActive,omitempty"`
+	LockoutScope      string         `json:"lockoutScope,omitempty"`
+	RetryAfterSeconds int            `json:"retryAfterSeconds,omitempty"`
 }
 
 type resolveRequest struct {
@@ -315,8 +318,20 @@ func (b *localBackend) captureGeneratedSecret(req generatedSecretCaptureRequest)
 		response.Outcome = "invalid_ref"
 		return response, errInvalidRef
 	}
+	if decision := b.activeWritebackLockout(writebackLockoutScope("identity", service, operation, fullRef)); decision.Active {
+		_ = b.audit("writeback_lockout", fullRef, "lockout_active", service, req.RequestID)
+		response.Outcome = "lockout_active"
+		applyWritebackLockout(&response, decision)
+		return response, errLockoutActive
+	}
 	if service == "" {
 		_ = b.audit("writeback_capture", fullRef, "identity_expired", service, req.RequestID)
+		if decision, started := b.recordWritebackLockoutFailure(writebackLockoutScope("identity", service, operation, fullRef)); started {
+			_ = b.audit("writeback_lockout", fullRef, "lockout_active", service, req.RequestID)
+			response.Outcome = "lockout_active"
+			applyWritebackLockout(&response, decision)
+			return response, errLockoutActive
+		}
 		response.Outcome = "identity_expired"
 		return response, errIdentityExpired
 	}
@@ -324,26 +339,77 @@ func (b *localBackend) captureGeneratedSecret(req generatedSecretCaptureRequest)
 		expiresAt, err := time.Parse(time.RFC3339, strings.TrimSpace(req.Identity.ExpiresAt))
 		if err != nil || !expiresAt.After(b.now()) {
 			_ = b.audit("writeback_capture", fullRef, "identity_expired", service, req.RequestID)
+			if decision, started := b.recordWritebackLockoutFailure(writebackLockoutScope("identity", service, operation, fullRef)); started {
+				_ = b.audit("writeback_lockout", fullRef, "lockout_active", service, req.RequestID)
+				response.Outcome = "lockout_active"
+				applyWritebackLockout(&response, decision)
+				return response, errLockoutActive
+			}
 			response.Outcome = "identity_expired"
 			return response, errIdentityExpired
 		}
+	}
+	if decision := b.activeWritebackLockout(writebackLockoutScope("policy", service, operation, fullRef)); decision.Active {
+		_ = b.audit("writeback_lockout", fullRef, "lockout_active", service, req.RequestID)
+		response.Outcome = "lockout_active"
+		applyWritebackLockout(&response, decision)
+		return response, errLockoutActive
 	}
 	if req.Secrets != nil {
 		decision := evaluateServiceSecretsPolicy(service, "writeback", fullRef, req.Secrets)
 		_ = b.audit("policy_decision", fullRef, decision.Outcome, service, req.RequestID)
 		if decision.Outcome != "allowed" {
 			_ = b.audit("writeback_capture", fullRef, "policy_denied", service, req.RequestID)
+			if decision, started := b.recordWritebackLockoutFailure(writebackLockoutScope("policy", service, operation, fullRef)); started {
+				_ = b.audit("writeback_lockout", fullRef, "lockout_active", service, req.RequestID)
+				response.Outcome = "lockout_active"
+				applyWritebackLockout(&response, decision)
+				return response, errLockoutActive
+			} else if decision.Active {
+				_ = b.audit("writeback_lockout", fullRef, "lockout_active", service, req.RequestID)
+				response.Outcome = "lockout_active"
+				applyWritebackLockout(&response, decision)
+				return response, errLockoutActive
+			}
 			response.Outcome = "policy_denied"
 			return response, errPolicyDenied
 		}
 	}
 	if !namespaceAllowed(namespace, req.Policy.AllowedNamespaces) || !operationAllowed(operation, req.Policy.AllowedOperations) {
 		_ = b.audit("writeback_capture", fullRef, "policy_denied", service, req.RequestID)
+		if decision, started := b.recordWritebackLockoutFailure(writebackLockoutScope("policy", service, operation, fullRef)); started {
+			_ = b.audit("writeback_lockout", fullRef, "lockout_active", service, req.RequestID)
+			response.Outcome = "lockout_active"
+			applyWritebackLockout(&response, decision)
+			return response, errLockoutActive
+		} else if decision.Active {
+			_ = b.audit("writeback_lockout", fullRef, "lockout_active", service, req.RequestID)
+			response.Outcome = "lockout_active"
+			applyWritebackLockout(&response, decision)
+			return response, errLockoutActive
+		}
 		response.Outcome = "policy_denied"
 		return response, errPolicyDenied
 	}
+	if decision := b.activeWritebackLockout(writebackLockoutScope("source_auth", service, operation, fullRef)); decision.Active {
+		_ = b.audit("writeback_lockout", fullRef, "lockout_active", service, req.RequestID)
+		response.Outcome = "lockout_active"
+		applyWritebackLockout(&response, decision)
+		return response, errLockoutActive
+	}
 	if req.SourceAuthRequired {
 		_ = b.audit("writeback_capture", fullRef, "source_auth_required", service, req.RequestID)
+		if decision, started := b.recordWritebackLockoutFailure(writebackLockoutScope("source_auth", service, operation, fullRef)); started {
+			_ = b.audit("writeback_lockout", fullRef, "lockout_active", service, req.RequestID)
+			response.Outcome = "lockout_active"
+			applyWritebackLockout(&response, decision)
+			return response, errLockoutActive
+		} else if decision.Active {
+			_ = b.audit("writeback_lockout", fullRef, "lockout_active", service, req.RequestID)
+			response.Outcome = "lockout_active"
+			applyWritebackLockout(&response, decision)
+			return response, errLockoutActive
+		}
 		response.Outcome = "source_auth_required"
 		return response, errSourceAuthRequired
 	}
@@ -389,7 +455,45 @@ func (b *localBackend) captureGeneratedSecret(req generatedSecretCaptureRequest)
 	_ = b.audit("writeback_capture", fullRef, "ready", service, req.RequestID)
 	response.Outcome = "ready"
 	response.Metadata = written.Metadata
+	b.recordWritebackLockoutSuccess(writebackLockoutScope("identity", service, operation, fullRef))
+	b.recordWritebackLockoutSuccess(writebackLockoutScope("policy", service, operation, fullRef))
+	b.recordWritebackLockoutSuccess(writebackLockoutScope("source_auth", service, operation, fullRef))
 	return response, nil
+}
+
+func writebackLockoutScope(family, service, operation, ref string) string {
+	service = strings.TrimSpace(service)
+	if service == "" {
+		service = "unknown"
+	}
+	return strings.Join([]string{"writeback", strings.TrimSpace(family), strings.TrimSpace(operation), service, strings.Trim(strings.TrimSpace(ref), "/")}, ":")
+}
+
+func (b *localBackend) activeWritebackLockout(scope string) lockoutDecision {
+	if b == nil || b.lockouts == nil {
+		return lockoutDecision{Scope: scope}
+	}
+	return b.lockouts.active(scope)
+}
+
+func (b *localBackend) recordWritebackLockoutFailure(scope string) (lockoutDecision, bool) {
+	if b == nil || b.lockouts == nil {
+		return lockoutDecision{Scope: scope}, false
+	}
+	return b.lockouts.recordFailure(scope)
+}
+
+func (b *localBackend) recordWritebackLockoutSuccess(scope string) {
+	if b == nil || b.lockouts == nil {
+		return
+	}
+	b.lockouts.recordSuccess(scope)
+}
+
+func applyWritebackLockout(res *generatedSecretCaptureResponse, decision lockoutDecision) {
+	res.LockoutActive = true
+	res.LockoutScope = decision.Scope
+	res.RetryAfterSeconds = decision.RetryAfterSeconds
 }
 
 func (b *localBackend) resolve(req resolveRequest) resolveResponse {
@@ -692,6 +796,8 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, secur
 			writeAPIError(w, http.StatusForbidden, "policy_denied", "Write-back policy denied this generated secret capture.", "policy_denied", "review_policy")
 		case errors.Is(err, errSourceAuthRequired):
 			writeAPIError(w, http.StatusFailedDependency, "source_auth_required", "Source authentication is required before write-back can proceed.", "source_auth_required", "reconnect_source")
+		case errors.Is(err, errLockoutActive):
+			writeScopedLockoutAPIError(w, res.LockoutScope, res.RetryAfterSeconds, "Write-back is temporarily locked for this scope.")
 		case errors.Is(err, errLocked):
 			writeAPIError(w, http.StatusServiceUnavailable, "locked", "Secrets Broker local store is locked.", "locked", "unlock_broker")
 		default:
