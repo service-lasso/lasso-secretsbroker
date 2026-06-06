@@ -120,6 +120,24 @@ func (s localAPISecurity) require(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+func (s localAPISecurity) requireValidToken(w http.ResponseWriter, r *http.Request) bool {
+	expected := strings.TrimSpace(s.token)
+	if expected == "" {
+		writeAPIError(w, http.StatusServiceUnavailable, "security_not_configured", "Secret-bearing endpoints require SECRETSBROKER_API_TOKEN or --api-token.", "policy_denied", "configure_api_token")
+		return false
+	}
+	got := bearerToken(r.Header.Get("Authorization"))
+	if got == "" {
+		got = strings.TrimSpace(r.Header.Get("X-SecretsBroker-Token"))
+	}
+	if got == "" || !constantTimeTokenEqual(got, expected) {
+		s.auditOutcome("local_api_auth", "unauthorized")
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "A valid local API token is required.", "policy_denied", "authenticate_local_session")
+		return false
+	}
+	return true
+}
+
 func (s localAPISecurity) auditOutcome(operation, outcome string) {
 	if s.audit != nil {
 		_ = s.audit(operation, "", outcome, "@operator", "")

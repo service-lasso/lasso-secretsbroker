@@ -16,6 +16,7 @@ Secret-bearing endpoints require a local API token:
 - `POST /v1/secrets`
 - `POST /v1/writeback`
 - `POST /v1/resolve`
+- `POST /v1/management/lockouts/clear`
 
 Safe bootstrap/status endpoints remain unauthenticated:
 
@@ -75,6 +76,26 @@ Repeated write-back failures for launch identity, write-back policy, and provide
 Three failures for the same write-back operation/ref/service start a five-minute cooldown for that exact write-back scope. The cooldown does not block unrelated refs, unrelated operations, local status endpoints, management list/search surfaces, or other services.
 
 Secret-bearing endpoints cap request bodies at 1 MiB before JSON decode. Oversized requests return `413 request_too_large` with a safe fixed message; request content and bearer tokens are not echoed.
+
+## Lockout clear workflow
+
+Management clients can clear a scoped lockout with:
+
+```http
+POST /v1/management/lockouts/clear
+Authorization: Bearer <token>
+```
+
+The request body must include a lockout scope and an audit reason:
+
+```json
+{
+  "scope": "local_api:127.0.0.1",
+  "reason": "operator confirmed local token rotation"
+}
+```
+
+The endpoint requires a valid local API token even while the requested scope is locked out. Invalid or missing clear requests do not bypass token checks, and clear responses include metadata only: service id, API version, request id, scope, outcome, audit status, and next action. The audit reason is trimmed and control-character scrubbed before use. Raw secret values, presented tokens, expected tokens, auth headers, private keys, cookies, passwords, and environment values are never echoed.
 
 ## CLI helpers
 
@@ -215,7 +236,7 @@ Planned session model:
 - per-service/ref policy checks before resolve/write-back
 - lease/renew/revoke for runtime identities where applicable
 - audit events for allow/deny/resolve/write-back without plaintext values
-- durable audited lockout clear workflow for management clients
+- durable persistence for audited lockout clear records
 
 ## Non-goals for this slice
 

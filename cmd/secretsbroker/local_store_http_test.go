@@ -78,6 +78,83 @@ func TestHTTPGeneratedSecretWritebackLockoutResponseIsMetadataOnly(t *testing.T)
 	}
 }
 
+func TestHTTPManagementLockoutClearRequiresReasonAndClearsScope(t *testing.T) {
+	backend := testBackend(t)
+	ref := "services/@serviceadmin/runtime/API_TOKEN"
+	writeManagedTestSecret(t, backend, ref, "management-clear-secret")
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	deniedBody := []byte(`{"requestId":"req-reveal-denied","serviceId":"@serviceadmin","ref":"` + ref + `"}`)
+	for i := 1; i <= localAPILockoutThreshold; i++ {
+		res, payload := postJSON(t, server.URL+"/v1/management/secrets/reveal", "test-token", deniedBody)
+		if i < localAPILockoutThreshold {
+			if res.StatusCode != http.StatusForbidden {
+				t.Fatalf("attempt %d status=%d body=%s", i, res.StatusCode, payload)
+			}
+			continue
+		}
+		if res.StatusCode != http.StatusLocked || !bytes.Contains(payload, []byte(`"lockoutActive":true`)) {
+			t.Fatalf("lockout status=%d body=%s", res.StatusCode, payload)
+		}
+		assertNoSecretMaterial(t, payload, "management-clear-secret", "test-token")
+	}
+
+	scope := "management:reveal:@serviceadmin:" + ref
+	missingReason := []byte(`{"requestId":"req-clear-denied","serviceId":"@operator","scope":"` + scope + `"}`)
+	res, payload := postJSON(t, server.URL+"/v1/management/lockouts/clear", "test-token", missingReason)
+	if res.StatusCode != http.StatusForbidden || bytes.Contains(payload, []byte("management-clear-secret")) || bytes.Contains(payload, []byte("test-token")) {
+		t.Fatalf("missing reason clear status=%d body=%s", res.StatusCode, payload)
+	}
+
+	clearBody := []byte(`{"requestId":"req-clear-ok","serviceId":"@operator","scope":"` + scope + `","reason":"operator reviewed denial"}`)
+	res, payload = postJSON(t, server.URL+"/v1/management/lockouts/clear", "test-token", clearBody)
+	if res.StatusCode != http.StatusOK || !bytes.Contains(payload, []byte(`"outcome":"cleared"`)) || !bytes.Contains(payload, []byte(`"cleared":true`)) {
+		t.Fatalf("clear status=%d body=%s", res.StatusCode, payload)
+	}
+	assertNoSecretMaterial(t, payload, "management-clear-secret", "test-token")
+
+	revealBody := []byte(`{"requestId":"req-reveal-ok","serviceId":"@serviceadmin","ref":"` + ref + `","reason":"operator check","confirm":true,"noEcho":true}`)
+	res, payload = postJSON(t, server.URL+"/v1/management/secrets/reveal", "test-token", revealBody)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("post-clear reveal status=%d body=%s", res.StatusCode, payload)
+	}
+}
+
+func TestHTTPLocalAPILockoutClearAcceptsValidTokenDuringLockout(t *testing.T) {
+	backend := testBackend(t)
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	writeBody := []byte(`{"ref":"services/api/runtime/API_TOKEN","value":"local-api-clear-secret"}`)
+	for i := 1; i <= localAPILockoutThreshold; i++ {
+		res, payload := postJSON(t, server.URL+"/v1/secrets", "wrong-token", writeBody)
+		if i < localAPILockoutThreshold {
+			if res.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("attempt %d status=%d body=%s", i, res.StatusCode, payload)
+			}
+			continue
+		}
+		if res.StatusCode != http.StatusLocked || bytes.Contains(payload, []byte("wrong-token")) || bytes.Contains(payload, []byte("test-token")) {
+			t.Fatalf("local api lockout status=%d body=%s", res.StatusCode, payload)
+		}
+	}
+
+	clearBody := []byte(`{"requestId":"req-clear-local-api","serviceId":"@operator","scope":"local_api:127.0.0.1","reason":"operator verified local client"}`)
+	res, payload := postJSON(t, server.URL+"/v1/management/lockouts/clear", "test-token", clearBody)
+	if res.StatusCode != http.StatusOK || !bytes.Contains(payload, []byte(`"outcome":"cleared"`)) {
+		t.Fatalf("local api clear status=%d body=%s", res.StatusCode, payload)
+	}
+	assertNoSecretMaterial(t, payload, "local-api-clear-secret", "test-token", "wrong-token")
+
+	res, payload = postJSON(t, server.URL+"/v1/secrets", "test-token", writeBody)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("post-clear write status=%d body=%s", res.StatusCode, payload)
+	}
+}
+
 func TestSecretBearingEndpointRejectsOversizedBodyWithoutLeakingToken(t *testing.T) {
 	backend := testBackend(t)
 	state := "ready"
@@ -106,6 +183,28 @@ func TestSecretBearingEndpointRejectsOversizedBodyWithoutLeakingToken(t *testing
 	if bytes.Contains(payload, []byte("test-token")) || bytes.Contains(payload, []byte(strings.Repeat("x", 64))) {
 		t.Fatalf("oversized error leaked sensitive input: %s", payload)
 	}
+}
+
+func postJSON(t *testing.T, url, token string, body []byte) (*http.Response, []byte) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	payload, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res, payload
 }
 
 func TestLocalStoreHTTPWriteAndResolve(t *testing.T) {

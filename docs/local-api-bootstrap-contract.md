@@ -162,6 +162,7 @@ Example response:
     "GET /capabilities",
     "POST /v1/secrets",
     "POST /v1/resolve",
+    "POST /v1/management/lockouts/clear",
     "GET /v1/sources/status"
   ],
   "features": [
@@ -174,6 +175,7 @@ Example response:
     "batched-resolve",
     "typed-errors",
     "audit-redaction",
+    "audited-lockout-clear",
     "source-status"
   ],
   "futureFeatures": [

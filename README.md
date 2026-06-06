@@ -45,6 +45,7 @@ The first bootstrap slice provides:
   - `POST /v1/writeback`
   - `POST /v1/resolve`
   - `GET /v1/sources/status`
+  - `POST /v1/management/lockouts/clear`
 - CLI-style commands:
   - `secretsbroker serve`
   - `secretsbroker-resolve`
