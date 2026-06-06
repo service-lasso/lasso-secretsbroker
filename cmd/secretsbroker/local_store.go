@@ -29,6 +29,7 @@ var (
 	errMissingRef         = errors.New("secret ref was not found")
 	errInvalidRef         = errors.New("invalid secret ref")
 	errPolicyDenied       = errors.New("write-back policy denied")
+	errLockoutActive      = errors.New("lockout active")
 	errIdentityExpired    = errors.New("launch identity expired")
 	errSourceAuthRequired = errors.New("source authentication required")
 	errBackendDegraded    = errors.New("backend degraded")
@@ -41,6 +42,7 @@ type localBackend struct {
 	masterKey string
 	sources   sourceConfigFile
 	now       func() time.Time
+	lockouts  *lockoutStore
 }
 
 type localStoreFile struct {
@@ -168,7 +170,14 @@ type auditEvent struct {
 }
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
-	return &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }}
+	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }}
+	backend.lockouts = newLockoutStore(func() time.Time {
+		if backend.now == nil {
+			return time.Now().UTC()
+		}
+		return backend.now()
+	})
+	return backend
 }
 
 func defaultStorePath() string { return filepath.Join("data", "secretsbroker-store.json") }

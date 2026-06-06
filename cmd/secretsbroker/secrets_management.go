@@ -65,6 +65,9 @@ type managedSecretActionResponse struct {
 	AffectedRefs          []string             `json:"affectedRefs"`
 	AffectedServices      []string             `json:"affectedServices"`
 	UnsupportedCapability string               `json:"unsupportedCapability,omitempty"`
+	LockoutActive         bool                 `json:"lockoutActive,omitempty"`
+	LockoutScope          string               `json:"lockoutScope,omitempty"`
+	RetryAfterSeconds     int                  `json:"retryAfterSeconds,omitempty"`
 }
 
 func (b *localBackend) listManagedSecrets(query string, valueSearch bool) (managedSecretsResponse, error) {
@@ -204,9 +207,18 @@ func workspaceFromRef(ref string) string {
 
 func (b *localBackend) revealManagedSecret(req managedSecretActionRequest) (managedSecretActionResponse, error) {
 	res := baseManagedActionResponse(req, "reveal", "apply")
+	if b.managementLockoutActive(req, "reveal", &res) {
+		return res, errLockoutActive
+	}
 	if err := validateManagedAction(req, true); err != nil {
-		res.Outcome = "invalid_ref"
-		res.NextAction = "provide_ref_and_reason"
+		res.Outcome = outcomeForError(err)
+		res.NextAction = nextActionForManagedOutcome(res.Outcome)
+		if errors.Is(err, errPolicyDenied) {
+			b.recordManagementPolicyDenied(req, "reveal", &res)
+			if res.LockoutActive {
+				return res, errLockoutActive
+			}
+		}
 		_ = b.audit("management_reveal", req.Ref, res.Outcome, req.ServiceID, req.RequestID)
 		return res, err
 	}
@@ -218,6 +230,12 @@ func (b *localBackend) revealManagedSecret(req managedSecretActionRequest) (mana
 		}
 		res.Outcome = outcome
 		res.NextAction = nextActionForManagedOutcome(outcome)
+		if outcome == "policy_denied" {
+			b.recordManagementPolicyDenied(req, "reveal", &res)
+			if res.LockoutActive {
+				return res, errLockoutActive
+			}
+		}
 		_ = b.audit("management_reveal", req.Ref, outcome, req.ServiceID, req.RequestID)
 		return res, outcomeError(outcome)
 	}
@@ -227,6 +245,7 @@ func (b *localBackend) revealManagedSecret(req managedSecretActionRequest) (mana
 	res.TTLSeconds = revealTTLSeconds
 	res.AuditStatus = "audit_recorded"
 	res.Metadata = result.Metadata
+	b.recordManagementSuccess(req, "reveal")
 	_ = b.audit("management_reveal", req.Ref, "ready", req.ServiceID, req.RequestID)
 	return res, nil
 }
@@ -277,10 +296,17 @@ func (b *localBackend) managedResetApply(req managedSecretActionRequest) (manage
 
 func (b *localBackend) managedWriteApply(req managedSecretActionRequest, operation string) (managedSecretActionResponse, error) {
 	res := baseManagedActionResponse(req, operation, "apply")
+	if b.managementLockoutActive(req, operation, &res) {
+		return res, errLockoutActive
+	}
 	if err := validateManagedAction(req, true); err != nil || !req.Confirm || strings.TrimSpace(req.Value) == "" {
 		res.Outcome = "policy_denied"
 		res.NextAction = "run_dry_run_confirm_reason_and_value"
+		b.recordManagementPolicyDenied(req, operation, &res)
 		_ = b.audit("management_"+operation+"_apply", req.Ref, res.Outcome, req.ServiceID, req.RequestID)
+		if res.LockoutActive {
+			return res, errLockoutActive
+		}
 		return res, errPolicyDenied
 	}
 	written, err := b.writeSecret(writeSecretRequest{Ref: req.Ref, Value: req.Value, Metadata: map[string]string{"sourceId": "management:" + operation}})
@@ -295,16 +321,24 @@ func (b *localBackend) managedWriteApply(req managedSecretActionRequest, operati
 	res.AuditStatus = "audit_recorded"
 	res.Metadata = &written.Metadata
 	res.Record = &record
+	b.recordManagementSuccess(req, operation)
 	_ = b.audit("management_"+operation+"_apply", req.Ref, "applied", req.ServiceID, req.RequestID)
 	return res, nil
 }
 
 func (b *localBackend) managedPolicyApply(req managedSecretActionRequest) (managedSecretActionResponse, error) {
 	res := baseManagedActionResponse(req, "policy", "apply")
+	if b.managementLockoutActive(req, "policy", &res) {
+		return res, errLockoutActive
+	}
 	if err := validateManagedAction(req, true); err != nil || !req.Confirm || strings.TrimSpace(req.Policy) == "" {
 		res.Outcome = "policy_denied"
 		res.NextAction = "preview_confirm_reason_and_policy"
+		b.recordManagementPolicyDenied(req, "policy", &res)
 		_ = b.audit("management_policy_apply", req.Ref, res.Outcome, req.ServiceID, req.RequestID)
+		if res.LockoutActive {
+			return res, errLockoutActive
+		}
 		return res, errPolicyDenied
 	}
 	record, err := b.managedRecord(req.Ref)
@@ -318,6 +352,7 @@ func (b *localBackend) managedPolicyApply(req managedSecretActionRequest) (manag
 	res.Applied = true
 	res.AuditStatus = "audit_recorded"
 	res.Record = &record
+	b.recordManagementSuccess(req, "policy")
 	_ = b.audit("management_policy_apply", req.Ref, "applied", req.ServiceID, req.RequestID)
 	return res, nil
 }
@@ -346,6 +381,59 @@ func (b *localBackend) managedRecord(ref string) (managedSecretRecord, error) {
 
 func baseManagedActionResponse(req managedSecretActionRequest, operation, mode string) managedSecretActionResponse {
 	return managedSecretActionResponse{ServiceID: serviceID, APIVersion: apiVersion, RequestID: req.RequestID, Ref: strings.TrimSpace(req.Ref), Operation: operation, Mode: mode, Outcome: "pending", AuditStatus: "audit_pending", AffectedRefs: safeList([]string{req.Ref}), AffectedServices: safeList([]string{req.ServiceID})}
+}
+
+func (b *localBackend) managementLockoutActive(req managedSecretActionRequest, operation string, res *managedSecretActionResponse) bool {
+	if b == nil || res == nil || b.lockouts == nil {
+		return false
+	}
+	decision := b.lockouts.active(managementLockoutScope(req, operation))
+	if !decision.Active {
+		return false
+	}
+	applyManagementLockout(res, decision)
+	_ = b.audit("management_lockout", req.Ref, "lockout_active", req.ServiceID, req.RequestID)
+	return true
+}
+
+func (b *localBackend) recordManagementPolicyDenied(req managedSecretActionRequest, operation string, res *managedSecretActionResponse) {
+	if b == nil || res == nil || b.lockouts == nil {
+		return
+	}
+	decision, started := b.lockouts.recordFailure(managementLockoutScope(req, operation))
+	if started {
+		applyManagementLockout(res, decision)
+		_ = b.audit("management_lockout", req.Ref, "lockout_active", req.ServiceID, req.RequestID)
+	}
+}
+
+func (b *localBackend) recordManagementSuccess(req managedSecretActionRequest, operation string) {
+	if b == nil || b.lockouts == nil {
+		return
+	}
+	b.lockouts.recordSuccess(managementLockoutScope(req, operation))
+}
+
+func applyManagementLockout(res *managedSecretActionResponse, decision lockoutDecision) {
+	res.Outcome = "lockout_active"
+	res.NextAction = "wait_or_clear_lockout"
+	res.Value = ""
+	res.Applied = false
+	res.LockoutActive = true
+	res.LockoutScope = decision.Scope
+	res.RetryAfterSeconds = decision.RetryAfterSeconds
+}
+
+func managementLockoutScope(req managedSecretActionRequest, operation string) string {
+	service := strings.TrimSpace(req.ServiceID)
+	if service == "" {
+		service = "@operator"
+	}
+	ref := strings.TrimSpace(req.Ref)
+	if ref == "" || !validSecretRef(ref) {
+		ref = "unknown"
+	}
+	return strings.Join([]string{"management", strings.TrimSpace(operation), service, ref}, ":")
 }
 
 func dryRunMode(operation string) string {
@@ -502,6 +590,8 @@ func writeManagementActionError(w http.ResponseWriter, err error, res managedSec
 		status = http.StatusNotFound
 	case errors.Is(err, errPolicyDenied):
 		status = http.StatusForbidden
+	case errors.Is(err, errLockoutActive):
+		status = http.StatusLocked
 	case errors.Is(err, errSourceAuthRequired):
 		status = http.StatusFailedDependency
 	}

@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 const managedSecretValue = "fixture-managed-secret-value"
@@ -131,6 +133,82 @@ func TestManagedDryRunApplyAndPolicyContractsDoNotReturnRawValues(t *testing.T) 
 	policy, err := backend.managedPolicyApply(managedSecretActionRequest{RequestID: "req-policy-apply", ServiceID: "@serviceadmin", Ref: ref, Reason: "approved", Confirm: true, Policy: "policy/serviceadmin/reveal"})
 	if err != nil || !policy.Applied || policy.Value != "" || policy.Record.Policy != "policy/serviceadmin/reveal" {
 		t.Fatalf("policy apply = %#v err=%v", policy, err)
+	}
+}
+
+func TestManagedPolicyDeniedAttemptsStartScopedLockout(t *testing.T) {
+	backend := managedTestBackend(t)
+	now := time.Date(2026, 6, 6, 1, 45, 0, 0, time.UTC)
+	backend.now = func() time.Time { return now }
+	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	writeManagedTestSecret(t, backend, ref, managedSecretValue)
+
+	for i := 1; i <= localAPILockoutThreshold; i++ {
+		res, err := backend.managedEditApply(managedSecretActionRequest{RequestID: "req-denied", ServiceID: "@serviceadmin", Ref: ref, Value: "replacement-value"})
+		if !errors.Is(err, errPolicyDenied) && !errors.Is(err, errLockoutActive) {
+			t.Fatalf("denied edit apply err=%v res=%#v", err, res)
+		}
+		if i < localAPILockoutThreshold && res.LockoutActive {
+			t.Fatalf("lockout started too early on attempt %d: %#v", i, res)
+		}
+		if i == localAPILockoutThreshold {
+			if res.Outcome != "lockout_active" || !res.LockoutActive || res.LockoutScope != "management:edit:@serviceadmin:"+ref || res.RetryAfterSeconds < 1 || res.Value != "" || res.Applied {
+				t.Fatalf("lockout response = %#v", res)
+			}
+			assertNoSecretMaterial(t, mustManagedJSON(t, res), managedSecretValue, "replacement-value")
+		}
+	}
+
+	otherRef := "services/@serviceadmin/runtime/OTHER_KEY"
+	writeManagedTestSecret(t, backend, otherRef, "other-managed-value")
+	other, err := backend.managedEditApply(managedSecretActionRequest{RequestID: "req-other", ServiceID: "@serviceadmin", Ref: otherRef, Reason: "approved", Confirm: true, Value: "other-replacement"})
+	if err != nil || !other.Applied {
+		t.Fatalf("lockout should not block unrelated ref: %#v err=%v", other, err)
+	}
+
+	locked, err := backend.managedEditApply(managedSecretActionRequest{RequestID: "req-active", ServiceID: "@serviceadmin", Ref: ref, Reason: "approved", Confirm: true, Value: "replacement-value"})
+	if !errors.Is(err, errLockoutActive) || locked.Outcome != "lockout_active" || locked.Applied || locked.Value != "" {
+		t.Fatalf("active lockout should block valid apply until cooldown: %#v err=%v", locked, err)
+	}
+
+	now = now.Add(localAPILockoutCooldown + time.Second)
+	applied, err := backend.managedEditApply(managedSecretActionRequest{RequestID: "req-after-cooldown", ServiceID: "@serviceadmin", Ref: ref, Reason: "approved", Confirm: true, Value: "replacement-value"})
+	if err != nil || !applied.Applied || applied.Outcome != "applied" {
+		t.Fatalf("apply after cooldown = %#v err=%v", applied, err)
+	}
+	assertNoSecretMaterial(t, mustManagedJSON(t, applied), managedSecretValue, "replacement-value")
+}
+
+func TestManagedRevealLockoutHTTPResponseIsMetadataOnly(t *testing.T) {
+	backend := managedTestBackend(t)
+	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	writeManagedTestSecret(t, backend, ref, managedSecretValue)
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	for i := 1; i <= localAPILockoutThreshold; i++ {
+		body := []byte(`{"requestId":"req-http-denied","serviceId":"@serviceadmin","ref":"` + ref + `"}`)
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/management/secrets/reveal", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer test-token")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload := readClose(t, res.Body)
+		if i < localAPILockoutThreshold && res.StatusCode != http.StatusForbidden {
+			t.Fatalf("attempt %d status=%d body=%s", i, res.StatusCode, payload)
+		}
+		if i == localAPILockoutThreshold {
+			if res.StatusCode != http.StatusLocked || !bytes.Contains(payload, []byte(`"lockoutActive":true`)) || !bytes.Contains(payload, []byte(`"outcome":"lockout_active"`)) {
+				t.Fatalf("lockout status=%d body=%s", res.StatusCode, payload)
+			}
+			assertNoSecretMaterial(t, payload, managedSecretValue, "test-token")
+		}
 	}
 }
 
