@@ -125,7 +125,7 @@ func defaultProviderCapabilities() []providerCapability {
 		{ProviderKind: "openbao", DisplayName: "OpenBao", Supported: true, Capabilities: []string{"read", "reveal", "health", "migration_source"}, Limitations: []string{"write and migration target apply require provider write adapter"}},
 		{ProviderKind: "env", DisplayName: "Environment variables", Supported: true, Capabilities: []string{"read", "health", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
 		{ProviderKind: "file", DisplayName: "File source", Supported: true, Capabilities: []string{"read", "health", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
-		{ProviderKind: "exec", DisplayName: "Exec source", Supported: true, Capabilities: []string{"read", "health", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
+		{ProviderKind: "exec", DisplayName: "Exec source", Supported: true, Capabilities: []string{"read", "reveal", "health", "audit", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
 	}
 }
 

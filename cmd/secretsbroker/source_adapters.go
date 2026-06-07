@@ -152,27 +152,30 @@ func (s sourceConfig) resolveExec(refCfg sourceRefConfig) sourceResolveResult {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, refCfg.Command, refCfg.Args...)
 	cmd.Env = []string{}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
+	stdout := newBoundedOutput(maxStdout)
+	cmd.Stdout = stdout
+	cmd.Stderr = io.Discard
+	err := cmd.Run()
 	if ctx.Err() == context.DeadlineExceeded {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Exec source timed out."}
 	}
 	if err != nil {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Exec source failed."}
 	}
-	if len(out) > maxStdout {
+	if stdout.Exceeded() {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Exec source stdout exceeded limit."}
 	}
+	out := stdout.Bytes()
 	value := ""
 	if refCfg.UnsafeStdout {
 		value = strings.TrimSpace(string(out))
 	} else {
-		var payload struct {
-			Value string `json:"value"`
-		}
+		var payload execSourceProtocolPayload
 		if err := json.Unmarshal(out, &payload); err != nil {
 			return sourceResolveResult{Outcome: "source_unavailable", Message: "Exec source did not return JSON value protocol."}
+		}
+		if outcome := normalizeExecProtocolOutcome(payload.Outcome); outcome != "" && outcome != "ready" {
+			return sourceResolveResult{Outcome: outcome, Message: execProtocolOutcomeMessage(outcome)}
 		}
 		value = strings.TrimSpace(payload.Value)
 	}
@@ -180,6 +183,65 @@ func (s sourceConfig) resolveExec(refCfg sourceRefConfig) sourceResolveResult {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Exec source returned empty value."}
 	}
 	return sourceResolveResult{Outcome: "ready", Value: value}
+}
+
+type execSourceProtocolPayload struct {
+	Value   string `json:"value"`
+	Outcome string `json:"outcome"`
+}
+
+type boundedOutput struct {
+	limit int
+	buf   bytes.Buffer
+}
+
+func newBoundedOutput(limit int) *boundedOutput {
+	return &boundedOutput{limit: firstPositive(limit, 4096)}
+}
+
+func (w *boundedOutput) Write(p []byte) (int, error) {
+	remaining := w.limit + 1 - w.buf.Len()
+	if remaining > 0 {
+		if len(p) < remaining {
+			remaining = len(p)
+		}
+		_, _ = w.buf.Write(p[:remaining])
+	}
+	return len(p), nil
+}
+
+func (w *boundedOutput) Bytes() []byte {
+	return w.buf.Bytes()
+}
+
+func (w *boundedOutput) Exceeded() bool {
+	return w.buf.Len() > w.limit
+}
+
+func normalizeExecProtocolOutcome(outcome string) string {
+	switch strings.TrimSpace(outcome) {
+	case "", "ready":
+		return strings.TrimSpace(outcome)
+	case "source_auth_required", "policy_denied", "missing_ref", "source_unavailable", "invalid_ref":
+		return strings.TrimSpace(outcome)
+	default:
+		return "source_unavailable"
+	}
+}
+
+func execProtocolOutcomeMessage(outcome string) string {
+	switch outcome {
+	case "source_auth_required":
+		return "Exec source reported authentication is required."
+	case "policy_denied":
+		return "Exec source policy denied access."
+	case "missing_ref":
+		return "Exec source reported the ref was not found."
+	case "invalid_ref":
+		return "Exec source protocol mapping is invalid."
+	default:
+		return "Exec source reported unavailable state."
+	}
 }
 
 func (s sourceConfig) resolveVault(refCfg sourceRefConfig) sourceResolveResult {
