@@ -46,12 +46,14 @@ type localBackend struct {
 }
 
 type localStoreFile struct {
-	Version   int                     `json:"version"`
-	ServiceID string                  `json:"serviceId"`
-	CreatedAt time.Time               `json:"createdAt"`
-	UpdatedAt time.Time               `json:"updatedAt"`
-	Secrets   map[string]secretEntry  `json:"secrets"`
-	Recovery  *recoveryPolicyMetadata `json:"recoveryPolicy,omitempty"`
+	Version    int                     `json:"version"`
+	ServiceID  string                  `json:"serviceId"`
+	KeyID      string                  `json:"keyId,omitempty"`
+	KeyVersion string                  `json:"keyVersion,omitempty"`
+	CreatedAt  time.Time               `json:"createdAt"`
+	UpdatedAt  time.Time               `json:"updatedAt"`
+	Secrets    map[string]secretEntry  `json:"secrets"`
+	Recovery   *recoveryPolicyMetadata `json:"recoveryPolicy,omitempty"`
 }
 
 type secretEntry struct {
@@ -238,6 +240,12 @@ func (b *localBackend) writeSecret(req writeSecretRequest) (writeSecretResponse,
 		return writeSecretResponse{}, err
 	}
 	now := b.now()
+	if store.KeyID == "" {
+		store.KeyID = masterKeyID(b.masterKey)
+	}
+	if store.KeyVersion == "" {
+		store.KeyVersion = masterKeyVersion
+	}
 	version := now.Format(time.RFC3339Nano)
 	metadata := SecretMetadata{
 		SourceID:  firstNonEmpty(req.Metadata["sourceId"], localStoreSource),
