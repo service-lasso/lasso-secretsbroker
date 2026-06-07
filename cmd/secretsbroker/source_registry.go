@@ -95,7 +95,7 @@ func sourceRegistryLifecycle(source sourceConfig) SourceLifecycle {
 	if !source.Enabled {
 		return disabledSourceLifecycle()
 	}
-	switch source.Kind {
+	switch strings.ToLower(strings.TrimSpace(source.Kind)) {
 	case "env", "file", "exec":
 		if len(source.Refs) == 0 {
 			return normalizeSourceLifecycle("missing_ref")
@@ -114,8 +114,14 @@ func sourceRegistryLifecycle(source sourceConfig) SourceLifecycle {
 }
 
 func capabilitiesForSourceKind(kind string) []string {
-	switch kind {
-	case "env", "file", "exec", "vault", "openbao":
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "exec":
+		contract, ok := adapterContractForKind(kind)
+		if ok {
+			return append(adapterCapabilityNames(contract.Capabilities), "health")
+		}
+		return []string{"read", "reveal", "audit", "migration", "health"}
+	case "env", "file", "vault", "openbao":
 		return []string{"read", "health"}
 	default:
 		return []string{"health"}
