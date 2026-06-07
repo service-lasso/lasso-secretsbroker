@@ -8,9 +8,9 @@ Service id: `@secretsbroker`
 
 This note defines the recommended initialization and recovery-key model for the local-first Secrets Broker. It answers whether PGP-based initialization should be the primary path, how operators can initialize without Keybase, how recovery material should be generated and stored, and what must stay out of UI, logs, diagnostics, and support artifacts.
 
-This is a design contract, not a production-readiness claim. The implemented foundation remains the portable master key, local encrypted store, local wrapper, backup/restore, rotation flows, and recovery policy metadata surfaces documented in `docs/portable-master-key.md`, `docs/master-key-lifecycle.md`, `docs/backup-restore-rotation.md`, `docs/local-api-bootstrap-contract.md`, and `docs/threat-model.md`.
+This is a design contract, not a production-readiness claim. The implemented foundation remains the portable master key, local encrypted store, local wrapper, backup/restore, rotation flows, threshold recovery share generation/import, and recovery policy metadata surfaces documented in `docs/portable-master-key.md`, `docs/master-key-lifecycle.md`, `docs/backup-restore-rotation.md`, `docs/local-api-bootstrap-contract.md`, and `docs/threat-model.md`.
 
-Current implementation note for #58: the broker persists and reports recovery policy/share metadata through API and CLI status surfaces. It still does not generate threshold shares, import shares, or create recipient envelopes; those remain follow-up implementation slices.
+Current implementation note for #59: the broker can generate CLI-first threshold recovery shares, import the configured threshold of share files, verify the reconstructed portable master key against store metadata/decryptability, and refresh a local wrapper only after verification succeeds. Recipient-encrypted share envelopes are still a follow-up implementation slice.
 
 ## Recommendation
 
@@ -98,6 +98,33 @@ Failure behavior:
 - Shares for the wrong key id: fail `locked`, no state mutation.
 - Corrupted store or unverifiable payloads: fail `degraded`, no wrapper mutation.
 - Unsupported wrapper provider: keep the store recoverable through explicit portable-key or recovery-share unlock, but do not claim durable local unlock.
+
+CLI recovery share generation writes share material only to explicit operator-selected files:
+
+```powershell
+secretsbroker key recovery generate `
+  --store .\data\secretsbroker-store.json `
+  --audit .\data\secretsbroker-audit.jsonl `
+  --master-key-file .\secure\portable-master-key.txt `
+  --policy-id break-glass-2026 `
+  --threshold 2 `
+  --share-out .\secure\share-1.json `
+  --share-out .\secure\share-2.json `
+  --share-out .\secure\share-3.json
+```
+
+CLI recovery import reconstructs the key in memory, verifies the store, then writes or refreshes the local wrapper:
+
+```powershell
+secretsbroker key recovery import `
+  --store .\data\secretsbroker-store.json `
+  --audit .\data\secretsbroker-audit.jsonl `
+  --wrapper .\data\secretsbroker-wrapper.json `
+  --share-in .\secure\share-1.json `
+  --share-in .\secure\share-2.json
+```
+
+The share files contain recovery material and must be stored separately from encrypted stores and local wrappers. Broker state, audit events, responses, diagnostics, and Service Admin surfaces must carry only safe policy/share fingerprints and status metadata.
 
 ## Rotation Workflow
 
@@ -190,7 +217,7 @@ Audit events must never include:
 Recommended follow-up implementation sequence:
 
 1. Add a recovery policy and share metadata contract.
-2. Add CLI-first threshold recovery share generation and recovery import.
+2. Add CLI-first threshold recovery share generation and recovery import. Completed for the local-first baseline in #59.
 3. Add optional `age`/X25519 recipient envelopes for individual shares.
 4. Add wrapper and recovery-policy status surfaces to API/CLI.
 5. Add a Service Admin initialization guide only after the broker CLI/API contract is proven.

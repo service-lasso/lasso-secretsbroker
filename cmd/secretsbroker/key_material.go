@@ -61,6 +61,8 @@ func runKey(args []string) error {
 		return runKeyWrapperStatus(args[1:])
 	case "rotate":
 		return runKeyRotate(args[1:])
+	case "recovery":
+		return runKeyRecovery(args[1:])
 	default:
 		return fmt.Errorf("unknown key command %q", args[0])
 	}

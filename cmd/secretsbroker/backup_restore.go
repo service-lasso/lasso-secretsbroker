@@ -255,6 +255,8 @@ func (b *localBackend) rotateMasterKey(newMasterKey string) (keyRotateResponse, 
 		entry.Metadata.UpdatedAt = b.now()
 		store.Secrets[ref] = entry
 	}
+	store.KeyID = masterKeyID(newMasterKey)
+	store.KeyVersion = masterKeyVersion
 	store.UpdatedAt = b.now()
 	if err := b.saveStore(store); err != nil {
 		_ = b.audit("key_rotate", "", "degraded", "", "")

@@ -245,7 +245,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/management/secrets/rotation/dry-run",
 			"POST /v1/management/secrets/policy/preview|apply",
 			"CLI secretsbroker backup create|restore",
-			"CLI secretsbroker key initialize|unlock|import|rewrap|wrapper-status|rotate",
+			"CLI secretsbroker key initialize|unlock|import|rewrap|wrapper-status|rotate|recovery generate|recovery import",
 			"CLI secretsbroker admin status|secrets|providers|migration|recovery|audit|events",
 		},
 		Features: []string{
@@ -283,6 +283,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"master-key-rotation",
 			"recovery-policy-metadata",
 			"recovery-policy-status",
+			"threshold-recovery-shares",
 			"headless-admin-cli",
 		},
 		FutureFeatures: []string{

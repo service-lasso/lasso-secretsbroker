@@ -185,7 +185,7 @@ func (b *localBackend) initializeStore(masterKey string) (keyLifecycleResponse, 
 		_ = b.audit("key_initialize", "", "degraded", "", "")
 		return keyLifecycleResponse{}, err
 	}
-	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: b.now(), UpdatedAt: b.now(), Secrets: map[string]secretEntry{}}
+	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, KeyID: masterKeyID(masterKey), KeyVersion: masterKeyVersion, CreatedAt: b.now(), UpdatedAt: b.now(), Secrets: map[string]secretEntry{}}
 	if err := b.saveStore(store); err != nil {
 		_ = b.audit("key_initialize", "", "degraded", "", "")
 		return keyLifecycleResponse{}, errBackendDegraded
@@ -244,6 +244,12 @@ func (b *localBackend) validateStoreForKey() (string, int, error) {
 	store, err := b.loadStore()
 	if err != nil {
 		return "degraded", 0, errBackendDegraded
+	}
+	if store.KeyID != "" && store.KeyID != masterKeyID(b.masterKey) {
+		return "locked", len(store.Secrets), errInvalidBackupKey
+	}
+	if store.KeyVersion != "" && store.KeyVersion != masterKeyVersion {
+		return "locked", len(store.Secrets), errInvalidBackupKey
 	}
 	for _, entry := range store.Secrets {
 		if entry.Payload.KeyID != "" && entry.Payload.KeyID != masterKeyID(b.masterKey) {
