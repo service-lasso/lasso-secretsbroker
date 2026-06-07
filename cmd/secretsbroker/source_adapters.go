@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,6 +113,8 @@ func (s sourceConfig) resolve(ref string, refCfg sourceRefConfig) sourceResolveR
 		return s.resolveExec(refCfg)
 	case "vault", "openbao":
 		return s.resolveVault(refCfg)
+	case "bitwarden-bws":
+		return s.resolveBitwardenBWS(refCfg)
 	default:
 		return sourceResolveResult{Outcome: "invalid_ref", Message: fmt.Sprintf("Unsupported source kind %q.", s.Kind)}
 	}
@@ -362,6 +365,179 @@ func vaultField(payload map[string]any, field string) (string, bool) {
 	}
 	text, ok := value.(string)
 	return text, ok
+}
+
+func (s sourceConfig) resolveBitwardenBWS(refCfg sourceRefConfig) sourceResolveResult {
+	if strings.TrimSpace(refCfg.Path) == "" {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Bitwarden/BWS source mapping requires a secret id path."}
+	}
+	token := firstNonEmpty(s.Token, os.Getenv(s.TokenEnv))
+	if strings.TrimSpace(token) == "" {
+		return sourceResolveResult{Outcome: "source_auth_required", Message: "Bitwarden/BWS access token is missing or expired."}
+	}
+	if strings.TrimSpace(refCfg.Command) != "" {
+		return s.resolveBitwardenBWSCLI(refCfg, token)
+	}
+	return s.resolveBitwardenBWSAPI(refCfg, token)
+}
+
+func (s sourceConfig) resolveBitwardenBWSAPI(refCfg sourceRefConfig, token string) sourceResolveResult {
+	if strings.TrimSpace(s.Address) == "" {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Bitwarden/BWS API source requires address or command."}
+	}
+	secretURL, err := url.JoinPath(strings.TrimRight(s.Address, "/"), "v1", "secrets", strings.TrimLeft(refCfg.Path, "/"))
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Bitwarden/BWS API URL is invalid."}
+	}
+	req, err := http.NewRequest(http.MethodGet, secretURL, nil)
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Bitwarden/BWS API request is invalid."}
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 5000)) * time.Millisecond}
+	res, err := client.Do(req)
+	if err != nil {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "Bitwarden/BWS API is unavailable."}
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return bitwardenStatusResult(res.StatusCode, res.Body, refCfg)
+	}
+	return decodeBitwardenBWSValue(res.Body, refCfg, "Bitwarden/BWS API")
+}
+
+func (s sourceConfig) resolveBitwardenBWSCLI(refCfg sourceRefConfig, token string) sourceResolveResult {
+	if err := validateExecConfig(s, refCfg); err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: err.Error()}
+	}
+	timeout := time.Duration(firstPositive(refCfg.TimeoutMs, 5000)) * time.Millisecond
+	maxStdout := firstPositive(refCfg.MaxStdoutBytes, 65536)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, refCfg.Command, refCfg.Args...)
+	cmd.Env = append(os.Environ(), "BWS_ACCESS_TOKEN="+token, "BITWARDEN_BWS_SECRET_ID="+refCfg.Path)
+	stdout := newBoundedOutput(maxStdout)
+	cmd.Stdout = stdout
+	cmd.Stderr = io.Discard
+	err := cmd.Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "Bitwarden/BWS CLI timed out."}
+	}
+	if err != nil {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "Bitwarden/BWS CLI failed."}
+	}
+	if stdout.Exceeded() {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "Bitwarden/BWS CLI output exceeded limit."}
+	}
+	return decodeBitwardenBWSValue(bytes.NewReader(stdout.Bytes()), refCfg, "Bitwarden/BWS CLI")
+}
+
+func bitwardenStatusResult(status int, body io.Reader, refCfg sourceRefConfig) sourceResolveResult {
+	if outcome := bitwardenOutcomeFromBody(body, refCfg); outcome != "" && outcome != "ready" {
+		return sourceResolveResult{Outcome: outcome, Message: bitwardenOutcomeMessage(outcome)}
+	}
+	switch status {
+	case http.StatusUnauthorized:
+		return sourceResolveResult{Outcome: "source_auth_required", Message: "Bitwarden/BWS access token is missing or expired."}
+	case http.StatusForbidden:
+		return sourceResolveResult{Outcome: "policy_denied", Message: "Bitwarden/BWS policy denied access."}
+	case http.StatusNotFound:
+		return sourceResolveResult{Outcome: "missing_ref", Message: "Bitwarden/BWS secret was not found."}
+	case http.StatusTooManyRequests:
+		return sourceResolveResult{Outcome: "degraded", Message: "Bitwarden/BWS source is degraded."}
+	default:
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "Bitwarden/BWS source returned a non-success status."}
+	}
+}
+
+func bitwardenOutcomeFromBody(body io.Reader, refCfg sourceRefConfig) string {
+	limit := int64(firstPositive(refCfg.MaxStdoutBytes, 65536))
+	bytes, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil || int64(len(bytes)) > limit || len(strings.TrimSpace(string(bytes))) == 0 {
+		return ""
+	}
+	var payload bitwardenBWSPayload
+	if err := json.Unmarshal(bytes, &payload); err != nil {
+		return ""
+	}
+	return normalizeBitwardenOutcome(payload.Outcome)
+}
+
+func decodeBitwardenBWSValue(body io.Reader, refCfg sourceRefConfig, label string) sourceResolveResult {
+	limit := int64(firstPositive(refCfg.MaxStdoutBytes, 65536))
+	bytes, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil || int64(len(bytes)) > limit {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: label + " response could not be read safely."}
+	}
+	var payload bitwardenBWSPayload
+	if err := json.Unmarshal(bytes, &payload); err != nil {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: label + " response was not JSON."}
+	}
+	if outcome := normalizeBitwardenOutcome(payload.Outcome); outcome != "" && outcome != "ready" {
+		return sourceResolveResult{Outcome: outcome, Message: bitwardenOutcomeMessage(outcome)}
+	}
+	value, ok := bitwardenBWSField(payload, firstNonEmpty(refCfg.Field, "value"))
+	if !ok || strings.TrimSpace(value) == "" {
+		return sourceResolveResult{Outcome: "missing_ref", Message: label + " value field was not found."}
+	}
+	return sourceResolveResult{Outcome: "ready", Value: value}
+}
+
+type bitwardenBWSPayload struct {
+	Value   string         `json:"value"`
+	Outcome string         `json:"outcome"`
+	Data    map[string]any `json:"data"`
+	Secret  map[string]any `json:"secret"`
+}
+
+func bitwardenBWSField(payload bitwardenBWSPayload, field string) (string, bool) {
+	field = strings.TrimSpace(field)
+	if field == "" {
+		field = "value"
+	}
+	if field == "value" && payload.Value != "" {
+		return payload.Value, true
+	}
+	for _, candidate := range []map[string]any{payload.Data, payload.Secret} {
+		if candidate == nil {
+			continue
+		}
+		if value, ok := candidate[field]; ok {
+			text, ok := value.(string)
+			return text, ok
+		}
+	}
+	return "", false
+}
+
+func normalizeBitwardenOutcome(outcome string) string {
+	switch strings.TrimSpace(outcome) {
+	case "", "ready":
+		return strings.TrimSpace(outcome)
+	case "source_auth_required", "identity_expired", "policy_denied", "missing_ref", "source_unavailable", "degraded", "invalid_ref":
+		return strings.TrimSpace(outcome)
+	default:
+		return "source_unavailable"
+	}
+}
+
+func bitwardenOutcomeMessage(outcome string) string {
+	switch outcome {
+	case "source_auth_required":
+		return "Bitwarden/BWS authentication is required."
+	case "identity_expired":
+		return "Bitwarden/BWS identity expired."
+	case "policy_denied":
+		return "Bitwarden/BWS policy denied access."
+	case "missing_ref":
+		return "Bitwarden/BWS secret was not found."
+	case "invalid_ref":
+		return "Bitwarden/BWS source mapping is invalid."
+	case "degraded":
+		return "Bitwarden/BWS source is degraded."
+	default:
+		return "Bitwarden/BWS source is unavailable."
+	}
 }
 
 func validateExecConfig(source sourceConfig, refCfg sourceRefConfig) error {

@@ -107,6 +107,16 @@ func sourceRegistryLifecycle(source sourceConfig) SourceLifecycle {
 		if strings.TrimSpace(firstNonEmpty(source.Token, os.Getenv(source.TokenEnv))) == "" {
 			return normalizeSourceLifecycle("source_auth_required")
 		}
+	case "bitwarden-bws":
+		if len(source.Refs) == 0 {
+			return normalizeSourceLifecycle("missing_ref")
+		}
+		if strings.TrimSpace(source.Address) == "" && !sourceHasCommandMapping(source) {
+			return normalizeSourceLifecycle("invalid_ref")
+		}
+		if strings.TrimSpace(firstNonEmpty(source.Token, os.Getenv(source.TokenEnv))) == "" {
+			return normalizeSourceLifecycle("source_auth_required")
+		}
 	default:
 		return normalizeSourceLifecycle("invalid_ref")
 	}
@@ -139,11 +149,26 @@ func capabilitiesForSourceKind(kind string) []string {
 			return append(adapterCapabilityNames(contract.Capabilities), "health")
 		}
 		return []string{"read", "reveal", "migration", "health"}
+	case "bitwarden-bws":
+		contract, ok := adapterContractForKind(kind)
+		if ok {
+			return append(adapterCapabilityNames(contract.Capabilities), "health")
+		}
+		return []string{"read", "reveal", "write/update", "audit", "migration", "health"}
 	case "vault", "openbao":
 		return []string{"read", "health"}
 	default:
 		return []string{"health"}
 	}
+}
+
+func sourceHasCommandMapping(source sourceConfig) bool {
+	for _, ref := range source.Refs {
+		if strings.TrimSpace(ref.Command) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func registerSourceRegistryHandlers(mux *http.ServeMux, backend *localBackend) {
