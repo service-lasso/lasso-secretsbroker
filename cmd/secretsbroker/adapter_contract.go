@@ -60,15 +60,16 @@ type AdapterDiagnosticsSpec struct {
 }
 
 type AdapterDiagnostic struct {
-	Kind        string            `json:"kind"`
-	SourceID    string            `json:"sourceId"`
-	Ref         string            `json:"ref,omitempty"`
-	State       string            `json:"state"`
-	Outcome     string            `json:"outcome"`
-	NextAction  string            `json:"nextAction,omitempty"`
-	Retryable   bool              `json:"retryable"`
-	Capability  AdapterCapability `json:"capability,omitempty"`
-	MessageCode string            `json:"messageCode,omitempty"`
+	Kind         string            `json:"kind"`
+	SourceID     string            `json:"sourceId"`
+	Ref          string            `json:"ref,omitempty"`
+	State        string            `json:"state"`
+	Outcome      string            `json:"outcome"`
+	NextAction   string            `json:"nextAction,omitempty"`
+	Retryable    bool              `json:"retryable"`
+	RetryAfterMs int               `json:"retryAfterMs,omitempty"`
+	Capability   AdapterCapability `json:"capability,omitempty"`
+	MessageCode  string            `json:"messageCode,omitempty"`
 }
 
 func externalAdapterContracts() []AdapterContract {
@@ -182,7 +183,7 @@ func externalAdapterContracts() []AdapterContract {
 
 func defaultAdapterDiagnosticsSpec() AdapterDiagnosticsSpec {
 	return AdapterDiagnosticsSpec{
-		SecretSafeFields: []string{"kind", "sourceId", "ref", "state", "outcome", "nextAction", "retryable", "capability", "messageCode"},
+		SecretSafeFields: []string{"kind", "sourceId", "ref", "state", "outcome", "nextAction", "retryable", "retryAfterMs", "capability", "messageCode"},
 		ForbiddenFields:  []string{"value", "secret", "token", "password", "privateKey", "credential", "rawOutput", "stdout", "stderr"},
 	}
 }
@@ -219,14 +220,15 @@ func adapterHasCapability(contract AdapterContract, capability AdapterCapability
 
 func buildAdapterDiagnostic(source sourceConfig, ref string, capability AdapterCapability, lifecycle SourceLifecycle) AdapterDiagnostic {
 	return AdapterDiagnostic{
-		Kind:        strings.ToLower(strings.TrimSpace(source.Kind)),
-		SourceID:    source.SourceID,
-		Ref:         ref,
-		State:       lifecycle.State,
-		Outcome:     lifecycle.Outcome,
-		NextAction:  lifecycle.NextAction,
-		Retryable:   lifecycle.Retryable,
-		Capability:  capability,
-		MessageCode: lifecycle.Outcome,
+		Kind:         strings.ToLower(strings.TrimSpace(source.Kind)),
+		SourceID:     source.SourceID,
+		Ref:          ref,
+		State:        lifecycle.State,
+		Outcome:      lifecycle.Outcome,
+		NextAction:   lifecycle.NextAction,
+		Retryable:    lifecycle.Retryable,
+		RetryAfterMs: lifecycle.RetryAfterMs,
+		Capability:   capability,
+		MessageCode:  lifecycle.Outcome,
 	}
 }

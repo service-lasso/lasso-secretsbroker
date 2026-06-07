@@ -29,7 +29,7 @@ A source registry entry describes a configured backend/source without revealing 
   "enabled": true,
   "critical": true,
   "priority": 0,
-  "capabilities": ["read", "write", "health"],
+  "capabilities": ["read", "reveal", "write/update", "rotate/reset", "audit", "migration", "health"],
   "namespaces": ["*"],
   "state": "connected",
   "outcome": "ready",
@@ -156,7 +156,7 @@ The implemented registry includes the default local source plus configured `env`
 
 - `sourceId`: visible stable source identifier
 - `kind`: `local-encrypted-store`, `env`, `file`, `exec`, `vault`, or `openbao`
-- `capabilities`: source-safe capabilities such as `read`, `write`, and `health`
+- `capabilities`: source-safe capabilities from the external adapter contract, plus `health` for status probes
 - `namespaces`: claimed namespaces or `*`
 - `state`/`outcome`/`nextAction`/`retryable`: normalized lifecycle view
 - `lifecycle`: structured lifecycle object mirroring the normalized fields

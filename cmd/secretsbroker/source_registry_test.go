@@ -16,11 +16,29 @@ func TestDefaultSourceRegistryReflectsLocalKeyState(t *testing.T) {
 		t.Fatalf("locked source = %#v", locked.Sources[0])
 	}
 	assertContains(t, locked.Sources[0].Capabilities, "read")
+	assertContains(t, locked.Sources[0].Capabilities, "reveal")
+	assertContains(t, locked.Sources[0].Capabilities, "write/update")
+	assertContains(t, locked.Sources[0].Capabilities, "rotate/reset")
+	assertContains(t, locked.Sources[0].Capabilities, "audit")
+	assertContains(t, locked.Sources[0].Capabilities, "migration")
+	assertContains(t, locked.Sources[0].Capabilities, "health")
+	assertNotContains(t, locked.Sources[0].Capabilities, "policy")
+	assertNotContains(t, locked.Sources[0].Capabilities, "value-search")
 	assertContains(t, locked.Sources[0].Namespaces, "*")
 
 	ready := defaultSourceRegistry(newLocalBackend("store.json", "audit.jsonl", "master-key"))
 	if ready.Sources[0].State != "connected" || ready.Sources[0].Outcome != "ready" {
 		t.Fatalf("ready source = %#v", ready.Sources[0])
+	}
+}
+
+func TestLocalEncryptedStoreSourceStatusUsesAdapterContractCapabilities(t *testing.T) {
+	caps := capabilitiesForSourceKind("local-encrypted-store")
+	for _, capability := range []string{"read", "reveal", "write/update", "rotate/reset", "audit", "migration", "health"} {
+		assertContains(t, caps, capability)
+	}
+	for _, capability := range []string{"policy", "value-search"} {
+		assertNotContains(t, caps, capability)
 	}
 }
 

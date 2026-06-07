@@ -38,6 +38,17 @@ func TestExternalAdapterContractsCoverRequiredFamilies(t *testing.T) {
 func TestAdapterContractsReportExpectedCapabilityMatrix(t *testing.T) {
 	contracts := adapterContractsByKind()
 
+	local := contracts["local-encrypted-store"]
+	for _, capability := range []AdapterCapability{AdapterCapabilityRead, AdapterCapabilityReveal, AdapterCapabilityWrite, AdapterCapabilityRotate, AdapterCapabilityAudit, AdapterCapabilityMigration} {
+		if !adapterHasCapability(local, capability) {
+			t.Fatalf("local encrypted store missing %s capability: %#v", capability, local.Capabilities)
+		}
+	}
+	for _, capability := range []AdapterCapability{AdapterCapabilityPolicy, AdapterCapabilityValueSearch} {
+		if adapterHasCapability(local, capability) {
+			t.Fatalf("local encrypted store should not declare %s capability: %#v", capability, local.Capabilities)
+		}
+	}
 	if !adapterHasCapability(contracts["vault-openbao"], AdapterCapabilityPolicy) || !adapterHasCapability(contracts["vault-openbao"], AdapterCapabilityRotate) {
 		t.Fatalf("vault/openbao capabilities = %#v", contracts["vault-openbao"].Capabilities)
 	}
@@ -68,6 +79,44 @@ func TestAdapterDiagnosticsAreMetadataOnly(t *testing.T) {
 	}
 	if !strings.Contains(string(payload), "api/DB_PASSWORD") || strings.Contains(string(payload), "token") {
 		t.Fatalf("diagnostic should include ref metadata only: %s", payload)
+	}
+}
+
+func TestLocalEncryptedStoreAdapterDiagnosticsNormalizeFailureStates(t *testing.T) {
+	source := sourceConfig{SourceID: "local", Kind: "local-encrypted-store"}
+	cases := []struct {
+		outcome     string
+		wantState   string
+		wantAction  string
+		wantRetry   bool
+		wantRetryMs int
+	}{
+		{outcome: "locked", wantState: "reconnect_required", wantAction: "unlock_or_unseal_source"},
+		{outcome: "missing_ref", wantState: "missing", wantAction: "check_ref"},
+		{outcome: "policy_denied", wantState: "denied", wantAction: "review_policy"},
+		{outcome: "degraded", wantState: "degraded", wantAction: "retry_or_inspect_source", wantRetry: true, wantRetryMs: defaultSourceRetryAfterMs},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.outcome, func(t *testing.T) {
+			diagnostic := buildAdapterDiagnostic(source, "services/api/runtime/ref", AdapterCapabilityRead, normalizeSourceLifecycle(tt.outcome))
+			if diagnostic.Kind != "local-encrypted-store" || diagnostic.SourceID != "local" || diagnostic.Outcome != tt.outcome {
+				t.Fatalf("diagnostic identity = %#v", diagnostic)
+			}
+			if diagnostic.State != tt.wantState || diagnostic.NextAction != tt.wantAction || diagnostic.Retryable != tt.wantRetry || diagnostic.RetryAfterMs != tt.wantRetryMs {
+				t.Fatalf("diagnostic lifecycle = %#v", diagnostic)
+			}
+			payload, err := json.Marshal(diagnostic)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertNoSecretMaterial(t, payload, "SERVICE_LASSO_FAKE_SECRET_SENTINEL_PASSWORD_DO_NOT_USE")
+			for _, forbidden := range defaultAdapterDiagnosticsSpec().ForbiddenFields {
+				if strings.Contains(string(payload), `"`+forbidden+`":`) {
+					t.Fatalf("local diagnostic contains forbidden field %q: %s", forbidden, payload)
+				}
+			}
+		})
 	}
 }
 
