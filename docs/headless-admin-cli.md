@@ -10,7 +10,7 @@ Headless/server operators need a safe CLI surface for Secrets Broker when Servic
 
 ## Safety defaults
 
-- Status, list, search, provider status, migration dry-run, and audit export output metadata only.
+- Status, list, search, provider status, recovery policy status, migration dry-run, and audit export output metadata only.
 - Provider credentials, portable master keys, wrapper plaintext, raw env values, tokens, passwords, cookies, private keys, and secret values are never printed by default.
 - Raw secret values are printed only by `admin secrets reveal` when all of these are present:
   - a valid ref
@@ -95,6 +95,24 @@ secretsbroker admin migration dry-run `
 ```
 
 Migration dry-run is metadata-only. Apply requires `--confirm`, `--operation-id`, and `--reason` and still does not print raw values.
+
+### Recovery policy metadata
+
+```powershell
+secretsbroker admin recovery enroll `
+  --policy-id recovery-policy-1 `
+  --key-id mk-safe-key `
+  --threshold 2 `
+  --share-count 3 `
+  --share-fingerprint share-fp-1 `
+  --share-fingerprint share-fp-2 `
+  --share-fingerprint share-fp-3
+
+secretsbroker admin recovery status
+secretsbroker admin recovery revoke --policy-id recovery-policy-1
+```
+
+Recovery policy commands persist and report safe lifecycle metadata only: policy id, key id fingerprint, threshold, share count, share fingerprints, optional recipient fingerprints, timestamps, status, and next action. They do not generate, import, print, or persist portable master key bytes, recovery share contents, private keys, passphrases, API tokens, source credentials, or plaintext secret values.
 
 ### Audit export
 

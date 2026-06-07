@@ -46,11 +46,12 @@ type localBackend struct {
 }
 
 type localStoreFile struct {
-	Version   int                    `json:"version"`
-	ServiceID string                 `json:"serviceId"`
-	CreatedAt time.Time              `json:"createdAt"`
-	UpdatedAt time.Time              `json:"updatedAt"`
-	Secrets   map[string]secretEntry `json:"secrets"`
+	Version   int                     `json:"version"`
+	ServiceID string                  `json:"serviceId"`
+	CreatedAt time.Time               `json:"createdAt"`
+	UpdatedAt time.Time               `json:"updatedAt"`
+	Secrets   map[string]secretEntry  `json:"secrets"`
+	Recovery  *recoveryPolicyMetadata `json:"recoveryPolicy,omitempty"`
 }
 
 type secretEntry struct {
@@ -166,6 +167,8 @@ type auditEvent struct {
 	RefHash     string    `json:"refHash,omitempty"`
 	ProviderID  string    `json:"providerId,omitempty"`
 	SourceID    string    `json:"sourceId,omitempty"`
+	PolicyID    string    `json:"policyId,omitempty"`
+	KeyID       string    `json:"keyId,omitempty"`
 	Outcome     string    `json:"outcome"`
 	ReasonCode  string    `json:"reasonCode"`
 	State       string    `json:"state,omitempty"`
@@ -624,6 +627,8 @@ func normalizeAuditEvent(event auditEvent) auditEvent {
 	event.Outcome = scrubAuditField(event.Outcome)
 	event.State = scrubAuditField(event.State)
 	event.SourceID = scrubAuditField(event.SourceID)
+	event.PolicyID = scrubAuditField(event.PolicyID)
+	event.KeyID = scrubAuditField(event.KeyID)
 	event.ServiceID = scrubAuditField(event.ServiceID)
 	event.RequestID = scrubAuditField(event.RequestID)
 	event.ProviderID = scrubAuditField(event.ProviderID)

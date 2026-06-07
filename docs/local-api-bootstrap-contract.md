@@ -162,6 +162,7 @@ Example response:
     "GET /capabilities",
     "POST /v1/secrets",
     "POST /v1/resolve",
+    "GET|POST /v1/recovery/policy",
     "POST /v1/management/lockouts/clear",
     "GET /v1/sources/status"
   ],
@@ -176,6 +177,8 @@ Example response:
     "typed-errors",
     "audit-redaction",
     "audited-lockout-clear",
+    "recovery-policy-metadata",
+    "recovery-policy-status",
     "source-status"
   ],
   "futureFeatures": [
@@ -195,6 +198,59 @@ Example response:
   ]
 }
 ```
+
+## Recovery policy metadata contract
+
+Endpoint:
+
+```text
+GET /v1/recovery/policy
+POST /v1/recovery/policy
+```
+
+`GET` returns safe recovery lifecycle metadata. `POST` requires local API authentication and creates or updates the metadata contract. This endpoint records metadata only; it does not accept, generate, import, or return recovery shares, portable master key bytes, recipient private keys, passphrases, source credentials, API tokens, or plaintext secret values.
+
+Request:
+
+```json
+{
+  "requestId": "01HV...",
+  "serviceId": "@operator",
+  "policyId": "recovery-policy-1",
+  "keyId": "mk-safe-key",
+  "keyVersion": "v1",
+  "threshold": 2,
+  "shareCount": 3,
+  "shareFingerprints": ["share-fp-1", "share-fp-2", "share-fp-3"],
+  "recipientFingerprints": ["age-recipient-1", "age-recipient-2", "age-recipient-3"],
+  "status": "active"
+}
+```
+
+Response:
+
+```json
+{
+  "serviceId": "@secretsbroker",
+  "apiVersion": "secretsbroker.local/v1",
+  "outcome": "active",
+  "policy": {
+    "policyId": "recovery-policy-1",
+    "keyId": "mk-safe-key",
+    "keyVersion": "v1",
+    "threshold": 2,
+    "shareCount": 3,
+    "shareFingerprints": ["share-fp-1", "share-fp-2", "share-fp-3"],
+    "recipientFingerprints": ["age-recipient-1", "age-recipient-2", "age-recipient-3"],
+    "createdAt": "2026-06-07T00:00:00Z",
+    "status": "active",
+    "nextAction": "monitor_recovery_policy"
+  },
+  "nextAction": "monitor_recovery_policy"
+}
+```
+
+Invalid or incomplete metadata fails closed with `policy_denied` and `provide_complete_safe_recovery_metadata`. Corrupted stored metadata reports `degraded` and `repair_recovery_policy_metadata`.
 
 ## Batched resolve contract
 
