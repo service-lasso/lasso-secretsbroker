@@ -10,7 +10,7 @@ This note defines the recommended initialization and recovery-key model for the 
 
 This is a design contract, not a production-readiness claim. The implemented foundation remains the portable master key, local encrypted store, local wrapper, backup/restore, rotation flows, threshold recovery share generation/import, and recovery policy metadata surfaces documented in `docs/portable-master-key.md`, `docs/master-key-lifecycle.md`, `docs/backup-restore-rotation.md`, `docs/local-api-bootstrap-contract.md`, and `docs/threat-model.md`.
 
-Current implementation note for #59: the broker can generate CLI-first threshold recovery shares, import the configured threshold of share files, verify the reconstructed portable master key against store metadata/decryptability, and refresh a local wrapper only after verification succeeds. Recipient-encrypted share envelopes are still a follow-up implementation slice.
+Current implementation note for #59/#60: the broker can generate CLI-first threshold recovery shares, optionally encrypt each share to an operator-supplied age/X25519 recipient, import plaintext or recipient-enveloped share files, verify the reconstructed portable master key against store metadata/decryptability, and refresh a local wrapper only after verification succeeds.
 
 ## Recommendation
 
@@ -113,6 +113,23 @@ secretsbroker key recovery generate `
   --share-out .\secure\share-3.json
 ```
 
+Operators who want share files encrypted at rest can provide one age/X25519 recipient per `--share-out`, in the same order:
+
+```powershell
+secretsbroker key recovery generate `
+  --store .\data\secretsbroker-store.json `
+  --audit .\data\secretsbroker-audit.jsonl `
+  --master-key-file .\secure\portable-master-key.txt `
+  --policy-id break-glass-2026 `
+  --threshold 2 `
+  --share-out .\secure\share-1.json `
+  --age-recipient age1...holder1 `
+  --share-out .\secure\share-2.json `
+  --age-recipient age1...holder2 `
+  --share-out .\secure\share-3.json `
+  --age-recipient age1...holder3
+```
+
 CLI recovery import reconstructs the key in memory, verifies the store, then writes or refreshes the local wrapper:
 
 ```powershell
@@ -122,6 +139,19 @@ secretsbroker key recovery import `
   --wrapper .\data\secretsbroker-wrapper.json `
   --share-in .\secure\share-1.json `
   --share-in .\secure\share-2.json
+```
+
+For recipient-enveloped shares, the operator supplies local age/X25519 identity material at import time. Recipient private keys are never written to broker state or audit:
+
+```powershell
+secretsbroker key recovery import `
+  --store .\data\secretsbroker-store.json `
+  --audit .\data\secretsbroker-audit.jsonl `
+  --wrapper .\data\secretsbroker-wrapper.json `
+  --share-in .\secure\share-1.json `
+  --age-identity-file .\secure\holder-1-age-identity.txt `
+  --share-in .\secure\share-2.json `
+  --age-identity-file .\secure\holder-2-age-identity.txt
 ```
 
 The share files contain recovery material and must be stored separately from encrypted stores and local wrappers. Broker state, audit events, responses, diagnostics, and Service Admin surfaces must carry only safe policy/share fingerprints and status metadata.

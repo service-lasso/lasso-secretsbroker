@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"filippo.io/age"
 )
 
 func recoveryShareBackend(t *testing.T, masterKey string) *localBackend {
@@ -156,6 +158,151 @@ func TestRecoveryShareImportFailuresFailClosed(t *testing.T) {
 	}
 	if _, err := os.Stat(corruptedWrapper); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("corrupted store should not write wrapper, stat err = %v", err)
+	}
+}
+
+func TestRecoveryShareAgeEnvelopeGenerateAndImport(t *testing.T) {
+	key := lifecycleTestKey(24)
+	backend := recoveryShareBackend(t, key)
+	if _, err := backend.writeSecret(writeSecretRequest{Ref: "services/api/ENVELOPED_TOKEN", Value: "enveloped-secret"}); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	outputs := []string{
+		filepath.Join(dir, "share-1.json"),
+		filepath.Join(dir, "share-2.json"),
+		filepath.Join(dir, "share-3.json"),
+	}
+	identities := make([]*age.X25519Identity, 0, len(outputs))
+	recipients := make([]string, 0, len(outputs))
+	identityStrings := make([]string, 0, len(outputs))
+	for range outputs {
+		identity, err := age.GenerateX25519Identity()
+		if err != nil {
+			t.Fatal(err)
+		}
+		identities = append(identities, identity)
+		recipients = append(recipients, identity.Recipient().String())
+		identityStrings = append(identityStrings, identity.String())
+	}
+
+	generated, err := backend.generateRecoveryShares(recoveryShareGenerateRequest{PolicyID: "policy-age-break-glass", Threshold: 2, Outputs: outputs, AgeRecipients: recipients, ServiceID: "@operator", RequestID: "req-age-generate"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if generated.Outcome != "ready" || generated.Policy == nil || len(generated.Policy.RecipientFingerprints) != len(outputs) || len(generated.Shares) != len(outputs) {
+		t.Fatalf("generated response = %#v", generated)
+	}
+	for i, share := range generated.Shares {
+		if share.EnvelopeFormat != recoveryShareEnvelopeAgeX25519V1 || share.RecipientFingerprint == "" || share.RecipientFingerprint != generated.Policy.RecipientFingerprints[i] {
+			t.Fatalf("share metadata = %#v policy = %#v", share, generated.Policy)
+		}
+	}
+
+	var plaintextShare string
+	for _, output := range outputs {
+		bytes, err := os.ReadFile(output)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(bytes), key) || strings.Contains(string(bytes), "enveloped-secret") {
+			t.Fatalf("encrypted share file leaked portable key or secret: %s", string(bytes))
+		}
+		for _, identity := range identityStrings {
+			if strings.Contains(string(bytes), identity) {
+				t.Fatalf("encrypted share file leaked recipient identity: %s", string(bytes))
+			}
+		}
+		var share recoveryShareFile
+		if err := json.Unmarshal(bytes, &share); err != nil {
+			t.Fatal(err)
+		}
+		if share.Share != "" || share.Envelope == nil || share.Envelope.Ciphertext == "" || share.Envelope.RecipientFingerprint == "" {
+			t.Fatalf("encrypted share file metadata = %#v", share)
+		}
+		decryptedShare, err := recoverySharePlaintext(share, []age.Identity{identities[0], identities[1], identities[2]})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plaintextShare == "" {
+			plaintextShare = decryptedShare
+		}
+		if strings.Contains(string(bytes), decryptedShare) {
+			t.Fatalf("encrypted share file leaked plaintext share: %s", string(bytes))
+		}
+	}
+
+	wrapperPath := filepath.Join(t.TempDir(), "wrapper.json")
+	recovered := newLocalBackend(backend.storePath, filepath.Join(t.TempDir(), "recovery-audit.jsonl"), "")
+	recovered.now = backend.now
+	imported, err := recovered.importRecoveryShares(recoveryShareImportRequest{Inputs: outputs[:2], AgeIdentities: identityStrings[:2], WrapperPath: wrapperPath, OS: "linux", ServiceID: "@operator", RequestID: "req-age-import"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imported.Outcome != "ready" || imported.Wrapper == nil || imported.Wrapper.KeyID != masterKeyID(key) || imported.SecretCount != 1 {
+		t.Fatalf("import response = %#v", imported)
+	}
+	resolved := recovered.resolve(resolveRequest{ServiceID: "api", Refs: []string{"services/api/ENVELOPED_TOKEN"}})
+	if resolved.Results[0].Outcome != "ready" || resolved.Results[0].Value != "enveloped-secret" {
+		t.Fatalf("recovered resolve = %#v", resolved.Results[0])
+	}
+	auditBytes, err := os.ReadFile(recovered.auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(auditBytes), key) || strings.Contains(string(auditBytes), plaintextShare) || strings.Contains(string(auditBytes), "enveloped-secret") {
+		t.Fatalf("audit leaked recovery material or secret: %s", string(auditBytes))
+	}
+}
+
+func TestRecoveryShareAgeEnvelopeRejectsWrongIdentityAndMalformedEnvelope(t *testing.T) {
+	key := lifecycleTestKey(25)
+	backend := recoveryShareBackend(t, key)
+	dir := t.TempDir()
+	outputs := []string{
+		filepath.Join(dir, "share-1.json"),
+		filepath.Join(dir, "share-2.json"),
+	}
+	firstIdentity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondIdentity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := backend.generateRecoveryShares(recoveryShareGenerateRequest{PolicyID: "policy-age-fail-closed", Threshold: 2, Outputs: outputs, AgeRecipients: []string{firstIdentity.Recipient().String(), secondIdentity.Recipient().String()}}); err != nil {
+		t.Fatal(err)
+	}
+
+	wrongIdentity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovered := newLocalBackend(backend.storePath, filepath.Join(t.TempDir(), "wrong-identity-audit.jsonl"), "")
+	if _, err := recovered.importRecoveryShares(recoveryShareImportRequest{Inputs: outputs, AgeIdentities: []string{wrongIdentity.String()}, WrapperPath: filepath.Join(t.TempDir(), "wrong-wrapper.json"), OS: "linux"}); !errors.Is(err, errInvalidRecoveryShare) {
+		t.Fatalf("wrong identity err = %v", err)
+	}
+
+	malformedBytes, err := os.ReadFile(outputs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var malformed recoveryShareFile
+	if err := json.Unmarshal(malformedBytes, &malformed); err != nil {
+		t.Fatal(err)
+	}
+	malformed.Envelope.Ciphertext = "not-valid-base64"
+	malformedPath := filepath.Join(t.TempDir(), "malformed-share.json")
+	bytes, err := json.MarshalIndent(malformed, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(malformedPath, bytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := recovered.importRecoveryShares(recoveryShareImportRequest{Inputs: []string{malformedPath, outputs[1]}, AgeIdentities: []string{firstIdentity.String(), secondIdentity.String()}, WrapperPath: filepath.Join(t.TempDir(), "malformed-wrapper.json"), OS: "linux"}); !errors.Is(err, errInvalidRecoveryShare) {
+		t.Fatalf("malformed envelope err = %v", err)
 	}
 }
 
