@@ -126,6 +126,7 @@ func defaultProviderCapabilities() []providerCapability {
 		{ProviderKind: "env", DisplayName: "Environment variables", Supported: true, Capabilities: []string{"read", "health", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
 		{ProviderKind: "file", DisplayName: "File source", Supported: true, Capabilities: []string{"read", "health", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
 		{ProviderKind: "exec", DisplayName: "Exec source", Supported: true, Capabilities: []string{"read", "reveal", "health", "audit", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
+		{ProviderKind: "bitwarden-bws", DisplayName: "Bitwarden/BWS", Supported: true, Capabilities: capabilitiesForSourceKind("bitwarden-bws"), Limitations: []string{"migration target apply requires a configured remote write path"}},
 	}
 }
 
@@ -154,7 +155,7 @@ func (b *localBackend) providerConfigStatusResponse() providerConfigStatusRespon
 func providerStatusFromSource(source SourceStatus, backend *localBackend) providerConfigStatus {
 	credential := ""
 	address := ""
-	if source.Kind == "vault" || source.Kind == "openbao" {
+	if source.Kind == "vault" || source.Kind == "openbao" || source.Kind == "bitwarden-bws" {
 		credential = "configured-ref-or-env"
 	}
 	if source.SourceID == "local" {
@@ -225,12 +226,12 @@ func providerStatusFromConfigRequest(req providerConfigRequest, apply bool) (pro
 		status.Outcome = "unsupported"
 		return status, errUnsupportedProvider
 	}
-	if (kind == "vault" || kind == "openbao") && strings.TrimSpace(req.CredentialRef) == "" {
+	if (kind == "vault" || kind == "openbao" || kind == "bitwarden-bws") && strings.TrimSpace(req.CredentialRef) == "" {
 		status.State = "auth_required"
 		status.Outcome = "source_auth_required"
 		return status, errSourceAuthRequired
 	}
-	if (kind == "vault" || kind == "openbao") && strings.TrimSpace(req.Address) == "" {
+	if (kind == "vault" || kind == "openbao" || kind == "bitwarden-bws") && strings.TrimSpace(req.Address) == "" {
 		status.State = "config_error"
 		status.Outcome = "invalid_ref"
 		return status, errInvalidRef
