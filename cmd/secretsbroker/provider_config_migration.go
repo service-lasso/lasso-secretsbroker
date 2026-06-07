@@ -120,7 +120,7 @@ type migrationPlanResponse struct {
 
 func defaultProviderCapabilities() []providerCapability {
 	return []providerCapability{
-		{ProviderKind: "local-encrypted-store", DisplayName: "Local encrypted store", Supported: true, Capabilities: []string{"read", "reveal", "write", "rotate", "policy", "value_search", "audit", "migration_source", "migration_target"}, Limitations: []string{"local-first development backend"}},
+		{ProviderKind: "local-encrypted-store", DisplayName: "Local encrypted store", Supported: true, Capabilities: capabilitiesForSourceKind("local-encrypted-store"), Limitations: []string{"local-first development backend"}},
 		{ProviderKind: "vault", DisplayName: "Vault", Supported: true, Capabilities: []string{"read", "reveal", "health", "migration_source"}, Limitations: []string{"write and migration target apply require provider write adapter"}},
 		{ProviderKind: "openbao", DisplayName: "OpenBao", Supported: true, Capabilities: []string{"read", "reveal", "health", "migration_source"}, Limitations: []string{"write and migration target apply require provider write adapter"}},
 		{ProviderKind: "env", DisplayName: "Environment variables", Supported: true, Capabilities: []string{"read", "health", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},

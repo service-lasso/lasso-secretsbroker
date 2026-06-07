@@ -22,6 +22,13 @@ func TestProviderCapabilitiesAndStatusAreSafeMetadataOnly(t *testing.T) {
 	if capabilities.Outcome != "ready" || len(capabilities.Capabilities) == 0 {
 		t.Fatalf("capabilities = %#v", capabilities)
 	}
+	localCapabilities := providerCapabilitiesByKind("local-encrypted-store").Capabilities
+	for _, capability := range []string{"read", "reveal", "write/update", "rotate/reset", "audit", "migration", "health"} {
+		assertContains(t, localCapabilities, capability)
+	}
+	for _, capability := range []string{"policy", "value-search", "value_search"} {
+		assertNotContains(t, localCapabilities, capability)
+	}
 	assertNoSecretMaterial(t, mustManagedJSON(t, capabilities), providerCredentialValue)
 
 	status := backend.providerConfigStatusResponse()

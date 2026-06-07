@@ -49,7 +49,7 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 			Enabled:          true,
 			Critical:         true,
 			Priority:         0,
-			Capabilities:     []string{"read", "write", "health"},
+			Capabilities:     capabilitiesForSourceKind("local-encrypted-store"),
 			Namespaces:       []string{"*"},
 			State:            localLifecycle.State,
 			Outcome:          localLifecycle.Outcome,
@@ -115,6 +115,12 @@ func sourceRegistryLifecycle(source sourceConfig) SourceLifecycle {
 
 func capabilitiesForSourceKind(kind string) []string {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "local-encrypted-store":
+		contract, ok := adapterContractForKind(kind)
+		if ok {
+			return append(adapterCapabilityNames(contract.Capabilities), "health")
+		}
+		return []string{"read", "reveal", "write/update", "rotate/reset", "audit", "migration", "health"}
 	case "exec":
 		contract, ok := adapterContractForKind(kind)
 		if ok {
