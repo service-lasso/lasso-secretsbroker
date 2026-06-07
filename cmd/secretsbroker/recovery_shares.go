@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -15,12 +16,15 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"filippo.io/age"
 )
 
 const (
-	recoveryShareVersion = 1
-	recoveryShareAlg     = "shamir-gf256-v1"
-	maxRecoveryShareSize = 64 * 1024
+	recoveryShareVersion             = 1
+	recoveryShareAlg                 = "shamir-gf256-v1"
+	recoveryShareEnvelopeAgeX25519V1 = "age-x25519-v1"
+	maxRecoveryShareSize             = 64 * 1024
 )
 
 var (
@@ -31,41 +35,54 @@ var (
 )
 
 type recoveryShareFile struct {
-	Version          int       `json:"version"`
-	ServiceID        string    `json:"serviceId"`
-	APIVersion       string    `json:"apiVersion"`
-	PolicyID         string    `json:"policyId"`
-	KeyID            string    `json:"keyId"`
-	KeyVersion       string    `json:"keyVersion"`
-	Threshold        int       `json:"threshold"`
-	ShareCount       int       `json:"shareCount"`
-	ShareIndex       int       `json:"shareIndex"`
-	Alg              string    `json:"alg"`
-	Share            string    `json:"share"`
-	ShareFingerprint string    `json:"shareFingerprint"`
-	CreatedAt        time.Time `json:"createdAt"`
+	Version          int                    `json:"version"`
+	ServiceID        string                 `json:"serviceId"`
+	APIVersion       string                 `json:"apiVersion"`
+	PolicyID         string                 `json:"policyId"`
+	KeyID            string                 `json:"keyId"`
+	KeyVersion       string                 `json:"keyVersion"`
+	Threshold        int                    `json:"threshold"`
+	ShareCount       int                    `json:"shareCount"`
+	ShareIndex       int                    `json:"shareIndex"`
+	Alg              string                 `json:"alg"`
+	Share            string                 `json:"share,omitempty"`
+	Envelope         *recoveryShareEnvelope `json:"envelope,omitempty"`
+	ShareFingerprint string                 `json:"shareFingerprint"`
+	CreatedAt        time.Time              `json:"createdAt"`
+}
+
+type recoveryShareEnvelope struct {
+	Format               string `json:"format"`
+	RecipientFingerprint string `json:"recipientFingerprint"`
+	Ciphertext           string `json:"ciphertext"`
 }
 
 type recoveryShareGenerateRequest struct {
-	PolicyID  string
-	Threshold int
-	Outputs   []string
-	ServiceID string
-	RequestID string
+	PolicyID          string
+	Threshold         int
+	Outputs           []string
+	AgeRecipients     []string
+	AgeRecipientFiles []string
+	ServiceID         string
+	RequestID         string
 }
 
 type recoveryShareImportRequest struct {
-	Inputs      []string
-	WrapperPath string
-	OS          string
-	ServiceID   string
-	RequestID   string
+	Inputs           []string
+	AgeIdentities    []string
+	AgeIdentityFiles []string
+	WrapperPath      string
+	OS               string
+	ServiceID        string
+	RequestID        string
 }
 
 type recoveryShareFileMetadata struct {
-	ShareIndex       int    `json:"shareIndex"`
-	Path             string `json:"path"`
-	ShareFingerprint string `json:"shareFingerprint"`
+	ShareIndex           int    `json:"shareIndex"`
+	Path                 string `json:"path"`
+	ShareFingerprint     string `json:"shareFingerprint"`
+	EnvelopeFormat       string `json:"envelopeFormat,omitempty"`
+	RecipientFingerprint string `json:"recipientFingerprint,omitempty"`
 }
 
 type recoveryShareOperationResponse struct {
@@ -109,7 +126,11 @@ func runKeyRecoveryGenerate(args []string) error {
 	requestID := fs.String("request-id", "", "request id")
 	service := fs.String("service-id", "@operator", "requesting service/operator id")
 	outputs := multiFlag{}
+	ageRecipients := multiFlag{}
+	ageRecipientFiles := multiFlag{}
 	fs.Var(&outputs, "share-out", "explicit recovery share output file; repeatable")
+	fs.Var(&ageRecipients, "age-recipient", "age/X25519 recipient for encrypted share output; repeatable and ordered with --share-out")
+	fs.Var(&ageRecipientFiles, "age-recipient-file", "file containing age/X25519 recipient; repeatable and ordered with --share-out")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -118,7 +139,7 @@ func runKeyRecoveryGenerate(args []string) error {
 		return err
 	}
 	backend := newLocalBackend(*storePath, *auditPath, material.Value)
-	res, err := backend.generateRecoveryShares(recoveryShareGenerateRequest{PolicyID: *policyID, Threshold: *threshold, Outputs: []string(outputs), ServiceID: *service, RequestID: *requestID})
+	res, err := backend.generateRecoveryShares(recoveryShareGenerateRequest{PolicyID: *policyID, Threshold: *threshold, Outputs: []string(outputs), AgeRecipients: []string(ageRecipients), AgeRecipientFiles: []string(ageRecipientFiles), ServiceID: *service, RequestID: *requestID})
 	if err != nil {
 		_ = encodeIndented(os.Stdout, res)
 		return err
@@ -135,12 +156,16 @@ func runKeyRecoveryImport(args []string) error {
 	requestID := fs.String("request-id", "", "request id")
 	service := fs.String("service-id", "@operator", "requesting service/operator id")
 	inputs := multiFlag{}
+	ageIdentities := multiFlag{}
+	ageIdentityFiles := multiFlag{}
 	fs.Var(&inputs, "share-in", "explicit recovery share input file; repeatable")
+	fs.Var(&ageIdentities, "age-identity", "local age/X25519 identity for encrypted recovery share import; repeatable")
+	fs.Var(&ageIdentityFiles, "age-identity-file", "file containing local age/X25519 identity; repeatable")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	backend := newLocalBackend(*storePath, *auditPath, "")
-	res, err := backend.importRecoveryShares(recoveryShareImportRequest{Inputs: []string(inputs), WrapperPath: *wrapperPath, OS: *osName, ServiceID: *service, RequestID: *requestID})
+	res, err := backend.importRecoveryShares(recoveryShareImportRequest{Inputs: []string(inputs), AgeIdentities: []string(ageIdentities), AgeIdentityFiles: []string(ageIdentityFiles), WrapperPath: *wrapperPath, OS: *osName, ServiceID: *service, RequestID: *requestID})
 	if err != nil {
 		_ = encodeIndented(os.Stdout, res)
 		return err
@@ -198,6 +223,13 @@ func (b *localBackend) generateRecoveryShares(req recoveryShareGenerateRequest) 
 		res.NextAction = "retry_recovery_share_generation"
 		return res, err
 	}
+	recipients, recipientFingerprints, err := loadAgeRecipients(req.AgeRecipients, req.AgeRecipientFiles, len(outputs))
+	if err != nil {
+		_ = b.auditRecoveryShares("recovery_share_generate", "", "policy_denied", req.ServiceID, req.RequestID)
+		res.Outcome = "policy_denied"
+		res.NextAction = "provide_valid_age_recipients"
+		return res, err
+	}
 	keyID := masterKeyID(b.masterKey)
 	policyID := scrubAuditField(req.PolicyID)
 	if policyID == "" {
@@ -210,11 +242,25 @@ func (b *localBackend) generateRecoveryShares(req recoveryShareGenerateRequest) 
 	for i, share := range shares {
 		encodedShare := base64.RawURLEncoding.EncodeToString(share.Value)
 		fp := recoveryShareFingerprint(policyID, keyID, share.Index, encodedShare)
-		files = append(files, recoveryShareFile{Version: recoveryShareVersion, ServiceID: serviceID, APIVersion: apiVersion, PolicyID: policyID, KeyID: keyID, KeyVersion: masterKeyVersion, Threshold: req.Threshold, ShareCount: len(shares), ShareIndex: share.Index, Alg: recoveryShareAlg, Share: encodedShare, ShareFingerprint: fp, CreatedAt: now})
+		file := recoveryShareFile{Version: recoveryShareVersion, ServiceID: serviceID, APIVersion: apiVersion, PolicyID: policyID, KeyID: keyID, KeyVersion: masterKeyVersion, Threshold: req.Threshold, ShareCount: len(shares), ShareIndex: share.Index, Alg: recoveryShareAlg, Share: encodedShare, ShareFingerprint: fp, CreatedAt: now}
+		meta := recoveryShareFileMetadata{ShareIndex: share.Index, Path: outputs[i], ShareFingerprint: fp}
+		if len(recipients) > 0 {
+			ciphertext, err := encryptAgeEnvelope(encodedShare, recipients[i])
+			if err != nil {
+				_ = b.auditRecoveryShares("recovery_share_generate", policyID, "degraded", req.ServiceID, req.RequestID)
+				res.NextAction = "retry_recovery_share_envelope_generation"
+				return res, err
+			}
+			file.Share = ""
+			file.Envelope = &recoveryShareEnvelope{Format: recoveryShareEnvelopeAgeX25519V1, RecipientFingerprint: recipientFingerprints[i], Ciphertext: ciphertext}
+			meta.EnvelopeFormat = recoveryShareEnvelopeAgeX25519V1
+			meta.RecipientFingerprint = recipientFingerprints[i]
+		}
+		files = append(files, file)
 		fingerprints = append(fingerprints, fp)
-		metadata = append(metadata, recoveryShareFileMetadata{ShareIndex: share.Index, Path: outputs[i], ShareFingerprint: fp})
+		metadata = append(metadata, meta)
 	}
-	if _, err := normalizeRecoveryPolicyRequest(recoveryPolicyRequest{PolicyID: policyID, KeyID: keyID, KeyVersion: masterKeyVersion, Threshold: req.Threshold, ShareCount: len(shares), ShareFingerprints: fingerprints, CreatedAt: &now, Status: "active"}, now); err != nil {
+	if _, err := normalizeRecoveryPolicyRequest(recoveryPolicyRequest{PolicyID: policyID, KeyID: keyID, KeyVersion: masterKeyVersion, Threshold: req.Threshold, ShareCount: len(shares), ShareFingerprints: fingerprints, RecipientFingerprints: recipientFingerprints, CreatedAt: &now, Status: "active"}, now); err != nil {
 		_ = b.auditRecoveryShares("recovery_share_generate", policyID, "policy_denied", req.ServiceID, req.RequestID)
 		res.Outcome = "policy_denied"
 		res.NextAction = "provide_valid_recovery_policy_metadata"
@@ -227,7 +273,7 @@ func (b *localBackend) generateRecoveryShares(req recoveryShareGenerateRequest) 
 			return res, err
 		}
 	}
-	policyRes, err := b.upsertRecoveryPolicy(recoveryPolicyRequest{RequestID: req.RequestID, ServiceID: req.ServiceID, PolicyID: policyID, KeyID: keyID, KeyVersion: masterKeyVersion, Threshold: req.Threshold, ShareCount: len(shares), ShareFingerprints: fingerprints, CreatedAt: &now, Status: "active"})
+	policyRes, err := b.upsertRecoveryPolicy(recoveryPolicyRequest{RequestID: req.RequestID, ServiceID: req.ServiceID, PolicyID: policyID, KeyID: keyID, KeyVersion: masterKeyVersion, Threshold: req.Threshold, ShareCount: len(shares), ShareFingerprints: fingerprints, RecipientFingerprints: recipientFingerprints, CreatedAt: &now, Status: "active"})
 	if err != nil {
 		_ = b.auditRecoveryShares("recovery_share_generate", policyID, "degraded", req.ServiceID, req.RequestID)
 		return res, err
@@ -243,6 +289,12 @@ func (b *localBackend) importRecoveryShares(req recoveryShareImportRequest) (rec
 		_ = b.auditRecoveryShares("recovery_share_import", "", "locked", req.ServiceID, req.RequestID)
 		return res, errInsufficientRecoveryShares
 	}
+	identities, err := loadAgeIdentities(req.AgeIdentities, req.AgeIdentityFiles)
+	if err != nil {
+		_ = b.auditRecoveryShares("recovery_share_import", "", "locked", req.ServiceID, req.RequestID)
+		res.NextAction = "provide_valid_age_identities"
+		return res, err
+	}
 	shareFiles := make([]recoveryShareFile, 0, len(inputs))
 	metadata := make([]recoveryShareFileMetadata, 0, len(inputs))
 	for _, path := range inputs {
@@ -253,9 +305,14 @@ func (b *localBackend) importRecoveryShares(req recoveryShareImportRequest) (rec
 			return res, err
 		}
 		shareFiles = append(shareFiles, file)
-		metadata = append(metadata, recoveryShareFileMetadata{ShareIndex: file.ShareIndex, Path: path, ShareFingerprint: file.ShareFingerprint})
+		meta := recoveryShareFileMetadata{ShareIndex: file.ShareIndex, Path: path, ShareFingerprint: file.ShareFingerprint}
+		if file.Envelope != nil {
+			meta.EnvelopeFormat = file.Envelope.Format
+			meta.RecipientFingerprint = file.Envelope.RecipientFingerprint
+		}
+		metadata = append(metadata, meta)
 	}
-	header, sharePoints, err := validateRecoveryShareSet(shareFiles)
+	header, sharePoints, err := validateRecoveryShareSet(shareFiles, identities)
 	if err != nil {
 		_ = b.auditRecoveryShares("recovery_share_import", "", "locked", req.ServiceID, req.RequestID)
 		res.Shares = metadata
@@ -399,7 +456,7 @@ func combineSecretGF256(shares []recoverySharePoint) ([]byte, error) {
 	return secret, nil
 }
 
-func validateRecoveryShareSet(files []recoveryShareFile) (recoveryShareFile, []recoverySharePoint, error) {
+func validateRecoveryShareSet(files []recoveryShareFile, identities []age.Identity) (recoveryShareFile, []recoverySharePoint, error) {
 	if len(files) == 0 {
 		return recoveryShareFile{}, nil, errInsufficientRecoveryShares
 	}
@@ -420,11 +477,15 @@ func validateRecoveryShareSet(files []recoveryShareFile) (recoveryShareFile, []r
 			return recoveryShareFile{}, nil, errInvalidRecoveryShare
 		}
 		seen[file.ShareIndex] = struct{}{}
-		shareValue, err := base64.RawURLEncoding.DecodeString(file.Share)
+		encodedShare, err := recoverySharePlaintext(file, identities)
+		if err != nil {
+			return recoveryShareFile{}, nil, err
+		}
+		shareValue, err := base64.RawURLEncoding.DecodeString(encodedShare)
 		if err != nil || len(shareValue) == 0 {
 			return recoveryShareFile{}, nil, errInvalidRecoveryShare
 		}
-		if recoveryShareFingerprint(file.PolicyID, file.KeyID, file.ShareIndex, file.Share) != file.ShareFingerprint {
+		if recoveryShareFingerprint(file.PolicyID, file.KeyID, file.ShareIndex, encodedShare) != file.ShareFingerprint {
 			return recoveryShareFile{}, nil, errInvalidRecoveryShare
 		}
 		points = append(points, recoverySharePoint{Index: file.ShareIndex, Value: shareValue})
@@ -442,10 +503,53 @@ func validateRecoveryShareHeader(file recoveryShareFile) error {
 	if file.Threshold < 1 || file.ShareCount < 1 || file.Threshold > file.ShareCount || file.ShareCount > 255 || file.ShareIndex < 1 || file.ShareIndex > file.ShareCount {
 		return errInvalidRecoveryShare
 	}
-	if strings.TrimSpace(file.Share) == "" || file.CreatedAt.IsZero() {
+	hasShare := strings.TrimSpace(file.Share) != ""
+	hasEnvelope := file.Envelope != nil
+	if hasShare == hasEnvelope || file.CreatedAt.IsZero() {
+		return errInvalidRecoveryShare
+	}
+	if hasEnvelope && validateRecoveryShareEnvelope(*file.Envelope) != nil {
 		return errInvalidRecoveryShare
 	}
 	return nil
+}
+
+func validateRecoveryShareEnvelope(envelope recoveryShareEnvelope) error {
+	if envelope.Format != recoveryShareEnvelopeAgeX25519V1 {
+		return errInvalidRecoveryShare
+	}
+	if !validSafeMetadataID(envelope.RecipientFingerprint) || strings.TrimSpace(envelope.Ciphertext) == "" {
+		return errInvalidRecoveryShare
+	}
+	return nil
+}
+
+func recoverySharePlaintext(file recoveryShareFile, identities []age.Identity) (string, error) {
+	if strings.TrimSpace(file.Share) != "" {
+		return file.Share, nil
+	}
+	if file.Envelope == nil || validateRecoveryShareEnvelope(*file.Envelope) != nil {
+		return "", errInvalidRecoveryShare
+	}
+	if len(identities) == 0 {
+		return "", errInvalidRecoveryShare
+	}
+	if file.Envelope.Format != recoveryShareEnvelopeAgeX25519V1 {
+		return "", errInvalidRecoveryShare
+	}
+	ciphertext, err := base64.RawURLEncoding.DecodeString(file.Envelope.Ciphertext)
+	if err != nil || len(ciphertext) == 0 {
+		return "", errInvalidRecoveryShare
+	}
+	reader, err := age.Decrypt(bytes.NewReader(ciphertext), identities...)
+	if err != nil {
+		return "", errInvalidRecoveryShare
+	}
+	plaintext, err := io.ReadAll(io.LimitReader(reader, maxRecoveryShareSize))
+	if err != nil || len(plaintext) == 0 {
+		return "", errInvalidRecoveryShare
+	}
+	return strings.TrimSpace(string(plaintext)), nil
 }
 
 func writeRecoveryShareFile(path string, share recoveryShareFile) error {
@@ -489,6 +593,95 @@ func readRecoveryShareFile(path string) (recoveryShareFile, error) {
 func recoveryShareFingerprint(policyID, keyID string, shareIndex int, encodedShare string) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{policyID, keyID, fmt.Sprintf("%d", shareIndex), encodedShare}, "|")))
 	return "share-" + hex.EncodeToString(sum[:])[:16]
+}
+
+func loadAgeRecipients(inlineRecipients, recipientFiles []string, expectedCount int) ([]age.Recipient, []string, error) {
+	specs, err := loadAgeStrings(inlineRecipients, recipientFiles)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(specs) == 0 {
+		return nil, nil, nil
+	}
+	if len(specs) != expectedCount {
+		return nil, nil, errInvalidRecoveryPolicy
+	}
+	recipients := make([]age.Recipient, 0, len(specs))
+	fingerprints := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		recipient, err := age.ParseX25519Recipient(spec)
+		if err != nil {
+			return nil, nil, errInvalidRecoveryPolicy
+		}
+		recipients = append(recipients, recipient)
+		fingerprints = append(fingerprints, ageRecipientFingerprint(spec))
+	}
+	return recipients, fingerprints, nil
+}
+
+func loadAgeIdentities(inlineIdentities, identityFiles []string) ([]age.Identity, error) {
+	specs, err := loadAgeStrings(inlineIdentities, identityFiles)
+	if err != nil {
+		return nil, err
+	}
+	identities := make([]age.Identity, 0, len(specs))
+	for _, spec := range specs {
+		identity, err := age.ParseX25519Identity(spec)
+		if err != nil {
+			return nil, errInvalidRecoveryShare
+		}
+		identities = append(identities, identity)
+	}
+	return identities, nil
+}
+
+func loadAgeStrings(inlineValues, files []string) ([]string, error) {
+	values := make([]string, 0, len(inlineValues)+len(files))
+	for _, value := range inlineValues {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			values = append(values, value)
+		}
+	}
+	for _, path := range files {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		bytes, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		for _, line := range strings.Split(string(bytes), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			values = append(values, line)
+		}
+	}
+	return values, nil
+}
+
+func encryptAgeEnvelope(plaintext string, recipient age.Recipient) (string, error) {
+	var buf bytes.Buffer
+	writer, err := age.Encrypt(&buf, recipient)
+	if err != nil {
+		return "", err
+	}
+	if _, err := writer.Write([]byte(plaintext)); err != nil {
+		_ = writer.Close()
+		return "", err
+	}
+	if err := writer.Close(); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf.Bytes()), nil
+}
+
+func ageRecipientFingerprint(recipient string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(recipient)))
+	return "age-" + hex.EncodeToString(sum[:])[:16]
 }
 
 func gfMul(a, b byte) byte {
