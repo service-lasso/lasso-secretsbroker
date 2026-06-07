@@ -30,6 +30,8 @@ type operationalEvent struct {
 	ServiceID  string    `json:"serviceId,omitempty"`
 	ProviderID string    `json:"providerId,omitempty"`
 	SourceID   string    `json:"sourceId,omitempty"`
+	PolicyID   string    `json:"policyId,omitempty"`
+	KeyID      string    `json:"keyId,omitempty"`
 	RefPrefix  string    `json:"refPrefix,omitempty"`
 	RefHash    string    `json:"refHash,omitempty"`
 	Outcome    string    `json:"outcome"`
@@ -103,6 +105,8 @@ func operationalEventFromAudit(audit auditEvent) operationalEvent {
 		ServiceID:  audit.ServiceID,
 		ProviderID: audit.ProviderID,
 		SourceID:   audit.SourceID,
+		PolicyID:   audit.PolicyID,
+		KeyID:      audit.KeyID,
 		RefPrefix:  safeRefPrefix(audit.Ref),
 		RefHash:    audit.RefHash,
 		Outcome:    audit.Outcome,
@@ -136,6 +140,8 @@ func eventFamily(audit auditEvent) string {
 	case strings.HasPrefix(audit.Operation, "management_"):
 		return "management_apply"
 	case strings.HasPrefix(audit.Operation, "key_"):
+		return "key_lifecycle"
+	case strings.HasPrefix(audit.Operation, "recovery_policy_"):
 		return "key_lifecycle"
 	case strings.HasPrefix(audit.Operation, "backup_"):
 		return "backup_restore"
@@ -212,6 +218,8 @@ func normalizeOperationalEvent(event operationalEvent) operationalEvent {
 	event.ServiceID = scrubAuditField(event.ServiceID)
 	event.ProviderID = scrubAuditField(event.ProviderID)
 	event.SourceID = scrubAuditField(event.SourceID)
+	event.PolicyID = scrubAuditField(event.PolicyID)
+	event.KeyID = scrubAuditField(event.KeyID)
 	event.RefPrefix = scrubAuditField(event.RefPrefix)
 	event.RefHash = scrubAuditField(event.RefHash)
 	event.Outcome = scrubAuditField(event.Outcome)

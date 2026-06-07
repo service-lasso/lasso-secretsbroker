@@ -31,6 +31,7 @@ type adminStatusResponse struct {
 	State      StateResponse                `json:"state"`
 	Key        keyStatusResponse            `json:"key"`
 	Providers  providerConfigStatusResponse `json:"providers"`
+	Recovery   recoveryPolicyStatusResponse `json:"recovery"`
 }
 
 type adminAuditExportResponse struct {
@@ -60,6 +61,8 @@ func executeAdmin(args []string, out io.Writer) error {
 		return runAdminProviders(args[1:], out)
 	case "migration":
 		return runAdminMigration(args[1:], out)
+	case "recovery":
+		return runAdminRecovery(args[1:], out)
 	case "audit":
 		return runAdminAudit(args[1:], out)
 	case "telemetry":
@@ -82,7 +85,11 @@ func runAdminStatus(args []string, out io.Writer) error {
 		return err
 	}
 	statusState := normalizeAdminState(*state, backend, material)
-	res := adminStatusResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: statusState, Health: defaultHealth(statusState), Status: defaultStatus(statusState), State: defaultState(statusState), Key: keyStatus(material), Providers: backend.providerConfigStatusResponse()}
+	recovery, recoveryErr := backend.recoveryPolicyStatus()
+	if recoveryErr != nil && statusState == "ready" {
+		statusState = "degraded"
+	}
+	res := adminStatusResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: statusState, Health: defaultHealth(statusState), Status: defaultStatus(statusState), State: defaultState(statusState), Key: keyStatus(material), Providers: backend.providerConfigStatusResponse(), Recovery: recovery}
 	return encodeAdminJSON(out, res)
 }
 
@@ -232,6 +239,58 @@ func runAdminMigration(args []string, out io.Writer) error {
 		return encodeAdminJSON(out, res)
 	default:
 		return fmt.Errorf("unknown admin migration command %q", sub)
+	}
+}
+
+func runAdminRecovery(args []string, out io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("unknown admin recovery command %q", "")
+	}
+	sub := args[0]
+	fs, opts := newAdminFlagSet("admin recovery " + sub)
+	requestID := fs.String("request-id", "", "request id")
+	service := fs.String("service-id", "@operator", "requesting service/operator id")
+	policyID := fs.String("policy-id", "", "recovery policy id")
+	keyID := fs.String("key-id", "", "portable master key id")
+	keyVersion := fs.String("key-version", masterKeyVersion, "portable master key version")
+	threshold := fs.Int("threshold", 0, "threshold required to recover")
+	shareCount := fs.Int("share-count", 0, "total recovery share count")
+	status := fs.String("status", "active", "policy status: active, rotated, or revoked")
+	shareFingerprints := multiFlag{}
+	recipientFingerprints := multiFlag{}
+	fs.Var(&shareFingerprints, "share-fingerprint", "safe recovery share fingerprint; repeatable")
+	fs.Var(&recipientFingerprints, "recipient-fingerprint", "safe recipient fingerprint; repeatable")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	backend, _, err := backendFromAdminOptions(opts)
+	if err != nil && !errors.Is(err, errLocked) {
+		return err
+	}
+	switch sub {
+	case "status":
+		res, err := backend.recoveryPolicyStatus()
+		if err != nil {
+			_ = encodeAdminJSON(out, res)
+			return err
+		}
+		return encodeAdminJSON(out, res)
+	case "enroll":
+		res, err := backend.upsertRecoveryPolicy(recoveryPolicyRequest{RequestID: *requestID, ServiceID: *service, PolicyID: *policyID, KeyID: *keyID, KeyVersion: *keyVersion, Threshold: *threshold, ShareCount: *shareCount, ShareFingerprints: []string(shareFingerprints), RecipientFingerprints: []string(recipientFingerprints), Status: *status})
+		if err != nil {
+			_ = encodeAdminJSON(out, res)
+			return err
+		}
+		return encodeAdminJSON(out, res)
+	case "revoke":
+		res, err := backend.revokeRecoveryPolicy(*policyID, *service, *requestID)
+		if err != nil {
+			_ = encodeAdminJSON(out, res)
+			return err
+		}
+		return encodeAdminJSON(out, res)
+	default:
+		return fmt.Errorf("unknown admin recovery command %q", sub)
 	}
 }
 

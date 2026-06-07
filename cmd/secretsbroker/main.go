@@ -233,6 +233,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"GET /v1/providers/config/status",
 			"GET /v1/telemetry",
 			"GET /v1/events",
+			"GET|POST /v1/recovery/policy",
 			"POST /v1/management/lockouts/clear",
 			"POST /v1/providers/config/validate|apply",
 			"POST /v1/providers/migration/dry-run|apply",
@@ -245,7 +246,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/management/secrets/policy/preview|apply",
 			"CLI secretsbroker backup create|restore",
 			"CLI secretsbroker key initialize|unlock|import|rewrap|wrapper-status|rotate",
-			"CLI secretsbroker admin status|secrets|providers|migration|audit|events",
+			"CLI secretsbroker admin status|secrets|providers|migration|recovery|audit|events",
 		},
 		Features: []string{
 			"liveness",
@@ -280,6 +281,8 @@ func defaultCapabilities() CapabilitiesResponse {
 			"master-key-initialize-unlock-import-rewrap",
 			"os-wrapper-status",
 			"master-key-rotation",
+			"recovery-policy-metadata",
+			"recovery-policy-status",
 			"headless-admin-cli",
 		},
 		FutureFeatures: []string{
@@ -400,6 +403,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		registerSecretsManagementHandlers(mux, backend, security)
 		registerRotationHandlers(mux, backend, security)
 		registerProviderConfigMigrationHandlers(mux, backend, security)
+		registerRecoveryPolicyHandlers(mux, backend, security)
 		registerTelemetryHandlers(mux, backend)
 		registerEventsHandlers(mux, backend)
 		registerLockoutManagementHandlers(mux, backend, security)
