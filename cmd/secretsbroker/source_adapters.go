@@ -42,6 +42,7 @@ type sourceRefConfig struct {
 	Path           string   `json:"path"`
 	Command        string   `json:"command"`
 	Args           []string `json:"args"`
+	MaxBytes       int      `json:"maxBytes"`
 	TimeoutMs      int      `json:"timeoutMs"`
 	MaxStdoutBytes int      `json:"maxStdoutBytes"`
 	UnsafeStdout   bool     `json:"unsafeStdout"`
@@ -106,7 +107,7 @@ func (s sourceConfig) resolve(ref string, refCfg sourceRefConfig) sourceResolveR
 	case "env":
 		return resolveEnv(refCfg)
 	case "file":
-		return resolveFile(refCfg)
+		return s.resolveFile(refCfg)
 	case "exec":
 		return s.resolveExec(refCfg)
 	case "vault", "openbao":
@@ -127,19 +128,58 @@ func resolveEnv(refCfg sourceRefConfig) sourceResolveResult {
 	return sourceResolveResult{Outcome: "ready", Value: value}
 }
 
-func resolveFile(refCfg sourceRefConfig) sourceResolveResult {
-	if strings.TrimSpace(refCfg.Path) == "" {
-		return sourceResolveResult{Outcome: "invalid_ref", Message: "File source mapping is missing path."}
+func (s sourceConfig) resolveFile(refCfg sourceRefConfig) sourceResolveResult {
+	if err := validateFileConfig(s, refCfg); err != nil {
+		if errors.Is(err, errFilePathOutsideTrustedDirs) {
+			return sourceResolveResult{Outcome: "policy_denied", Message: "File source path is outside trustedDirs."}
+		}
+		return sourceResolveResult{Outcome: "invalid_ref", Message: err.Error()}
 	}
-	bytes, err := os.ReadFile(refCfg.Path)
+	maxBytes := firstPositive(refCfg.MaxBytes, firstPositive(refCfg.MaxStdoutBytes, 65536))
+	file, err := os.Open(refCfg.Path)
 	if err != nil {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Mapped file could not be read."}
+	}
+	defer file.Close()
+	bytes, err := io.ReadAll(io.LimitReader(file, int64(maxBytes)+1))
+	if err != nil {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "Mapped file could not be read."}
+	}
+	if len(bytes) > maxBytes {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "Mapped file exceeded byte limit."}
 	}
 	value := strings.TrimSpace(string(bytes))
 	if value == "" {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Mapped file is empty."}
 	}
 	return sourceResolveResult{Outcome: "ready", Value: value}
+}
+
+var errFilePathOutsideTrustedDirs = errors.New("file path is outside trustedDirs")
+
+func validateFileConfig(source sourceConfig, refCfg sourceRefConfig) error {
+	path := strings.TrimSpace(refCfg.Path)
+	if path == "" {
+		return errors.New("file source mapping is missing path")
+	}
+	if len(source.TrustedDirs) == 0 {
+		return nil
+	}
+	cleanPath, err := filepath.Abs(path)
+	if err != nil {
+		return errors.New("file source path is invalid")
+	}
+	for _, dir := range source.TrustedDirs {
+		cleanDir, err := filepath.Abs(strings.TrimSpace(dir))
+		if err != nil {
+			continue
+		}
+		rel, err := filepath.Rel(cleanDir, cleanPath)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			return nil
+		}
+	}
+	return errFilePathOutsideTrustedDirs
 }
 
 func (s sourceConfig) resolveExec(refCfg sourceRefConfig) sourceResolveResult {

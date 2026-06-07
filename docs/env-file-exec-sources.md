@@ -51,8 +51,12 @@ Example:
       "kind": "file",
       "enabled": true,
       "priority": 20,
+      "trustedDirs": ["./secrets"],
       "refs": {
-        "openclaw/telegram/bot_token": { "path": "./secrets/telegram-token.txt" }
+        "openclaw/telegram/bot_token": {
+          "path": "./secrets/telegram-token.txt",
+          "maxBytes": 65536
+        }
       }
     },
     {
@@ -99,9 +103,13 @@ Reads a file path from the source config.
 Rules:
 
 - file value is trimmed of surrounding whitespace
+- when `trustedDirs` is configured on the source, mapped files must resolve under one trusted directory
+- `maxBytes` limits the file read and defaults to 65536 bytes
 - empty file is `source_unavailable`
-- missing file is `source_unavailable`
+- missing or unreadable file is `source_unavailable`
+- files over the configured byte limit are `source_unavailable`
 - value is returned only through authenticated resolve
+- diagnostics and status output must not include file contents
 
 ## Exec adapter hardening
 
