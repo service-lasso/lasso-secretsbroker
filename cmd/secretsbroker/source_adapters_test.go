@@ -17,6 +17,49 @@ func TestEnvSourceAdapter(t *testing.T) {
 	}
 }
 
+func TestEnvSourceAdapterNormalizesFailureStatesWithoutLeakingValues(t *testing.T) {
+	t.Setenv("ENV_SOURCE_FAKE_SECRET", "SERVICE_LASSO_FAKE_SECRET_SENTINEL_TOKEN_DO_NOT_USE")
+	t.Setenv("ENV_SOURCE_EMPTY_SECRET", "")
+	cfg := sourceConfigFile{Sources: []sourceConfig{{SourceID: "env-local", Kind: "env", Enabled: true, Refs: map[string]sourceRefConfig{
+		"openclaw/empty":   {Env: "ENV_SOURCE_EMPTY_SECRET"},
+		"openclaw/invalid": {Env: " "},
+		"openclaw/ready":   {Env: "ENV_SOURCE_FAKE_SECRET"},
+		"openclaw/unset":   {Env: "ENV_SOURCE_UNSET_SECRET"},
+	}}}}
+
+	tests := []struct {
+		ref         string
+		wantOutcome string
+		wantState   string
+	}{
+		{ref: "openclaw/empty", wantOutcome: "source_unavailable", wantState: "degraded"},
+		{ref: "openclaw/invalid", wantOutcome: "invalid_ref", wantState: "config_error"},
+		{ref: "openclaw/unset", wantOutcome: "source_unavailable", wantState: "degraded"},
+		{ref: "openclaw/missing", wantOutcome: "missing_ref", wantState: "missing"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.ref, func(t *testing.T) {
+			res := cfg.resolve(tc.ref)
+			if res.Outcome != tc.wantOutcome || res.Lifecycle.State != tc.wantState || res.Value != "" {
+				t.Fatalf("env result = %#v", res)
+			}
+			assertNoSecretMaterialSurfaces(t, map[string]string{
+				"message":    res.Message,
+				"sourceID":   res.SourceID,
+				"outcome":    res.Outcome,
+				"state":      res.Lifecycle.State,
+				"nextAction": res.Lifecycle.NextAction,
+			})
+		})
+	}
+
+	ready := cfg.resolve("openclaw/ready")
+	if ready.Outcome != "ready" || ready.Value == "" {
+		t.Fatalf("ready env result = %#v", ready)
+	}
+	assertNoSecretMaterialSurfaces(t, map[string]string{"message": ready.Message})
+}
+
 func TestFileSourceAdapter(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "secret.txt")
@@ -130,6 +173,25 @@ func TestExecSourceStatusReportsContractCapabilities(t *testing.T) {
 	caps := capabilitiesForSourceKind("exec")
 	for _, capability := range []string{"read", "reveal", "audit", "migration", "health"} {
 		assertContains(t, caps, capability)
+	}
+}
+
+func TestEnvSourceStatusReportsContractCapabilities(t *testing.T) {
+	caps := capabilitiesForSourceKind("env")
+	for _, capability := range []string{"read", "reveal", "migration", "health"} {
+		assertContains(t, caps, capability)
+	}
+	for _, capability := range []string{"write/update", "rotate/reset", "policy", "value-search", "audit"} {
+		assertNotContains(t, caps, capability)
+	}
+}
+
+func assertNotContains(t *testing.T, values []string, forbidden string) {
+	t.Helper()
+	for _, value := range values {
+		if value == forbidden {
+			t.Fatalf("values should not contain %q: %#v", forbidden, values)
+		}
 	}
 }
 
