@@ -366,10 +366,13 @@ func onePasswordCLIArgs(refCfg sourceRefConfig) []string {
 	}
 	path := strings.TrimSpace(refCfg.Path)
 	field := strings.TrimSpace(refCfg.Field)
-	if field == "" {
-		return []string{"read", path, "--format", "json"}
+	if strings.HasPrefix(strings.ToLower(path), "op://") {
+		return []string{"read", path}
 	}
-	return []string{"item", "get", path, "--field", field, "--format", "json"}
+	if field == "" {
+		return []string{"item", "get", path, "--format", "json"}
+	}
+	return []string{"item", "get", path, "--fields", "label=" + field, "--format", "json"}
 }
 
 func decodeOnePasswordCLIValue(output []byte, refCfg sourceRefConfig) sourceResolveResult {

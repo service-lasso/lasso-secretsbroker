@@ -260,6 +260,43 @@ func TestOnePasswordCLIAdapterJSONProtocolSuccess(t *testing.T) {
 	}
 }
 
+func TestOnePasswordCLIAdapterDefaultArgsUseDocumentedCLIForms(t *testing.T) {
+	cases := []struct {
+		name string
+		ref  sourceRefConfig
+		want []string
+	}{
+		{
+			name: "secret reference",
+			ref:  sourceRefConfig{Path: "op://local/api/password", Field: "password"},
+			want: []string{"read", "op://local/api/password"},
+		},
+		{
+			name: "item metadata json",
+			ref:  sourceRefConfig{Path: "api-item"},
+			want: []string{"item", "get", "api-item", "--format", "json"},
+		},
+		{
+			name: "item field json",
+			ref:  sourceRefConfig{Path: "api-item", Field: "password"},
+			want: []string{"item", "get", "api-item", "--fields", "label=password", "--format", "json"},
+		},
+		{
+			name: "custom args override defaults",
+			ref:  sourceRefConfig{Path: "api-item", Field: "password", Args: []string{"read", "op://custom/ref"}},
+			want: []string{"read", "op://custom/ref"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := onePasswordCLIArgs(tc.ref)
+			if strings.Join(got, "\x00") != strings.Join(tc.want, "\x00") {
+				t.Fatalf("args = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestOnePasswordCLIAdapterNormalizesFailuresWithoutLeakingOutput(t *testing.T) {
 	cases := []struct {
 		name        string
