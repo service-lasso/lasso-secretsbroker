@@ -113,6 +113,8 @@ func (s sourceConfig) resolve(ref string, refCfg sourceRefConfig) sourceResolveR
 		return s.resolveExec(refCfg)
 	case "vault", "openbao":
 		return s.resolveVault(refCfg)
+	case "onepassword-cli":
+		return s.resolveOnePasswordCLI(ref, refCfg)
 	case "bitwarden-bws":
 		return s.resolveBitwardenBWS(refCfg)
 	default:
@@ -284,6 +286,211 @@ func execProtocolOutcomeMessage(outcome string) string {
 		return "Exec source protocol mapping is invalid."
 	default:
 		return "Exec source reported unavailable state."
+	}
+}
+
+func (s sourceConfig) resolveOnePasswordCLI(ref string, refCfg sourceRefConfig) sourceResolveResult {
+	if err := validateOnePasswordCLIConfig(s, refCfg); err != nil {
+		if errors.Is(err, errOnePasswordCommandOutsideTrustedDirs) {
+			return sourceResolveResult{Outcome: "policy_denied", Message: "1Password CLI command is outside trustedDirs."}
+		}
+		return sourceResolveResult{Outcome: "invalid_ref", Message: err.Error()}
+	}
+	timeout := time.Duration(firstPositive(refCfg.TimeoutMs, 5000)) * time.Millisecond
+	maxOutput := firstPositive(refCfg.MaxStdoutBytes, firstPositive(refCfg.MaxBytes, 32768))
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, refCfg.Command, onePasswordCLIArgs(refCfg)...)
+	cmd.Env = append(os.Environ(),
+		"OP_ITEM_REF="+refCfg.Path,
+		"OP_FIELD_REF="+refCfg.Field,
+		"SERVICE_LASSO_SECRET_REF="+ref,
+		"SERVICE_LASSO_SOURCE_ID="+s.SourceID,
+	)
+	stdout := newBoundedOutput(maxOutput)
+	stderr := newBoundedOutput(maxOutput)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	err := cmd.Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "1Password CLI timed out."}
+	}
+	if stdout.Exceeded() || stderr.Exceeded() {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "1Password CLI output exceeded limit."}
+	}
+	if err != nil {
+		if outcome := onePasswordCLIOutcomeFromOutput(stdout.Bytes(), stderr.Bytes()); outcome != "" {
+			return sourceResolveResult{Outcome: outcome, Message: onePasswordCLIOutcomeMessage(outcome)}
+		}
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "1Password CLI is unavailable or failed."}
+	}
+	return decodeOnePasswordCLIValue(stdout.Bytes(), refCfg)
+}
+
+var errOnePasswordCommandOutsideTrustedDirs = errors.New("onepassword-cli command is outside trustedDirs")
+
+func validateOnePasswordCLIConfig(source sourceConfig, refCfg sourceRefConfig) error {
+	if strings.TrimSpace(refCfg.Command) == "" {
+		return errors.New("1Password CLI source mapping is missing command")
+	}
+	if strings.TrimSpace(refCfg.Path) == "" {
+		return errors.New("1Password CLI source mapping is missing item/ref path")
+	}
+	if len(source.TrustedDirs) > 0 {
+		cleanCommand, err := filepath.Abs(strings.TrimSpace(refCfg.Command))
+		if err != nil {
+			return errors.New("1Password CLI command path is invalid")
+		}
+		allowed := false
+		for _, dir := range source.TrustedDirs {
+			cleanDir, err := filepath.Abs(strings.TrimSpace(dir))
+			if err != nil {
+				continue
+			}
+			rel, err := filepath.Rel(cleanDir, cleanCommand)
+			if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return errOnePasswordCommandOutsideTrustedDirs
+		}
+	}
+	return validateExecConfig(source, refCfg)
+}
+
+func onePasswordCLIArgs(refCfg sourceRefConfig) []string {
+	if len(refCfg.Args) > 0 {
+		return append([]string{}, refCfg.Args...)
+	}
+	path := strings.TrimSpace(refCfg.Path)
+	field := strings.TrimSpace(refCfg.Field)
+	if strings.HasPrefix(strings.ToLower(path), "op://") {
+		return []string{"read", path}
+	}
+	if field == "" {
+		return []string{"item", "get", path, "--format", "json"}
+	}
+	return []string{"item", "get", path, "--fields", "label=" + field, "--format", "json"}
+}
+
+func decodeOnePasswordCLIValue(output []byte, refCfg sourceRefConfig) sourceResolveResult {
+	if outcome := onePasswordCLIOutcomeFromOutput(output, nil); outcome != "" && outcome != "ready" {
+		return sourceResolveResult{Outcome: outcome, Message: onePasswordCLIOutcomeMessage(outcome)}
+	}
+	value, ok := onePasswordCLIValueFromJSON(output, refCfg)
+	if !ok {
+		value = strings.TrimSpace(string(output))
+	}
+	if strings.TrimSpace(value) == "" {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "1Password CLI returned empty value."}
+	}
+	return sourceResolveResult{Outcome: "ready", Value: strings.TrimSpace(value)}
+}
+
+type onePasswordCLIPayload struct {
+	Value   string           `json:"value"`
+	Outcome string           `json:"outcome"`
+	Field   map[string]any   `json:"field"`
+	Fields  []map[string]any `json:"fields"`
+	Details struct {
+		Fields []map[string]any `json:"fields"`
+	} `json:"details"`
+}
+
+func onePasswordCLIValueFromJSON(output []byte, refCfg sourceRefConfig) (string, bool) {
+	var payload onePasswordCLIPayload
+	if err := json.Unmarshal(output, &payload); err != nil {
+		return "", false
+	}
+	if strings.TrimSpace(payload.Value) != "" {
+		return payload.Value, true
+	}
+	fieldName := strings.TrimSpace(refCfg.Field)
+	if value, ok := onePasswordFieldValue(payload.Field, fieldName); ok {
+		return value, true
+	}
+	for _, field := range append(payload.Fields, payload.Details.Fields...) {
+		if value, ok := onePasswordFieldValue(field, fieldName); ok {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+func onePasswordFieldValue(field map[string]any, fieldName string) (string, bool) {
+	if field == nil {
+		return "", false
+	}
+	if fieldName != "" {
+		matched := false
+		for _, key := range []string{"id", "label", "name"} {
+			if text, ok := field[key].(string); ok && strings.EqualFold(strings.TrimSpace(text), fieldName) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return "", false
+		}
+	}
+	if text, ok := field["value"].(string); ok && strings.TrimSpace(text) != "" {
+		return text, true
+	}
+	return "", false
+}
+
+func onePasswordCLIOutcomeFromOutput(stdout, stderr []byte) string {
+	for _, output := range [][]byte{stdout, stderr} {
+		var payload onePasswordCLIPayload
+		if len(strings.TrimSpace(string(output))) > 0 && json.Unmarshal(output, &payload) == nil {
+			if outcome := normalizeOnePasswordCLIOutcome(payload.Outcome); outcome != "" {
+				return outcome
+			}
+		}
+		text := strings.ToLower(string(output))
+		switch {
+		case strings.Contains(text, "not signed in") || strings.Contains(text, "sign in") || strings.Contains(text, "not currently signed in"):
+			return "source_auth_required"
+		case strings.Contains(text, "session expired") || strings.Contains(text, "session has expired") || strings.Contains(text, "identity expired"):
+			return "identity_expired"
+		case strings.Contains(text, "permission denied") || strings.Contains(text, "access denied") || strings.Contains(text, "not authorized"):
+			return "policy_denied"
+		case strings.Contains(text, "not found") || strings.Contains(text, "does not exist") || strings.Contains(text, "field") && strings.Contains(text, "missing"):
+			return "missing_ref"
+		case strings.Contains(text, "invalid"):
+			return "invalid_ref"
+		}
+	}
+	return ""
+}
+
+func normalizeOnePasswordCLIOutcome(outcome string) string {
+	switch strings.TrimSpace(outcome) {
+	case "", "ready":
+		return strings.TrimSpace(outcome)
+	case "source_auth_required", "identity_expired", "policy_denied", "missing_ref", "source_unavailable", "invalid_ref":
+		return strings.TrimSpace(outcome)
+	default:
+		return "source_unavailable"
+	}
+}
+
+func onePasswordCLIOutcomeMessage(outcome string) string {
+	switch outcome {
+	case "source_auth_required":
+		return "1Password CLI authentication is required."
+	case "identity_expired":
+		return "1Password CLI session expired."
+	case "policy_denied":
+		return "1Password CLI policy denied access."
+	case "missing_ref":
+		return "1Password CLI item or field was not found."
+	case "invalid_ref":
+		return "1Password CLI source mapping is invalid."
+	default:
+		return "1Password CLI source is unavailable."
 	}
 }
 
