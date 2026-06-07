@@ -73,6 +73,82 @@ func TestFileSourceAdapter(t *testing.T) {
 	}
 }
 
+func TestFileSourceAdapterNormalizesFailuresWithoutLeakingContents(t *testing.T) {
+	dir := t.TempDir()
+	secretPath := filepath.Join(dir, "secret.txt")
+	oversizedPath := filepath.Join(dir, "oversized.txt")
+	emptyPath := filepath.Join(dir, "empty.txt")
+	if err := os.WriteFile(secretPath, []byte("SERVICE_LASSO_FAKE_SECRET_SENTINEL_TOKEN_DO_NOT_USE\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oversizedPath, []byte("0123456789SERVICE_LASSO_FAKE_SECRET_SENTINEL_PASSWORD_DO_NOT_USE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(emptyPath, []byte(" \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := sourceConfigFile{Sources: []sourceConfig{{
+		SourceID:    "file-local",
+		Kind:        "file",
+		Enabled:     true,
+		TrustedDirs: []string{dir},
+		Refs: map[string]sourceRefConfig{
+			"openclaw/empty":      {Path: emptyPath},
+			"openclaw/invalid":    {Path: " "},
+			"openclaw/missing":    {Path: filepath.Join(dir, "missing.txt")},
+			"openclaw/oversized":  {Path: oversizedPath, MaxBytes: 8},
+			"openclaw/ready":      {Path: secretPath},
+			"openclaw/unreadable": {Path: dir},
+			"openclaw/untrusted":  {Path: filepath.Join(t.TempDir(), "outside.txt")},
+		},
+	}}}
+
+	tests := []struct {
+		ref         string
+		wantOutcome string
+		wantState   string
+	}{
+		{ref: "openclaw/empty", wantOutcome: "source_unavailable", wantState: "degraded"},
+		{ref: "openclaw/invalid", wantOutcome: "invalid_ref", wantState: "config_error"},
+		{ref: "openclaw/missing", wantOutcome: "source_unavailable", wantState: "degraded"},
+		{ref: "openclaw/oversized", wantOutcome: "source_unavailable", wantState: "degraded"},
+		{ref: "openclaw/unreadable", wantOutcome: "source_unavailable", wantState: "degraded"},
+		{ref: "openclaw/untrusted", wantOutcome: "policy_denied", wantState: "denied"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.ref, func(t *testing.T) {
+			res := cfg.resolve(tc.ref)
+			if res.Outcome != tc.wantOutcome || res.Lifecycle.State != tc.wantState || res.Value != "" {
+				t.Fatalf("file result = %#v", res)
+			}
+			assertNoSecretMaterialSurfaces(t, map[string]string{
+				"message":    res.Message,
+				"sourceID":   res.SourceID,
+				"outcome":    res.Outcome,
+				"state":      res.Lifecycle.State,
+				"nextAction": res.Lifecycle.NextAction,
+			})
+		})
+	}
+
+	ready := cfg.resolve("openclaw/ready")
+	if ready.Outcome != "ready" || ready.Value == "" {
+		t.Fatalf("ready file result = %#v", ready)
+	}
+	assertNoSecretMaterialSurfaces(t, map[string]string{"message": ready.Message})
+}
+
+func TestFileSourceStatusReportsContractCapabilities(t *testing.T) {
+	caps := capabilitiesForSourceKind("file")
+	for _, capability := range []string{"read", "reveal", "migration", "health"} {
+		assertContains(t, caps, capability)
+	}
+	for _, capability := range []string{"write/update", "rotate/reset", "policy", "value-search", "audit"} {
+		assertNotContains(t, caps, capability)
+	}
+}
+
 func TestSourcePriorityAndMissing(t *testing.T) {
 	t.Setenv("LOW", "low")
 	t.Setenv("HIGH", "high")
