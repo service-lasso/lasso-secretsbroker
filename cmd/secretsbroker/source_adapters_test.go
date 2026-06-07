@@ -252,6 +252,97 @@ func TestExecSourceStatusReportsContractCapabilities(t *testing.T) {
 	}
 }
 
+func TestOnePasswordCLIAdapterJSONProtocolSuccess(t *testing.T) {
+	cfg, refCfg := onePasswordCLIFixture(t, "success-json")
+	res := cfg.resolve("openclaw/op", refCfg)
+	if res.Outcome != "ready" || res.Value != "op-secret" {
+		t.Fatalf("1Password CLI result = %#v", res)
+	}
+}
+
+func TestOnePasswordCLIAdapterNormalizesFailuresWithoutLeakingOutput(t *testing.T) {
+	cases := []struct {
+		name        string
+		mode        string
+		wantOutcome string
+	}{
+		{name: "not signed in", mode: "auth-required", wantOutcome: "source_auth_required"},
+		{name: "expired session", mode: "identity-expired", wantOutcome: "identity_expired"},
+		{name: "policy denied", mode: "policy-denied", wantOutcome: "policy_denied"},
+		{name: "missing item", mode: "missing-item", wantOutcome: "missing_ref"},
+		{name: "missing field", mode: "missing-field", wantOutcome: "missing_ref"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, refCfg := onePasswordCLIFixture(t, tc.mode)
+			res := cfg.resolve("openclaw/op", refCfg)
+			if res.Outcome != tc.wantOutcome || res.Value != "" {
+				t.Fatalf("1Password CLI result = %#v", res)
+			}
+			assertNoSecretMaterialSurfaces(t, map[string]string{"message": res.Message, "outcome": res.Outcome})
+		})
+	}
+}
+
+func TestOnePasswordCLIAdapterHandlesUnavailableTimeoutAndOutputLimit(t *testing.T) {
+	t.Run("unavailable cli", func(t *testing.T) {
+		trusted := t.TempDir()
+		source := sourceConfig{SourceID: "op-local", Kind: "onepassword-cli", Enabled: true, TrustedDirs: []string{trusted}}
+		res := source.resolve("openclaw/op", sourceRefConfig{Command: filepath.Join(trusted, "missing-op"), Path: "op://local/api/password"})
+		if res.Outcome != "source_unavailable" || res.Value != "" {
+			t.Fatalf("1Password CLI unavailable result = %#v", res)
+		}
+		assertNoSecretMaterialSurfaces(t, map[string]string{"message": res.Message})
+	})
+
+	t.Run("timeout", func(t *testing.T) {
+		cfg, refCfg := onePasswordCLIFixture(t, "timeout")
+		refCfg.TimeoutMs = 50
+		res := cfg.resolve("openclaw/op", refCfg)
+		if res.Outcome != "source_unavailable" || res.Value != "" {
+			t.Fatalf("1Password CLI timeout result = %#v", res)
+		}
+		assertNoSecretMaterialSurfaces(t, map[string]string{"message": res.Message})
+	})
+
+	t.Run("output limit", func(t *testing.T) {
+		cfg, refCfg := onePasswordCLIFixture(t, "oversized")
+		refCfg.MaxStdoutBytes = 16
+		res := cfg.resolve("openclaw/op", refCfg)
+		if res.Outcome != "source_unavailable" || res.Value != "" {
+			t.Fatalf("1Password CLI oversized result = %#v", res)
+		}
+		assertNoSecretMaterialSurfaces(t, map[string]string{"message": res.Message})
+	})
+}
+
+func TestOnePasswordCLIAdapterRejectsInvalidMappingAndUntrustedCommand(t *testing.T) {
+	cfg, refCfg := onePasswordCLIFixture(t, "success-json")
+	refCfg.Path = " "
+	res := cfg.resolve("openclaw/op", refCfg)
+	if res.Outcome != "invalid_ref" {
+		t.Fatalf("missing path result = %#v", res)
+	}
+
+	cfg, refCfg = onePasswordCLIFixture(t, "success-json")
+	cfg.TrustedDirs = []string{filepath.Join(t.TempDir(), "trusted")}
+	res = cfg.resolve("openclaw/op", refCfg)
+	if res.Outcome != "policy_denied" {
+		t.Fatalf("untrusted command result = %#v", res)
+	}
+	assertNoSecretMaterialSurfaces(t, map[string]string{"message": res.Message})
+}
+
+func TestOnePasswordCLIStatusReportsContractCapabilities(t *testing.T) {
+	caps := capabilitiesForSourceKind("onepassword-cli")
+	for _, capability := range []string{"read", "reveal", "audit", "migration", "health"} {
+		assertContains(t, caps, capability)
+	}
+	for _, capability := range []string{"write/update", "rotate/reset", "policy", "value-search"} {
+		assertNotContains(t, caps, capability)
+	}
+}
+
 func TestEnvSourceStatusReportsContractCapabilities(t *testing.T) {
 	caps := capabilitiesForSourceKind("env")
 	for _, capability := range []string{"read", "reveal", "migration", "health"} {
@@ -293,6 +384,30 @@ func execSourceFixture(t *testing.T, mode string) (sourceConfig, sourceRefConfig
 	return source, refCfg
 }
 
+func onePasswordCLIFixture(t *testing.T, mode string) (sourceConfig, sourceRefConfig) {
+	t.Helper()
+	command, err := filepath.Abs(os.Args[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := sourceConfig{
+		SourceID:            "op-local",
+		Kind:                "onepassword-cli",
+		Enabled:             true,
+		TrustedDirs:         []string{filepath.Dir(command)},
+		AllowSymlinkCommand: true,
+	}
+	refCfg := sourceRefConfig{
+		Command:        command,
+		Args:           []string{"-test.run=TestOnePasswordCLIHelperProcess", "--", mode},
+		Path:           "op://local/api/password",
+		Field:          "password",
+		TimeoutMs:      2000,
+		MaxStdoutBytes: 4096,
+	}
+	return source, refCfg
+}
+
 func TestExecSourceHelperProcess(t *testing.T) {
 	args := os.Args
 	separator := -1
@@ -324,6 +439,44 @@ func TestExecSourceHelperProcess(t *testing.T) {
 		os.Stdout.WriteString(`SERVICE_LASSO_FAKE_SECRET_SENTINEL_TOKEN_DO_NOT_USE`)
 		os.Stderr.WriteString(`SERVICE_LASSO_FAKE_SECRET_SENTINEL_PASSWORD_DO_NOT_USE`)
 		os.Exit(2)
+	case "timeout":
+		time.Sleep(2 * time.Second)
+	}
+	os.Exit(0)
+}
+
+func TestOnePasswordCLIHelperProcess(t *testing.T) {
+	args := os.Args
+	separator := -1
+	for i, arg := range args {
+		if arg == "--" {
+			separator = i
+			break
+		}
+	}
+	if separator == -1 || separator+1 >= len(args) {
+		return
+	}
+	switch args[separator+1] {
+	case "success-json":
+		os.Stdout.WriteString(`{"value":"op-secret"}`)
+	case "auth-required":
+		os.Stderr.WriteString(`not signed in SERVICE_LASSO_FAKE_SECRET_SENTINEL_TOKEN_DO_NOT_USE`)
+		os.Exit(2)
+	case "identity-expired":
+		os.Stdout.WriteString(`{"outcome":"identity_expired","message":"SERVICE_LASSO_FAKE_SECRET_SENTINEL_TOKEN_DO_NOT_USE"}`)
+		os.Exit(2)
+	case "policy-denied":
+		os.Stderr.WriteString(`permission denied SERVICE_LASSO_FAKE_SECRET_SENTINEL_PASSWORD_DO_NOT_USE`)
+		os.Exit(2)
+	case "missing-item":
+		os.Stdout.WriteString(`{"outcome":"missing_ref","message":"SERVICE_LASSO_FAKE_SECRET_SENTINEL_PASSWORD_DO_NOT_USE"}`)
+		os.Exit(2)
+	case "missing-field":
+		os.Stderr.WriteString(`field missing SERVICE_LASSO_FAKE_SECRET_SENTINEL_TOKEN_DO_NOT_USE`)
+		os.Exit(2)
+	case "oversized":
+		os.Stdout.WriteString(strings.Repeat("A", 64) + "SERVICE_LASSO_FAKE_SECRET_SENTINEL_TOKEN_DO_NOT_USE")
 	case "timeout":
 		time.Sleep(2 * time.Second)
 	}

@@ -100,6 +100,13 @@ func sourceRegistryLifecycle(source sourceConfig) SourceLifecycle {
 		if len(source.Refs) == 0 {
 			return normalizeSourceLifecycle("missing_ref")
 		}
+	case "onepassword-cli":
+		if len(source.Refs) == 0 {
+			return normalizeSourceLifecycle("missing_ref")
+		}
+		if !sourceHasCommandMapping(source) {
+			return normalizeSourceLifecycle("invalid_ref")
+		}
 	case "vault", "openbao":
 		if strings.TrimSpace(source.Address) == "" {
 			return normalizeSourceLifecycle("invalid_ref")
@@ -155,6 +162,12 @@ func capabilitiesForSourceKind(kind string) []string {
 			return append(adapterCapabilityNames(contract.Capabilities), "health")
 		}
 		return []string{"read", "reveal", "write/update", "audit", "migration", "health"}
+	case "onepassword-cli":
+		contract, ok := adapterContractForKind(kind)
+		if ok {
+			return append(adapterCapabilityNames(contract.Capabilities), "health")
+		}
+		return []string{"read", "reveal", "audit", "migration", "health"}
 	case "vault", "openbao":
 		return []string{"read", "health"}
 	default:
