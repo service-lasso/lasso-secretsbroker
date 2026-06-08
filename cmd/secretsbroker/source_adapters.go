@@ -33,6 +33,8 @@ type sourceConfig struct {
 	TrustedDirs         []string                   `json:"trustedDirs"`
 	AllowSymlinkCommand bool                       `json:"allowSymlinkCommand"`
 	Address             string                     `json:"address"`
+	Region              string                     `json:"region"`
+	AccountID           string                     `json:"accountId"`
 	Token               string                     `json:"token"`
 	TokenEnv            string                     `json:"tokenEnv"`
 	Refs                map[string]sourceRefConfig `json:"refs"`
@@ -48,6 +50,8 @@ type sourceRefConfig struct {
 	MaxStdoutBytes int      `json:"maxStdoutBytes"`
 	UnsafeStdout   bool     `json:"unsafeStdout"`
 	Field          string   `json:"field"`
+	VersionID      string   `json:"versionId"`
+	VersionStage   string   `json:"versionStage"`
 }
 
 type sourceResolveResult struct {
@@ -117,6 +121,8 @@ func (s sourceConfig) resolve(ref string, refCfg sourceRefConfig) sourceResolveR
 		return s.resolveOnePasswordCLI(ref, refCfg)
 	case "bitwarden-bws":
 		return s.resolveBitwardenBWS(refCfg)
+	case "aws-secrets-manager":
+		return s.resolveAWSSecretsManager(refCfg)
 	default:
 		return sourceResolveResult{Outcome: "invalid_ref", Message: fmt.Sprintf("Unsupported source kind %q.", s.Kind)}
 	}
@@ -586,6 +592,200 @@ func (s sourceConfig) resolveBitwardenBWS(refCfg sourceRefConfig) sourceResolveR
 		return s.resolveBitwardenBWSCLI(refCfg, token)
 	}
 	return s.resolveBitwardenBWSAPI(refCfg, token)
+}
+
+func (s sourceConfig) resolveAWSSecretsManager(refCfg sourceRefConfig) sourceResolveResult {
+	if strings.TrimSpace(refCfg.Path) == "" {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "AWS Secrets Manager source mapping requires a secret id path."}
+	}
+	token := firstNonEmpty(s.Token, os.Getenv(s.TokenEnv))
+	if strings.TrimSpace(token) == "" {
+		return sourceResolveResult{Outcome: "source_auth_required", Message: "AWS Secrets Manager identity is missing or expired."}
+	}
+	endpoint, err := awsSecretsManagerEndpoint(s)
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: err.Error()}
+	}
+	requestBody, err := json.Marshal(awsSecretsManagerGetSecretValueRequest{
+		SecretID:     strings.TrimSpace(refCfg.Path),
+		VersionID:    strings.TrimSpace(refCfg.VersionID),
+		VersionStage: strings.TrimSpace(refCfg.VersionStage),
+	})
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "AWS Secrets Manager request could not be prepared."}
+	}
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(requestBody))
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "AWS Secrets Manager request is invalid."}
+	}
+	req.Header.Set("Content-Type", "application/x-amz-json-1.1")
+	req.Header.Set("X-Amz-Target", "secretsmanager.GetSecretValue")
+	req.Header.Set("Authorization", "Bearer "+token)
+	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 5000)) * time.Millisecond}
+	res, err := client.Do(req)
+	if err != nil {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "AWS Secrets Manager source is unavailable."}
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return awsSecretsManagerStatusResult(res.StatusCode, res.Header.Get("x-amzn-ErrorType"), res.Body, refCfg)
+	}
+	return decodeAWSSecretsManagerValue(res.Body, refCfg)
+}
+
+type awsSecretsManagerGetSecretValueRequest struct {
+	SecretID     string `json:"SecretId"`
+	VersionID    string `json:"VersionId,omitempty"`
+	VersionStage string `json:"VersionStage,omitempty"`
+}
+
+type awsSecretsManagerPayload struct {
+	ARN          string         `json:"ARN"`
+	Name         string         `json:"Name"`
+	SecretString string         `json:"SecretString"`
+	SecretBinary string         `json:"SecretBinary"`
+	Outcome      string         `json:"outcome"`
+	Type         string         `json:"__type"`
+	Code         string         `json:"code"`
+	Message      string         `json:"message"`
+	Data         map[string]any `json:"data"`
+	Secret       map[string]any `json:"secret"`
+}
+
+func awsSecretsManagerEndpoint(source sourceConfig) (string, error) {
+	if address := strings.TrimSpace(source.Address); address != "" {
+		return strings.TrimRight(address, "/"), nil
+	}
+	region := strings.TrimSpace(source.Region)
+	if region == "" {
+		return "", errors.New("AWS Secrets Manager source requires address or region")
+	}
+	return "https://secretsmanager." + region + ".amazonaws.com", nil
+}
+
+func awsSecretsManagerStatusResult(status int, errorType string, body io.Reader, refCfg sourceRefConfig) sourceResolveResult {
+	if outcome := awsSecretsManagerOutcomeFromBody(errorType, body, refCfg); outcome != "" && outcome != "ready" {
+		return sourceResolveResult{Outcome: outcome, Message: awsSecretsManagerOutcomeMessage(outcome)}
+	}
+	switch status {
+	case http.StatusUnauthorized:
+		return sourceResolveResult{Outcome: "source_auth_required", Message: "AWS Secrets Manager identity is missing or expired."}
+	case http.StatusForbidden:
+		return sourceResolveResult{Outcome: "policy_denied", Message: "AWS Secrets Manager policy denied access."}
+	case http.StatusNotFound:
+		return sourceResolveResult{Outcome: "missing_ref", Message: "AWS Secrets Manager secret was not found."}
+	case http.StatusTooManyRequests:
+		return sourceResolveResult{Outcome: "degraded", Message: "AWS Secrets Manager source is degraded."}
+	default:
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "AWS Secrets Manager source returned a non-success status."}
+	}
+}
+
+func awsSecretsManagerOutcomeFromBody(errorType string, body io.Reader, refCfg sourceRefConfig) string {
+	limit := int64(firstPositive(refCfg.MaxStdoutBytes, firstPositive(refCfg.MaxBytes, 65536)))
+	bytes, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil || int64(len(bytes)) > limit {
+		return "source_unavailable"
+	}
+	payload := awsSecretsManagerPayload{}
+	if len(strings.TrimSpace(string(bytes))) > 0 {
+		_ = json.Unmarshal(bytes, &payload)
+	}
+	outcome := firstNonEmpty(payload.Outcome, payload.Type)
+	outcome = firstNonEmpty(outcome, payload.Code)
+	outcome = firstNonEmpty(outcome, errorType)
+	return normalizeAWSSecretsManagerOutcome(outcome)
+}
+
+func decodeAWSSecretsManagerValue(body io.Reader, refCfg sourceRefConfig) sourceResolveResult {
+	limit := int64(firstPositive(refCfg.MaxStdoutBytes, firstPositive(refCfg.MaxBytes, 65536)))
+	bytes, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil || int64(len(bytes)) > limit {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "AWS Secrets Manager response could not be read safely."}
+	}
+	var payload awsSecretsManagerPayload
+	if err := json.Unmarshal(bytes, &payload); err != nil {
+		return sourceResolveResult{Outcome: "source_unavailable", Message: "AWS Secrets Manager response was not JSON."}
+	}
+	if outcome := normalizeAWSSecretsManagerOutcome(payload.Outcome); outcome != "" && outcome != "ready" {
+		return sourceResolveResult{Outcome: outcome, Message: awsSecretsManagerOutcomeMessage(outcome)}
+	}
+	value, ok := awsSecretsManagerField(payload, refCfg.Field)
+	if !ok || strings.TrimSpace(value) == "" {
+		return sourceResolveResult{Outcome: "missing_ref", Message: "AWS Secrets Manager secret value was not found."}
+	}
+	return sourceResolveResult{Outcome: "ready", Value: value}
+}
+
+func awsSecretsManagerField(payload awsSecretsManagerPayload, field string) (string, bool) {
+	field = strings.TrimSpace(field)
+	if field == "" {
+		if strings.TrimSpace(payload.SecretString) != "" {
+			return payload.SecretString, true
+		}
+		return "", false
+	}
+	var nested map[string]any
+	if payload.SecretString != "" && json.Unmarshal([]byte(payload.SecretString), &nested) == nil {
+		if value, ok := nested[field]; ok {
+			text, ok := value.(string)
+			return text, ok
+		}
+	}
+	for _, candidate := range []map[string]any{payload.Data, payload.Secret} {
+		if candidate == nil {
+			continue
+		}
+		if value, ok := candidate[field]; ok {
+			text, ok := value.(string)
+			return text, ok
+		}
+	}
+	return "", false
+}
+
+func normalizeAWSSecretsManagerOutcome(outcome string) string {
+	cleaned := strings.ToLower(strings.TrimSpace(outcome))
+	if cleaned == "" || cleaned == "ready" {
+		return strings.TrimSpace(outcome)
+	}
+	switch {
+	case strings.Contains(cleaned, "expiredtoken"), strings.Contains(cleaned, "expired"):
+		return "identity_expired"
+	case strings.Contains(cleaned, "unrecognizedclient"), strings.Contains(cleaned, "invalidclienttoken"), strings.Contains(cleaned, "missingauthentication"), strings.Contains(cleaned, "source_auth_required"):
+		return "source_auth_required"
+	case strings.Contains(cleaned, "accessdenied"), strings.Contains(cleaned, "notauthorized"), strings.Contains(cleaned, "policy_denied"):
+		return "policy_denied"
+	case strings.Contains(cleaned, "resourcenotfound"), strings.Contains(cleaned, "notfound"), strings.Contains(cleaned, "missing_ref"):
+		return "missing_ref"
+	case strings.Contains(cleaned, "throttl"), strings.Contains(cleaned, "limitexceeded"), strings.Contains(cleaned, "degraded"):
+		return "degraded"
+	case strings.Contains(cleaned, "invalidrequest"), strings.Contains(cleaned, "invalidparameter"), strings.Contains(cleaned, "invalid_ref"):
+		return "invalid_ref"
+	case strings.Contains(cleaned, "source_unavailable"), strings.Contains(cleaned, "internalservice"), strings.Contains(cleaned, "serviceunavailable"):
+		return "source_unavailable"
+	default:
+		return "source_unavailable"
+	}
+}
+
+func awsSecretsManagerOutcomeMessage(outcome string) string {
+	switch outcome {
+	case "source_auth_required":
+		return "AWS Secrets Manager authentication is required."
+	case "identity_expired":
+		return "AWS Secrets Manager identity expired."
+	case "policy_denied":
+		return "AWS Secrets Manager policy denied access."
+	case "missing_ref":
+		return "AWS Secrets Manager secret was not found."
+	case "invalid_ref":
+		return "AWS Secrets Manager source mapping is invalid."
+	case "degraded":
+		return "AWS Secrets Manager source is degraded."
+	default:
+		return "AWS Secrets Manager source is unavailable."
+	}
 }
 
 func (s sourceConfig) resolveBitwardenBWSAPI(refCfg sourceRefConfig, token string) sourceResolveResult {
