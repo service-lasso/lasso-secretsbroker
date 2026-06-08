@@ -33,6 +33,8 @@ func TestVaultSourceAdapterStatusMapping(t *testing.T) {
 		{status: http.StatusUnauthorized, outcome: "source_auth_required"},
 		{status: http.StatusForbidden, outcome: "policy_denied"},
 		{status: http.StatusNotFound, outcome: "missing_ref"},
+		{status: http.StatusBadRequest, body: `{"errors":["invalid source mapping"]}`, outcome: "invalid_ref"},
+		{status: http.StatusTooManyRequests, body: `{"errors":["rate limit exceeded"]}`, outcome: "degraded"},
 		{status: http.StatusServiceUnavailable, body: `{"sealed":true}`, outcome: "locked"},
 		{status: http.StatusInternalServerError, outcome: "source_unavailable"},
 	}
@@ -50,6 +52,22 @@ func TestVaultSourceAdapterStatusMapping(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVaultSourceOutcomeBodyMappingIsMetadataOnly(t *testing.T) {
+	secretMarker := "SERVICE_LASSO_FAKE_SECRET_SENTINEL_TOKEN_DO_NOT_USE"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `{"outcome":"policy_denied","errors":["%s"]}`, secretMarker)
+	}))
+	defer server.Close()
+
+	source := sourceConfig{SourceID: "vault", Kind: "vault", Enabled: true, Address: server.URL, Token: "token"}
+	res := source.resolve("ref", sourceRefConfig{Path: "secret/data/ref", Field: "value"})
+	if res.Outcome != "policy_denied" || res.Value != "" {
+		t.Fatalf("outcome = %#v", res)
+	}
+	assertNoSecretMaterial(t, []byte(res.Message), secretMarker, "token")
 }
 
 func TestVaultSourceMissingTokenRequiresAuth(t *testing.T) {

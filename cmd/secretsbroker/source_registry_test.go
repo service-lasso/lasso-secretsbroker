@@ -57,7 +57,28 @@ func TestSourceRegistryMapsVaultAuthStateWithoutTokenLeak(t *testing.T) {
 		t.Fatalf("vault source = %#v", vault)
 	}
 	assertContains(t, vault.Capabilities, "read")
+	assertContains(t, vault.Capabilities, "reveal")
+	assertContains(t, vault.Capabilities, "write/update")
+	assertContains(t, vault.Capabilities, "rotate/reset")
+	assertContains(t, vault.Capabilities, "policy")
+	assertContains(t, vault.Capabilities, "audit")
+	assertContains(t, vault.Capabilities, "migration")
+	assertContains(t, vault.Capabilities, "health")
+	assertNotContains(t, vault.Capabilities, "value-search")
 	assertContains(t, vault.Namespaces, "prod/*")
+	assertNoSecretMaterial(t, mustManagedJSON(t, registry), "MISSING_VAULT_TOKEN")
+}
+
+func TestVaultOpenBaoCapabilitiesUseAdapterContract(t *testing.T) {
+	for _, kind := range []string{"vault", "openbao"} {
+		t.Run(kind, func(t *testing.T) {
+			caps := capabilitiesForSourceKind(kind)
+			for _, capability := range []string{"read", "reveal", "write/update", "rotate/reset", "policy", "audit", "migration", "health"} {
+				assertContains(t, caps, capability)
+			}
+			assertNotContains(t, caps, "value-search")
+		})
+	}
 }
 
 func TestSourceStatusEndpointDoesNotRequireSecretToken(t *testing.T) {
