@@ -121,8 +121,8 @@ type migrationPlanResponse struct {
 func defaultProviderCapabilities() []providerCapability {
 	return []providerCapability{
 		{ProviderKind: "local-encrypted-store", DisplayName: "Local encrypted store", Supported: true, Capabilities: capabilitiesForSourceKind("local-encrypted-store"), Limitations: []string{"local-first development backend"}},
-		{ProviderKind: "vault", DisplayName: "Vault", Supported: true, Capabilities: []string{"read", "reveal", "health", "migration_source"}, Limitations: []string{"write and migration target apply require provider write adapter"}},
-		{ProviderKind: "openbao", DisplayName: "OpenBao", Supported: true, Capabilities: []string{"read", "reveal", "health", "migration_source"}, Limitations: []string{"write and migration target apply require provider write adapter"}},
+		{ProviderKind: "vault", DisplayName: "Vault", Supported: true, Capabilities: capabilitiesForSourceKind("vault"), Limitations: []string{"remote write, rotation, policy apply, and migration target apply require a configured provider operation path"}},
+		{ProviderKind: "openbao", DisplayName: "OpenBao", Supported: true, Capabilities: capabilitiesForSourceKind("openbao"), Limitations: []string{"remote write, rotation, policy apply, and migration target apply require a configured provider operation path"}},
 		{ProviderKind: "env", DisplayName: "Environment variables", Supported: true, Capabilities: []string{"read", "health", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
 		{ProviderKind: "file", DisplayName: "File source", Supported: true, Capabilities: []string{"read", "health", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
 		{ProviderKind: "exec", DisplayName: "Exec source", Supported: true, Capabilities: []string{"read", "reveal", "health", "audit", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},

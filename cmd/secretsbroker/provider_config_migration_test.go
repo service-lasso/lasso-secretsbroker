@@ -30,6 +30,11 @@ func TestProviderCapabilitiesAndStatusAreSafeMetadataOnly(t *testing.T) {
 		assertNotContains(t, localCapabilities, capability)
 	}
 	assertNoSecretMaterial(t, mustManagedJSON(t, capabilities), providerCredentialValue)
+	vaultCapabilities := providerCapabilitiesByKind("vault").Capabilities
+	for _, capability := range []string{"read", "reveal", "write/update", "rotate/reset", "policy", "audit", "migration", "health"} {
+		assertContains(t, vaultCapabilities, capability)
+	}
+	assertNotContains(t, vaultCapabilities, "value-search")
 
 	status := backend.providerConfigStatusResponse()
 	if status.Outcome != "ready" || len(status.Providers) != 2 {

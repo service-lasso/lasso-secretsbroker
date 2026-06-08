@@ -193,6 +193,10 @@ func adapterContractsByKind() map[string]AdapterContract {
 	for _, contract := range externalAdapterContracts() {
 		contracts[contract.Kind] = contract
 	}
+	if contract, ok := contracts["vault-openbao"]; ok {
+		contracts["vault"] = contract
+		contracts["openbao"] = contract
+	}
 	return contracts
 }
 

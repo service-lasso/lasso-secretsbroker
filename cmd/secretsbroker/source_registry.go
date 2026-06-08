@@ -185,7 +185,11 @@ func capabilitiesForSourceKind(kind string) []string {
 		}
 		return []string{"read", "reveal", "audit", "migration", "health"}
 	case "vault", "openbao":
-		return []string{"read", "health"}
+		contract, ok := adapterContractForKind(kind)
+		if ok {
+			return append(adapterCapabilityNames(contract.Capabilities), "health")
+		}
+		return []string{"read", "reveal", "write/update", "rotate/reset", "policy", "audit", "migration", "health"}
 	default:
 		return []string{"health"}
 	}

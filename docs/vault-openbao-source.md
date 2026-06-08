@@ -1,7 +1,7 @@
 # Vault and OpenBao Source Adapter
 
-Status: read-only MVP  
-Issue: #6
+Status: contract-backed adapter MVP
+Issue: #47
 
 ## Purpose
 
@@ -47,12 +47,23 @@ OpenBao uses the same API shape for this MVP:
 { "kind": "openbao" }
 ```
 
+## Capability and operation model
+
+Vault/OpenBao capability/status output follows the shared adapter contract in `docs/external-adapter-contract.md`:
+
+- `read` and `reveal` are implemented through bounded HTTP reads.
+- `write/update`, `rotate/reset`, `policy`, `audit`, and `migration` are advertised for provider planning and Service Admin capability checks.
+- Remote write, rotation, policy apply, and migration target apply still require a configured provider operation path before apply is allowed.
+- `value-search` is intentionally not advertised for Vault/OpenBao.
+
 ## Auth and backend state mapping
 
 - no token/token env missing -> `source_auth_required`
 - configured source without an address -> `invalid_ref` in source status
 - HTTP 401/403 -> `source_auth_required` or `policy_denied`
 - HTTP 404 -> `missing_ref`
+- HTTP 400 -> `invalid_ref`
+- HTTP 429 or explicit rate-limit/degraded response -> `degraded`
 - sealed response body (`{"sealed":true}` on a non-2xx response) -> `locked`
 - unreachable/5xx without sealed evidence -> `source_unavailable`
 - successful value -> `ready`

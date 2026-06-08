@@ -527,14 +527,24 @@ func (s sourceConfig) resolveVault(refCfg sourceRefConfig) sourceResolveResult {
 		return sourceResolveResult{Outcome: "policy_denied", Message: "Vault/OpenBao policy denied access."}
 	case http.StatusNotFound:
 		return sourceResolveResult{Outcome: "missing_ref", Message: "Vault/OpenBao path or field was not found."}
+	case http.StatusBadRequest:
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Vault/OpenBao source mapping is invalid."}
+	case http.StatusTooManyRequests:
+		return sourceResolveResult{Outcome: "degraded", Message: "Vault/OpenBao source is degraded."}
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		if outcome := vaultOutcomeFromBody(res.Body, refCfg); outcome != "" {
+			if outcome == "locked" {
+				return sourceResolveResult{Outcome: "locked", Message: "Vault/OpenBao source is sealed."}
+			}
+			return sourceResolveResult{Outcome: outcome, Message: vaultOutcomeMessage(outcome)}
+		}
 		if vaultResponseSealed(res.Body, firstPositive(refCfg.MaxStdoutBytes, 65536)) {
 			return sourceResolveResult{Outcome: "locked", Message: "Vault/OpenBao source is sealed."}
 		}
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Vault/OpenBao source returned a non-success status."}
 	}
-	limit := int64(firstPositive(refCfg.MaxStdoutBytes, 65536))
+	limit := int64(firstPositive(refCfg.MaxStdoutBytes, firstPositive(refCfg.MaxBytes, 65536)))
 	body, err := io.ReadAll(io.LimitReader(res.Body, limit+1))
 	if err != nil || int64(len(body)) > limit {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Vault/OpenBao response could not be read safely."}
@@ -550,6 +560,36 @@ func (s sourceConfig) resolveVault(refCfg sourceRefConfig) sourceResolveResult {
 	return sourceResolveResult{Outcome: "ready", Value: value}
 }
 
+type vaultPayload struct {
+	Outcome string `json:"outcome"`
+	Errors  []any  `json:"errors"`
+	Sealed  bool   `json:"sealed"`
+}
+
+func vaultOutcomeFromBody(body io.Reader, refCfg sourceRefConfig) string {
+	limit := int64(firstPositive(refCfg.MaxStdoutBytes, firstPositive(refCfg.MaxBytes, 65536)))
+	bytes, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil || int64(len(bytes)) > limit || len(strings.TrimSpace(string(bytes))) == 0 {
+		return ""
+	}
+	var payload vaultPayload
+	if err := json.Unmarshal(bytes, &payload); err != nil {
+		return ""
+	}
+	if payload.Sealed {
+		return "locked"
+	}
+	if outcome := normalizeVaultOutcome(payload.Outcome); outcome != "" {
+		return outcome
+	}
+	for _, item := range payload.Errors {
+		if outcome := normalizeVaultOutcome(fmt.Sprint(item)); outcome != "" {
+			return outcome
+		}
+	}
+	return ""
+}
+
 func vaultResponseSealed(body io.Reader, maxBytes int) bool {
 	limit := int64(firstPositive(maxBytes, 65536))
 	bytes, err := io.ReadAll(io.LimitReader(body, limit+1))
@@ -562,6 +602,50 @@ func vaultResponseSealed(body io.Reader, maxBytes int) bool {
 	}
 	sealed, _ := payload["sealed"].(bool)
 	return sealed
+}
+
+func normalizeVaultOutcome(outcome string) string {
+	cleaned := strings.ToLower(strings.TrimSpace(outcome))
+	if cleaned == "" || cleaned == "ready" {
+		return strings.TrimSpace(outcome)
+	}
+	switch {
+	case strings.Contains(cleaned, "expired"), strings.Contains(cleaned, "source_auth_required"), strings.Contains(cleaned, "permission denied with invalid token"):
+		return "source_auth_required"
+	case strings.Contains(cleaned, "sealed"), strings.Contains(cleaned, "locked"):
+		return "locked"
+	case strings.Contains(cleaned, "permission denied"), strings.Contains(cleaned, "access denied"), strings.Contains(cleaned, "policy_denied"):
+		return "policy_denied"
+	case strings.Contains(cleaned, "not found"), strings.Contains(cleaned, "missing_ref"), strings.Contains(cleaned, "no value found"):
+		return "missing_ref"
+	case strings.Contains(cleaned, "rate limit"), strings.Contains(cleaned, "throttl"), strings.Contains(cleaned, "degraded"):
+		return "degraded"
+	case strings.Contains(cleaned, "invalid"), strings.Contains(cleaned, "invalid_ref"):
+		return "invalid_ref"
+	case strings.Contains(cleaned, "unavailable"), strings.Contains(cleaned, "timeout"), strings.Contains(cleaned, "connection"):
+		return "source_unavailable"
+	default:
+		return ""
+	}
+}
+
+func vaultOutcomeMessage(outcome string) string {
+	switch outcome {
+	case "source_auth_required":
+		return "Vault/OpenBao authentication is required."
+	case "locked":
+		return "Vault/OpenBao source is sealed."
+	case "policy_denied":
+		return "Vault/OpenBao policy denied access."
+	case "missing_ref":
+		return "Vault/OpenBao path or field was not found."
+	case "invalid_ref":
+		return "Vault/OpenBao source mapping is invalid."
+	case "degraded":
+		return "Vault/OpenBao source is degraded."
+	default:
+		return "Vault/OpenBao source is unavailable."
+	}
 }
 
 func vaultField(payload map[string]any, field string) (string, bool) {
