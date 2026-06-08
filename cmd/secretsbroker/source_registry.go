@@ -124,6 +124,16 @@ func sourceRegistryLifecycle(source sourceConfig) SourceLifecycle {
 		if strings.TrimSpace(firstNonEmpty(source.Token, os.Getenv(source.TokenEnv))) == "" {
 			return normalizeSourceLifecycle("source_auth_required")
 		}
+	case "aws-secrets-manager":
+		if len(source.Refs) == 0 {
+			return normalizeSourceLifecycle("missing_ref")
+		}
+		if strings.TrimSpace(source.Address) == "" && strings.TrimSpace(source.Region) == "" {
+			return normalizeSourceLifecycle("invalid_ref")
+		}
+		if strings.TrimSpace(firstNonEmpty(source.Token, os.Getenv(source.TokenEnv))) == "" {
+			return normalizeSourceLifecycle("source_auth_required")
+		}
 	default:
 		return normalizeSourceLifecycle("invalid_ref")
 	}
@@ -162,6 +172,12 @@ func capabilitiesForSourceKind(kind string) []string {
 			return append(adapterCapabilityNames(contract.Capabilities), "health")
 		}
 		return []string{"read", "reveal", "write/update", "audit", "migration", "health"}
+	case "aws-secrets-manager":
+		contract, ok := adapterContractForKind(kind)
+		if ok {
+			return append(adapterCapabilityNames(contract.Capabilities), "health")
+		}
+		return []string{"read", "reveal", "write/update", "rotate/reset", "policy", "value-search", "audit", "migration", "health"}
 	case "onepassword-cli":
 		contract, ok := adapterContractForKind(kind)
 		if ok {

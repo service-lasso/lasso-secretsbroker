@@ -95,7 +95,9 @@ func (b *localBackend) listManagedSecrets(query string, valueSearch bool) (manag
 				continue
 			}
 			record := managedRecordFromSource(ref, source)
-			if managedRecordMatches(record, query) && !valueSearch {
+			if !valueSearch && managedRecordMatches(record, query) {
+				records = append(records, record)
+			} else if valueSearch && sourceSupportsValueSearch(source.Kind) && b.sourceValueMatches(source, ref, query) {
 				records = append(records, record)
 			}
 		}
@@ -139,11 +141,32 @@ func managedRecordFromSource(ref string, source sourceConfig) managedSecretRecor
 		WorkspaceID:    workspaceFromRef(ref),
 		State:          state,
 		Outcome:        lifecycle.Outcome,
-		Capabilities:   []string{"metadata", "reveal"},
+		Capabilities:   managedCapabilitiesForSourceKind(source.Kind),
 		Policy:         "source-read-policy",
 		AuditStatus:    "audit_available",
-		ValueSearch:    "unsupported",
+		ValueSearch:    valueSearchStatusForSourceKind(source.Kind),
 	}
+}
+
+func managedCapabilitiesForSourceKind(kind string) []string {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "aws-secrets-manager":
+		return []string{"metadata", "reveal", "edit", "reset", "policy", "rotate/reset", "value_search"}
+	default:
+		return []string{"metadata", "reveal"}
+	}
+}
+
+func valueSearchStatusForSourceKind(kind string) string {
+	if sourceSupportsValueSearch(kind) {
+		return "supported"
+	}
+	return "unsupported"
+}
+
+func sourceSupportsValueSearch(kind string) bool {
+	contract, ok := adapterContractForKind(kind)
+	return ok && adapterHasCapability(contract, AdapterCapabilityValueSearch)
 }
 
 func (b *localBackend) localValueMatches(entry secretEntry, query string) bool {
@@ -156,6 +179,19 @@ func (b *localBackend) localValueMatches(entry secretEntry, query string) bool {
 		return false
 	}
 	return strings.Contains(strings.ToLower(value), query)
+}
+
+func (b *localBackend) sourceValueMatches(source sourceConfig, ref string, query string) bool {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return false
+	}
+	refCfg, ok := source.Refs[ref]
+	if !ok {
+		return false
+	}
+	res := source.resolve(ref, refCfg)
+	return res.Outcome == "ready" && strings.Contains(strings.ToLower(res.Value), query)
 }
 
 func managedRecordMatches(record managedSecretRecord, query string) bool {
