@@ -1,7 +1,7 @@
 # Secure Initialization and Recovery-Key Model
 
 Status: design recommendation
-Issue: #55
+Issue: #55, #92
 Service id: `@secretsbroker`
 
 ## Purpose
@@ -10,7 +10,9 @@ This note defines the recommended initialization and recovery-key model for the 
 
 This is a design contract, not a production-readiness claim. The implemented foundation remains the portable master key, local encrypted store, local wrapper, backup/restore, rotation flows, threshold recovery share generation/import, and recovery policy metadata surfaces documented in `docs/portable-master-key.md`, `docs/master-key-lifecycle.md`, `docs/backup-restore-rotation.md`, `docs/local-api-bootstrap-contract.md`, and `docs/threat-model.md`.
 
-Current implementation note for #59/#60: the broker can generate CLI-first threshold recovery shares, optionally encrypt each share to an operator-supplied age/X25519 recipient, import plaintext or recipient-enveloped share files, verify the reconstructed portable master key against store metadata/decryptability, and refresh a local wrapper only after verification succeeds.
+Decision scope for #92: secure initialization and recovery must not depend on Keybase, public keyserver discovery, plaintext recovery UIs, or provider-specific vault assumptions. PGP is allowed only as a future optional share-envelope backend after the local-first ceremony remains safe without it.
+
+Current implementation note for #59/#60 and this #92 planning pass: the broker can generate CLI-first threshold recovery shares, optionally encrypt each share to an operator-supplied age/X25519 recipient, import plaintext or recipient-enveloped share files, verify the reconstructed portable master key against store metadata/decryptability, and refresh a local wrapper only after verification succeeds.
 
 ## Recommendation
 
@@ -32,6 +34,18 @@ For the default no-Keybase path, prefer:
 - `age`/X25519 recipient encryption as the first optional share-envelope format, because it is compact, file-based, and does not depend on public keyservers or social identity systems.
 - OS key stores/wrappers for daily machine-local unlock where available.
 
+## Option Decision Matrix
+
+| Option | Recommended role | Why | Guardrails |
+| --- | --- | --- | --- |
+| PGP recipient encryption | Future optional share envelope only | Useful for organizations that already have disciplined offline PGP key custody, but too much trust, expiry, revocation, and discovery complexity for default bootstrap. | Operator-supplied public key files only; no Keybase lookup; no keyserver lookup; audit safe fingerprints only; no private keys or passphrases in broker state. |
+| Local `age`/X25519 recipient keys | Default optional share envelope | Small, explicit recipient strings/files, no social identity dependency, and already fits the implemented recipient-enveloped share flow. | One recipient per share output; private identities supplied only at import time; store only recipient fingerprints/envelope metadata. |
+| Minisign-style signing keys | Integrity/signature adjunct, not recovery encryption | Good for authenticating release/config artifacts, but not a complete recovery-share confidentiality mechanism by itself. | Use only to sign ceremony bundles or policy metadata after a separate encryption/recovery model exists. |
+| OS keystore-backed wrapping | Routine local unlock on enrolled machines | Keeps daily unlock local to the current OS/user/machine while preserving portable recovery through shares. | Treat wrappers as machine-local convenience, not backup; unsupported wrappers fail closed and keep CLI/share recovery available. |
+| Offline recovery shares | Required break-glass recovery model | Separates recovery authority across holders and avoids binding recovery to one user's account or device. | Threshold policy required; share material stored separately from store/backups/wrappers; rotate shares with the portable master key. |
+| Remote/cloud KMS or Vault/OpenBao unseal as the default | Not default for local-first bootstrap | Creates an external availability and custody dependency before Service Lasso can initialize its own local broker. | May be a later enterprise backend/source option behind `@secretsbroker`, not the baseline initialization dependency. |
+| Plaintext recovery page, bulk share export, Keybase lookup, public keyserver lookup, storing recovery material in Service Admin | No-go | These paths make the most sensitive material easy to leak, hard to audit, or dependent on external identity systems. | Must not be implemented. Service Admin may show metadata and guide local CLI ceremonies only. |
+
 ## Threat Assumptions
 
 The default model assumes:
@@ -42,6 +56,35 @@ The default model assumes:
 - Recovery share holders are trusted to protect their share out of band.
 - Service Admin is optional and must not become the only way to unlock or recover the broker.
 - Vault/OpenBao can be a backend/source later, but the Service Lasso-facing broker contract remains `@secretsbroker`.
+
+## Operator Ceremony
+
+The supported ceremony is local, explicit, and auditable:
+
+1. Prepare an empty local store path, audit path, and wrapper path on the operator-controlled host.
+2. Generate or import the portable master key through the CLI; do not pass it through shell history or UI fields.
+3. Choose a threshold policy before storing production secrets, for example 2-of-3 for small deployments or 3-of-5 where more separation is needed.
+4. Write each recovery share to an operator-selected target. Prefer offline removable media or a dedicated offline password-manager item per holder.
+5. Optionally encrypt each share to an explicit `age`/X25519 recipient before the share file is written.
+6. Store encrypted backups away from key/share/wrapper material.
+7. Verify recovery on a separate test store or controlled recovery host before relying on the ceremony.
+8. Record only safe fingerprints, policy id, threshold, share count, wrapper kind, outcome, and reason metadata in broker state and audit.
+
+The ceremony must remain possible without Service Admin. Service Admin may later guide state and next actions, but sensitive material entry, share generation, share import, and identity private-key use stay in local CLI/broker-controlled flows unless a separately approved secure local UI bridge exists.
+
+## Storage Boundaries
+
+Keep these materials separated:
+
+| Material | Storage boundary | May appear in API/UI/audit? |
+| --- | --- | --- |
+| Encrypted local store | Broker data directory or backup artifact | Metadata only: key id/version, counts, lifecycle state. |
+| Portable master key | Operator-selected secure file, OS secret store, or in-memory unlock input | No. Never render or audit key bytes. |
+| Local wrapper | Current machine/user-specific broker data path | Metadata only: wrapper kind, OS, key id, support status. |
+| Recovery share plaintext | Holder-controlled offline destination only | No. Never in broker state, Service Admin, logs, diagnostics, or support bundles. |
+| Recipient-enveloped recovery share | Holder-controlled file destination | Envelope format and safe recipient fingerprint only. |
+| Recipient private identity | Holder-controlled import-time input | No. Never stored by the broker. |
+| Backup artifact | Backup destination separate from key/share material | Artifact metadata only; still sensitive operational data. |
 
 ## Initialization Workflow
 
@@ -197,6 +240,18 @@ Recommended default role for `age`/X25519:
 - Broker stores only recipient fingerprints and envelope metadata.
 - Share plaintext is never persisted by the broker unless the operator explicitly chooses a plaintext share output target.
 
+## Explicit No-Go Options
+
+Do not implement these as part of initialization or recovery:
+
+- Keybase-dependent setup or recovery.
+- Public keyserver discovery during bootstrap.
+- PGP private-key import into broker state.
+- A web page that displays portable master keys, recovery share plaintext, recipient private identities, passphrases, source credentials, or API tokens.
+- Bulk copy/export of all recovery shares from Service Admin.
+- Storage of recovery share plaintext, portable master keys, passphrases, private keys, provider credentials, or local API tokens in routes, query strings, page titles, breadcrumbs, browser storage, logs, diagnostics, fixtures, support bundles, issue comments, or screenshots.
+- Automatic rotation that invalidates existing recovery shares before the new recovery bundle is generated and verified.
+
 ## UI and Service Admin Rules
 
 Service Admin may eventually guide initialization, but it must not become a plaintext recovery-material surface.
@@ -246,10 +301,11 @@ Audit events must never include:
 
 Recommended follow-up implementation sequence:
 
-1. Add a recovery policy and share metadata contract.
-2. Add CLI-first threshold recovery share generation and recovery import. Completed for the local-first baseline in #59.
-3. Add optional `age`/X25519 recipient envelopes for individual shares.
-4. Add wrapper and recovery-policy status surfaces to API/CLI.
-5. Add a Service Admin initialization guide only after the broker CLI/API contract is proven.
+1. Recovery policy and share metadata contract. Completed for the local-first baseline.
+2. CLI-first threshold recovery share generation and recovery import. Completed for the local-first baseline in #59.
+3. Optional `age`/X25519 recipient envelopes for individual shares. Completed for the local-first baseline in #60.
+4. Wrapper and recovery-policy status surfaces to API/CLI. Completed for the current metadata-only status contract.
+5. First remaining executable slice after #92: add an end-to-end initialization ceremony command or guided CLI flow that creates the local store, enrolls or verifies the local wrapper, generates/envelopes recovery shares, persists safe recovery policy metadata, and writes one summarized audit trail without exposing key/share material. This slice should include a dry-run/preview mode for paths/policy, no-secret serialization tests, fail-closed tests for invalid thresholds/recipient counts/output paths, and documentation that Service Admin can invoke or link to the ceremony only after the CLI contract is proven.
+6. Add a Service Admin initialization guide only after the broker CLI/API ceremony is proven. The UI guide must remain metadata-only and must not collect or render recovery material.
 
 Each implementation slice must include no-secret serialization tests and negative tests for wrong shares, insufficient shares, corrupted stores, unsupported wrappers, and audit redaction.
