@@ -345,6 +345,7 @@ func runAdminEvents(args []string, out io.Writer) error {
 	until := fs.String("until", "", "RFC3339 upper time bound")
 	serviceID := fs.String("service-id", "", "service id filter")
 	providerID := fs.String("provider-id", "", "provider id filter")
+	sourceID := fs.String("source-id", "", "source id filter")
 	operation := fs.String("operation", "", "operation filter")
 	outcome := fs.String("outcome", "", "outcome filter")
 	severity := fs.String("severity", "", "severity filter")
@@ -365,6 +366,7 @@ func runAdminEvents(args []string, out io.Writer) error {
 		"until":      *until,
 		"serviceId":  *serviceID,
 		"providerId": *providerID,
+		"sourceId":   *sourceID,
 		"operation":  *operation,
 		"outcome":    *outcome,
 		"severity":   *severity,

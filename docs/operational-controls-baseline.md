@@ -134,18 +134,21 @@ Events represent operator-relevant state transitions and decisions. The broker s
 Event families:
 
 - `policy_decision`
+- `auth_failure`
 - `audit_recorded` / `audit_unavailable`
 - `source_auth_required` / `source_recovered`
 - `provider_unavailable` / `provider_recovered`
 - `lockout_started` / `lockout_cleared`
 - `management_reveal`
 - `management_apply`
+- `rotation_action`
+- `delete_action`
 - `key_lifecycle`
 - `backup_restore`
 
 Filtering requirements:
 
-- Filters support time window, service id, provider id, operation, outcome, severity, event family, and ref prefix/hash.
+- Filters support time window, service id, provider id, source id, operation, outcome, severity, event family, and ref prefix/hash.
 - Filters have bounded limits and deterministic pagination.
 - Invalid filters fail safely with typed errors.
 - Value search and credential search are not event-filter features.
@@ -153,10 +156,11 @@ Filtering requirements:
 Implemented first slice:
 
 - Audit metadata now feeds a bounded local operational event store with deterministic retention of the most recent 200 events.
-- GET /v1/events returns metadata-only events with filters for since, until, serviceId, providerId, operation, outcome, severity, family, refPrefix, and refHash.
-- secretsbroker admin events list exposes the same bounded event reader for headless administration.
+- GET /v1/events returns metadata-only events with filters for since, until, serviceId, providerId, sourceId, operation, outcome, severity, family, refPrefix, and refHash.
+- secretsbroker admin events list exposes the same bounded event reader for headless administration, including `--source-id`.
 - Event responses expose safe ref prefixes and refHash; they do not include raw refs, raw values, provider credentials, tokens, private keys, cookies, passwords, environment values, provider response bodies, or credential search results.
 - Event filters use bounded page sizes with cursor pagination, and invalid filters return typed invalid_event_filter errors.
+- Auth failures, provider/source failures, lockout-like conditions, rotation/delete actions, and source health changes are represented by explicit event families so Service Admin and notification sinks can filter without parsing operation names.
 
 ## Lockout model
 
@@ -230,7 +234,7 @@ Implemented management clear slice:
 | Policy assignment | Show effective allowed refs/namespaces per service and explain denied operations without exposing values. |
 | Audit logging | Show audit availability/status, export metadata-only audit events, and block dangerous apply/reveal flows when audit is unavailable. |
 | Telemetry | Show broker health and operational counters without raw refs or secret values. |
-| Events/filtering | Provide event filters for service, provider, operation, outcome, severity, and time range. |
+| Events/filtering | Provide event filters for service, provider, source, operation, outcome, severity, family, and time range. Track UI follow-up in [lasso-serviceadmin#118](https://github.com/service-lasso/lasso-serviceadmin/issues/118). |
 | Lockout | Show active lockouts, retry windows, affected scopes, and audited clear action when supported. |
 
 ## Test requirements

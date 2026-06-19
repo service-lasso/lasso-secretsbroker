@@ -122,6 +122,14 @@ secretsbroker admin audit export --audit .\data\secretsbroker-audit.jsonl --oper
 
 Audit export returns operation/ref/outcome/timestamp/request metadata only. Audit events must not contain raw values.
 
+### Operational events
+
+```powershell
+secretsbroker admin events list --family source_auth_required --source-id vault-prod --limit 25
+```
+
+Operational events are bounded, metadata-only records derived from broker audit metadata. Filters include time window, service id, provider id, source id, operation, outcome, severity, family, safe ref prefix, and ref hash. Event output must not contain raw secret values, provider credentials, API tokens, recovery material, or raw provider response bodies.
+
 ### Unlock/import/re-wrap
 
 Master-key lifecycle commands are part of the same headless operator workflow and are documented in `docs/master-key-lifecycle.md`:

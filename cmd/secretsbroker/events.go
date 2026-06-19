@@ -60,6 +60,7 @@ type eventFilters struct {
 	Until      *time.Time
 	ServiceID  string
 	ProviderID string
+	SourceID   string
 	Operation  string
 	Outcome    string
 	Severity   string
@@ -121,6 +122,8 @@ func eventFamily(audit auditEvent) string {
 		return "audit_unavailable"
 	}
 	switch {
+	case audit.Operation == "local_api_auth" && audit.Outcome != "ready":
+		return "auth_failure"
 	case audit.Operation == "lockout_clear":
 		return "lockout_cleared"
 	case strings.Contains(audit.Operation, "lockout"):
@@ -129,14 +132,22 @@ func eventFamily(audit auditEvent) string {
 		return "policy_decision"
 	case audit.Operation == "source_lifecycle" && audit.Outcome == "ready":
 		return "source_recovered"
-	case audit.Operation == "source_lifecycle":
+	case audit.Operation == "source_lifecycle" && audit.Outcome == "source_auth_required":
 		return "source_auth_required"
+	case audit.Operation == "source_lifecycle":
+		return "source_unavailable"
 	case strings.HasPrefix(audit.Operation, "provider_") && audit.Outcome == "ready":
 		return "provider_recovered"
+	case strings.HasPrefix(audit.Operation, "provider_") && audit.Outcome == "source_auth_required":
+		return "source_auth_required"
 	case strings.HasPrefix(audit.Operation, "provider_"):
 		return "provider_unavailable"
 	case audit.Operation == "management_reveal":
 		return "management_reveal"
+	case strings.Contains(audit.Operation, "rotation"):
+		return "rotation_action"
+	case strings.Contains(audit.Operation, "delete"):
+		return "delete_action"
 	case strings.HasPrefix(audit.Operation, "management_"):
 		return "management_apply"
 	case strings.HasPrefix(audit.Operation, "key_"):
@@ -251,6 +262,7 @@ func parseEventFilters(values url.Values) (eventFilters, error) {
 	}
 	filters.ServiceID = scrubAuditField(values.Get("serviceId"))
 	filters.ProviderID = scrubAuditField(values.Get("providerId"))
+	filters.SourceID = scrubAuditField(values.Get("sourceId"))
 	filters.Operation = scrubAuditField(values.Get("operation"))
 	filters.Outcome = scrubAuditField(values.Get("outcome"))
 	filters.Severity = scrubAuditField(values.Get("severity"))
@@ -333,6 +345,9 @@ func eventMatchesFilters(event operationalEvent, filters eventFilters) bool {
 		return false
 	}
 	if filters.ProviderID != "" && event.ProviderID != filters.ProviderID {
+		return false
+	}
+	if filters.SourceID != "" && event.SourceID != filters.SourceID {
 		return false
 	}
 	if filters.Operation != "" && event.Operation != filters.Operation {

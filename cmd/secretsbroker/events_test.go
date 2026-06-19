@@ -104,6 +104,55 @@ func TestOperationalEventsEndpointPaginationAndInvalidFilters(t *testing.T) {
 	}
 }
 
+func TestOperationalEventFamiliesAndSourceFilter(t *testing.T) {
+	backend := testBackend(t)
+	ref := "services/api/runtime/API_TOKEN"
+	events := []auditEvent{
+		{TS: backend.now(), Operation: "local_api_auth", Outcome: "unauthorized", ServiceID: "@operator", RequestID: "req-auth"},
+		{TS: backend.now().Add(time.Second), Operation: "source_lifecycle", Outcome: "source_auth_required", SourceID: "vault-prod", Ref: ref, ServiceID: "api", RequestID: "req-source-auth"},
+		{TS: backend.now().Add(2 * time.Second), Operation: "source_lifecycle", Outcome: "ready", SourceID: "vault-prod", Ref: ref, ServiceID: "api", RequestID: "req-source-ready"},
+		{TS: backend.now().Add(3 * time.Second), Operation: "provider_config_validate", Outcome: "source_auth_required", ProviderID: "vault-prod", ServiceID: "@serviceadmin", RequestID: "req-provider-auth"},
+		{TS: backend.now().Add(4 * time.Second), Operation: "credential_rotation_dry_run", Outcome: "dry_run_ready", Ref: ref, ServiceID: "@serviceadmin", RequestID: "req-rotation"},
+		{TS: backend.now().Add(5 * time.Second), Operation: "management_delete_apply", Outcome: "applied", Ref: ref, ServiceID: "@serviceadmin", RequestID: "req-delete"},
+	}
+	for _, event := range events {
+		if err := backend.writeAuditEvent(event); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cases := map[string]string{
+		"req-auth":          "auth_failure",
+		"req-source-auth":   "source_auth_required",
+		"req-source-ready":  "source_recovered",
+		"req-provider-auth": "source_auth_required",
+		"req-rotation":      "rotation_action",
+		"req-delete":        "delete_action",
+	}
+	res, err := buildEventsResponse(backend.eventPath, eventFilters{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range res.Events {
+		if want, ok := cases[event.RequestID]; ok && event.Family != want {
+			t.Fatalf("%s family = %q, want %q", event.RequestID, event.Family, want)
+		}
+	}
+
+	filtered, err := buildEventsResponse(backend.eventPath, eventFilters{Limit: 20, SourceID: "vault-prod", Family: "source_auth_required"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered.Events) != 1 || filtered.Events[0].RequestID != "req-source-auth" || filtered.Events[0].SourceID != "vault-prod" {
+		t.Fatalf("source filtered events = %#v", filtered.Events)
+	}
+	encoded, err := json.Marshal(filtered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecretMaterial(t, encoded, operationalEventSecretValue, ref)
+}
+
 func TestAdminEventsCLIReadsMetadataOnlyEvents(t *testing.T) {
 	backend := testBackend(t)
 	ref := "services/api/runtime/API_TOKEN"
@@ -117,5 +166,19 @@ func TestAdminEventsCLIReadsMetadataOnlyEvents(t *testing.T) {
 	assertNoSecretMaterial(t, out.Bytes(), operationalEventSecretValue, "test-master-key", ref)
 	if !strings.Contains(out.String(), "events") || !strings.Contains(out.String(), "audit_recorded") {
 		t.Fatalf("events CLI output missing expected metadata: %s", out.String())
+	}
+}
+
+func TestAdminEventsCLIFiltersBySourceID(t *testing.T) {
+	backend := testBackend(t)
+	_ = backend.writeAuditEvent(auditEvent{TS: backend.now(), Operation: "source_lifecycle", SourceID: "vault-prod", Outcome: "source_auth_required", Ref: "services/api/runtime/API_TOKEN"})
+	_ = backend.writeAuditEvent(auditEvent{TS: backend.now(), Operation: "source_lifecycle", SourceID: "env-dev", Outcome: "source_auth_required", Ref: "services/api/runtime/API_TOKEN"})
+
+	var out bytes.Buffer
+	if err := executeAdmin([]string{"events", "list", "--events", backend.eventPath, "--source-id", "vault-prod", "--family", "source_auth_required", "--limit", "10"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"sourceId": "vault-prod"`) || strings.Contains(out.String(), `"sourceId": "env-dev"`) {
+		t.Fatalf("source-id filter output = %s", out.String())
 	}
 }
