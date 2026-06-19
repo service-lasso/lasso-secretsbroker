@@ -43,6 +43,7 @@ type localBackend struct {
 	sources   sourceConfigFile
 	now       func() time.Time
 	lockouts  *lockoutStore
+	campaigns map[string]bulkCampaignResponse
 }
 
 type localStoreFile struct {
@@ -178,7 +179,7 @@ type auditEvent struct {
 }
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
-	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }}
+	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}}
 	backend.lockouts = newLockoutStore(func() time.Time {
 		if backend.now == nil {
 			return time.Now().UTC()
