@@ -243,6 +243,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/management/secrets/edit/dry-run|apply",
 			"POST /v1/management/secrets/reset/dry-run|apply",
 			"POST /v1/management/secrets/rotation/dry-run",
+			"POST /v1/management/secrets/campaigns/create|revalidate|apply|status",
 			"POST /v1/management/secrets/policy/preview|apply",
 			"CLI secretsbroker admin mcp tools|call",
 			"CLI secretsbroker backup create|restore",
@@ -272,6 +273,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"secrets-management-controlled-reveal",
 			"secrets-management-dry-run-apply",
 			"credential-rotation-dry-run",
+			"bulk-secret-operation-campaigns",
 			"env-source",
 			"file-source",
 			"exec-source",
@@ -405,6 +407,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		registerSourceRegistryHandlers(mux, backend)
 		registerSecretsManagementHandlers(mux, backend, security)
 		registerRotationHandlers(mux, backend, security)
+		registerBulkCampaignHandlers(mux, backend, security)
 		registerProviderConfigMigrationHandlers(mux, backend, security)
 		registerRecoveryPolicyHandlers(mux, backend, security)
 		registerTelemetryHandlers(mux, backend)
