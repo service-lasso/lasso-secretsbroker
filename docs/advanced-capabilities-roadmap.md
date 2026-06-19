@@ -10,6 +10,8 @@ This roadmap classifies advanced platform capabilities raised during Secrets Bro
 
 The broker remains local-first. Vault, OpenBao, HSMs, identity providers, GitHub sync, and other enterprise systems may sit behind or beside the stable `@secretsbroker` contract, but Service Lasso should not imply parity with those systems unless a capability is explicitly implemented, integrated, validated, and documented.
 
+The focused readiness assessment for HSM support, FIPS compliance, MFA, and automated credential rotation is documented in `docs/enterprise-security-readiness.md`.
+
 ## Classification rules
 
 - Near-term: can be designed and implemented as a focused local-first broker or Service Lasso slice after current contract dependencies land.
@@ -38,6 +40,7 @@ Every capability keeps these safety rules:
 
 - Automated credential rotation dry-run and operation contract: [lasso-secretsbroker#68](https://github.com/service-lasso/lasso-secretsbroker/issues/68).
 - Secrets Sync / GitHub Actions design baseline and first executable slice: [lasso-secretsbroker#95](https://github.com/service-lasso/lasso-secretsbroker/issues/95) and `docs/secrets-sync-design.md`.
+- Enterprise security readiness assessment for HSM, FIPS, MFA, and automated credential rotation: [lasso-secretsbroker#96](https://github.com/service-lasso/lasso-secretsbroker/issues/96) and `docs/enterprise-security-readiness.md`.
 
 The other capabilities are intentionally classified as Later or Out of scope until their dependencies and approval gates are explicit. They should not block current broker operational-control issues (#62-#66) or Service Admin UI work.
 
