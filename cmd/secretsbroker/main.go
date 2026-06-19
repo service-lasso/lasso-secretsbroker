@@ -244,6 +244,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/management/secrets/reset/dry-run|apply",
 			"POST /v1/management/secrets/rotation/dry-run",
 			"POST /v1/management/secrets/policy/preview|apply",
+			"CLI secretsbroker admin mcp tools|call",
 			"CLI secretsbroker backup create|restore",
 			"CLI secretsbroker key initialize|unlock|import|rewrap|wrapper-status|rotate|recovery generate|recovery import",
 			"CLI secretsbroker admin status|secrets|providers|migration|recovery|audit|events",
@@ -285,6 +286,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"recovery-policy-status",
 			"threshold-recovery-shares",
 			"headless-admin-cli",
+			"metadata-only-mcp-adapter",
 		},
 		FutureFeatures: []string{
 			"external-backend-write-back",

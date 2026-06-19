@@ -69,6 +69,8 @@ func executeAdmin(args []string, out io.Writer) error {
 		return runAdminTelemetry(args[1:], out)
 	case "events":
 		return runAdminEvents(args[1:], out)
+	case "mcp":
+		return runAdminMCP(args[1:], out)
 	default:
 		return fmt.Errorf("unknown admin command %q", args[0])
 	}
