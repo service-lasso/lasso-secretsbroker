@@ -169,6 +169,10 @@ Audit events MUST be metadata-only JSON objects. Implementations MAY add fields,
 
 Audit events MUST NOT include plaintext secret values or credentials.
 
+Implementations MAY add optional tamper-evidence fields such as `previousHash`, `eventHash`, and
+`chainStatus`. These fields must be derived from normalized audit metadata only, must not include raw
+secret material, and must remain safe for hash-only export flows.
+
 ## Backup/restore compatibility
 
 Backup artifacts MUST remain encrypted-at-rest artifacts. A conforming implementation MUST:

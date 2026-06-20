@@ -377,6 +377,17 @@ Response:
 {
   "serviceId": "@secretsbroker",
   "apiVersion": "secretsbroker.local/v1",
+  "sourceConfig": {
+    "configured": true,
+    "checked": true,
+    "platform": "linux",
+    "pathHash": "sha256:...",
+    "mode": "0644",
+    "state": "broad_access",
+    "outcome": "degraded",
+    "nextAction": "restrict_source_config_permissions",
+    "broadReadable": true
+  },
   "sources": [
     {
       "sourceId": "local",
@@ -395,6 +406,12 @@ Response:
   ]
 }
 ```
+
+`sourceConfig` is metadata-only. It reports config-file permission diagnostics without returning the
+raw source config path, source tokens, provider credentials, mapped file contents, or resolved values.
+On platforms where POSIX-style mode bits are meaningful, owner-only config files should be `0600`.
+Broad group/other access is reported as degraded. On Windows, ACL review is required and the mode-bit
+check reports `outcome: "not_verified"` rather than claiming protection.
 
 ## Error envelope
 

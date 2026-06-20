@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -105,5 +108,48 @@ func TestSourceStatusEndpointDoesNotRequireSecretToken(t *testing.T) {
 	}
 	if body.Sources[1].SourceID != "disabled-source" || body.Sources[1].State != "disabled" || body.Sources[1].NextAction != "enable_source" {
 		t.Fatalf("disabled body = %#v", body.Sources[1])
+	}
+}
+
+func TestSourceConfigSecurityFlagsBroadPortableModes(t *testing.T) {
+	unsafe := classifySourceConfigMode(0o644, "linux")
+	if unsafe.Outcome != "degraded" || unsafe.State != "broad_access" || !unsafe.BroadReadable || unsafe.BroadWritable {
+		t.Fatalf("unsafe mode = %#v", unsafe)
+	}
+	writable := classifySourceConfigMode(0o666, "linux")
+	if writable.Outcome != "degraded" || !writable.BroadReadable || !writable.BroadWritable {
+		t.Fatalf("writable mode = %#v", writable)
+	}
+	protected := classifySourceConfigMode(0o600, "linux")
+	if protected.Outcome != "ready" || protected.State != "protected" || protected.BroadReadable || protected.BroadWritable {
+		t.Fatalf("protected mode = %#v", protected)
+	}
+	windows := classifySourceConfigMode(0o666, "windows")
+	if windows.Outcome != "not_verified" || windows.NextAction != "review_os_acl" {
+		t.Fatalf("windows mode = %#v", windows)
+	}
+}
+
+func TestSourceConfigSecurityStatusDoesNotExposeConfigPathOrSecrets(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "sources.json")
+	config := `{"sources":[{"sourceId":"vault-prod","kind":"vault","enabled":true,"address":"https://vault.example.invalid","token":"SOURCE_CONFIG_TOKEN_SHOULD_NOT_LEAK","refs":{"services/api/runtime/API_TOKEN":{"path":"secret/data/api","field":"token"}}}]}`
+	if err := os.WriteFile(configPath, []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := loadSourceConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := newLocalBackend("store.json", "audit.jsonl", "master-key")
+	backend.sources = cfg
+	registry := defaultSourceRegistry(backend)
+	payload := mustManagedJSON(t, registry)
+	assertNoSecretMaterial(t, payload, "SOURCE_CONFIG_TOKEN_SHOULD_NOT_LEAK")
+	if strings.Contains(string(payload), configPath) {
+		t.Fatalf("source config status exposed raw path: %s", payload)
+	}
+	if registry.SourceConfig.PathHash == "" || registry.SourceConfig.Mode == "" || !registry.SourceConfig.Configured || !registry.SourceConfig.Checked {
+		t.Fatalf("source config security missing metadata: %#v", registry.SourceConfig)
 	}
 }

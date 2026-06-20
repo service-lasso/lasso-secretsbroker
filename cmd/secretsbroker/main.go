@@ -320,6 +320,7 @@ func serve(args []string) error {
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
 	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
 	eventsPath := fs.String("events", getenvDefault("SECRETSBROKER_EVENTS_PATH", defaultEventsPath(*auditPath)), "operational events JSONL path")
+	auditHashChain := fs.Bool("audit-hash-chain", envBoolDefault("SECRETSBROKER_AUDIT_HASH_CHAIN", false), "append tamper-evident audit hash-chain metadata")
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "local development master key; empty means locked")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
 	apiToken := fs.String("api-token", getenvDefault("SECRETSBROKER_API_TOKEN", ""), "local API token for secret-bearing endpoints")
@@ -352,6 +353,7 @@ func serve(args []string) error {
 	}
 	backend := newLocalBackend(*storePath, *auditPath, material.Value)
 	backend.eventPath = eventsPathValue
+	backend.auditHashChain = *auditHashChain
 	backend.launchIdentitySigningKey = strings.TrimSpace(*launchIdentitySigningKey)
 	sources, err := loadSourceConfig(*sourcesPath)
 	if err != nil {
@@ -520,4 +522,15 @@ func getenvDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func envBoolDefault(key string, fallback bool) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }

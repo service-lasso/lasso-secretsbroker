@@ -14,12 +14,13 @@ import (
 )
 
 type adminCommonOptions struct {
-	StorePath     string
-	AuditPath     string
-	MasterKey     string
-	MasterKeyFile string
-	SourcesPath   string
-	EventsPath    string
+	StorePath      string
+	AuditPath      string
+	MasterKey      string
+	MasterKeyFile  string
+	SourcesPath    string
+	EventsPath     string
+	AuditHashChain bool
 }
 
 type adminStatusResponse struct {
@@ -35,13 +36,14 @@ type adminStatusResponse struct {
 }
 
 type adminAuditExportResponse struct {
-	ServiceID   string       `json:"serviceId"`
-	APIVersion  string       `json:"apiVersion"`
-	Outcome     string       `json:"outcome"`
-	Operation   string       `json:"operation,omitempty"`
-	Ref         string       `json:"ref,omitempty"`
-	RefHashOnly bool         `json:"refHashOnly,omitempty"`
-	Events      []auditEvent `json:"events"`
+	ServiceID   string                 `json:"serviceId"`
+	APIVersion  string                 `json:"apiVersion"`
+	Outcome     string                 `json:"outcome"`
+	Operation   string                 `json:"operation,omitempty"`
+	Ref         string                 `json:"ref,omitempty"`
+	RefHashOnly bool                   `json:"refHashOnly,omitempty"`
+	Chain       auditChainVerification `json:"chain"`
+	Events      []auditEvent           `json:"events"`
 }
 
 func runAdmin(args []string) error {
@@ -488,6 +490,7 @@ func newAdminFlagSet(name string) (*flag.FlagSet, *adminCommonOptions) {
 	fs.StringVar(&opts.MasterKey, "master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "portable master key")
 	fs.StringVar(&opts.MasterKeyFile, "master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
 	fs.StringVar(&opts.SourcesPath, "sources", getenvDefault("SECRETSBROKER_SOURCES_PATH", ""), "source adapter config path")
+	fs.BoolVar(&opts.AuditHashChain, "audit-hash-chain", envBoolDefault("SECRETSBROKER_AUDIT_HASH_CHAIN", false), "append tamper-evident audit hash-chain metadata")
 	return fs, opts
 }
 
@@ -499,6 +502,7 @@ func backendFromAdminOptions(opts *adminCommonOptions) (*localBackend, keyMateri
 	}
 	backend := newLocalBackend(opts.StorePath, opts.AuditPath, material.Value)
 	backend.eventPath = opts.EventsPath
+	backend.auditHashChain = opts.AuditHashChain
 	sources, sourceErr := loadSourceConfig(opts.SourcesPath)
 	if sourceErr != nil {
 		return nil, material, sourceErr
@@ -524,7 +528,7 @@ func normalizeAdminState(state string, backend *localBackend, material keyMateri
 }
 
 func exportAuditEvents(path, operation, ref string, refHashOnly bool) (adminAuditExportResponse, error) {
-	res := adminAuditExportResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "ready", Operation: strings.TrimSpace(operation), Ref: strings.TrimSpace(ref), RefHashOnly: refHashOnly, Events: []auditEvent{}}
+	res := adminAuditExportResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "ready", Operation: strings.TrimSpace(operation), Ref: strings.TrimSpace(ref), RefHashOnly: refHashOnly, Chain: auditChainVerification{Status: "not_enabled"}, Events: []auditEvent{}}
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return res, nil
@@ -548,14 +552,20 @@ func exportAuditEvents(path, operation, ref string, refHashOnly bool) (adminAudi
 			continue
 		}
 		event = normalizeAuditEvent(event)
-		if refHashOnly {
-			event.Ref = ""
-		}
 		res.Events = append(res.Events, event)
 	}
 	if err := scanner.Err(); err != nil {
 		res.Outcome = "degraded"
 		return res, errBackendDegraded
+	}
+	res.Chain, res.Events = verifyAuditChain(res.Events)
+	if res.Chain.Status == "invalid" {
+		res.Outcome = "degraded"
+	}
+	if refHashOnly {
+		for i := range res.Events {
+			res.Events[i].Ref = ""
+		}
 	}
 	return res, nil
 }
