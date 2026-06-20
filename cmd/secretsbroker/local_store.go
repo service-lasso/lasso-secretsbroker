@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,20 +33,25 @@ var (
 	errPolicyDenied       = errors.New("write-back policy denied")
 	errLockoutActive      = errors.New("lockout active")
 	errIdentityExpired    = errors.New("launch identity expired")
+	errIdentityInvalid    = errors.New("launch identity invalid")
+	errIdentityReplayed   = errors.New("launch identity replayed")
 	errSourceAuthRequired = errors.New("source authentication required")
 	errBackendDegraded    = errors.New("backend degraded")
 )
 
 type localBackend struct {
-	storePath      string
-	auditPath      string
-	eventPath      string
-	masterKey      string
-	auditHashChain bool
-	sources        sourceConfigFile
-	now            func() time.Time
-	lockouts       *lockoutStore
-	campaigns      map[string]bulkCampaignResponse
+	storePath                string
+	auditPath                string
+	eventPath                string
+	masterKey                string
+	auditHashChain           bool
+	sources                  sourceConfigFile
+	now                      func() time.Time
+	lockouts                 *lockoutStore
+	campaigns                map[string]bulkCampaignResponse
+	launchIdentitySigningKey string
+	launchLeaseMu            sync.Mutex
+	seenLaunchLeaseJTI       map[string]time.Time
 }
 
 type localStoreFile struct {
@@ -103,9 +110,35 @@ type writebackIdentity struct {
 	ExpiresAt string `json:"expiresAt"`
 }
 
+type launchIdentityLease struct {
+	Issuer            string   `json:"issuer"`
+	ServiceID         string   `json:"serviceId"`
+	WorkspaceID       string   `json:"workspaceId,omitempty"`
+	AllowedRefs       []string `json:"allowedRefs,omitempty"`
+	AllowedNamespaces []string `json:"allowedNamespaces,omitempty"`
+	AllowedOperations []string `json:"allowedOperations,omitempty"`
+	IssuedAt          string   `json:"issuedAt"`
+	ExpiresAt         string   `json:"expiresAt"`
+	JTI               string   `json:"jti"`
+	Signature         string   `json:"signature"`
+}
+
+type launchIdentityLeasePayload struct {
+	Issuer            string   `json:"issuer"`
+	ServiceID         string   `json:"serviceId"`
+	WorkspaceID       string   `json:"workspaceId,omitempty"`
+	AllowedRefs       []string `json:"allowedRefs,omitempty"`
+	AllowedNamespaces []string `json:"allowedNamespaces,omitempty"`
+	AllowedOperations []string `json:"allowedOperations,omitempty"`
+	IssuedAt          string   `json:"issuedAt"`
+	ExpiresAt         string   `json:"expiresAt"`
+	JTI               string   `json:"jti"`
+}
+
 type generatedSecretCaptureRequest struct {
 	RequestID          string                `json:"requestId"`
 	Identity           writebackIdentity     `json:"identity"`
+	IdentityLease      *launchIdentityLease  `json:"identityLease,omitempty"`
 	Policy             writebackPolicy       `json:"policy"`
 	Secrets            *serviceSecretsPolicy `json:"secrets,omitempty"`
 	Operation          string                `json:"operation"`
@@ -138,12 +171,13 @@ type generatedSecretCaptureResponse struct {
 }
 
 type resolveRequest struct {
-	RequestID   string                `json:"requestId"`
-	WorkspaceID string                `json:"workspaceId"`
-	ServiceID   string                `json:"serviceId"`
-	Purpose     string                `json:"purpose"`
-	Secrets     *serviceSecretsPolicy `json:"secrets,omitempty"`
-	Refs        []string              `json:"refs"`
+	RequestID     string                `json:"requestId"`
+	WorkspaceID   string                `json:"workspaceId"`
+	ServiceID     string                `json:"serviceId"`
+	IdentityLease *launchIdentityLease  `json:"identityLease,omitempty"`
+	Purpose       string                `json:"purpose"`
+	Secrets       *serviceSecretsPolicy `json:"secrets,omitempty"`
+	Refs          []string              `json:"refs"`
 }
 
 type resolveResponse struct {
@@ -183,7 +217,7 @@ type auditEvent struct {
 }
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
-	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}}
+	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}, seenLaunchLeaseJTI: map[string]time.Time{}}
 	backend.lockouts = newLockoutStore(func() time.Time {
 		if backend.now == nil {
 			return time.Now().UTC()
@@ -308,6 +342,216 @@ func operationAllowed(operation string, allowed []string) bool {
 		}
 	}
 	return false
+}
+
+func signLaunchIdentityLease(lease launchIdentityLease, key string) (launchIdentityLease, error) {
+	input, err := launchIdentitySignatureInput(lease)
+	if err != nil {
+		return lease, err
+	}
+	mac := hmac.New(sha256.New, []byte(key))
+	_, _ = mac.Write(input)
+	lease.Signature = "hmac-sha256:" + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return lease, nil
+}
+
+func launchIdentitySignatureInput(lease launchIdentityLease) ([]byte, error) {
+	payload := launchIdentityLeasePayload{
+		Issuer:            strings.TrimSpace(lease.Issuer),
+		ServiceID:         strings.TrimSpace(lease.ServiceID),
+		WorkspaceID:       strings.TrimSpace(lease.WorkspaceID),
+		AllowedRefs:       safeList(lease.AllowedRefs),
+		AllowedNamespaces: safeList(lease.AllowedNamespaces),
+		AllowedOperations: safeList(lease.AllowedOperations),
+		IssuedAt:          strings.TrimSpace(lease.IssuedAt),
+		ExpiresAt:         strings.TrimSpace(lease.ExpiresAt),
+		JTI:               strings.TrimSpace(lease.JTI),
+	}
+	return json.Marshal(payload)
+}
+
+func (b *localBackend) authorizeWritebackLaunchLease(req *generatedSecretCaptureRequest, signingKey string) error {
+	if req == nil {
+		return errIdentityInvalid
+	}
+	operation := normalizeWritebackOperation(req.Operation)
+	namespace := strings.Trim(strings.TrimSpace(req.Namespace), "/")
+	ref := strings.Trim(strings.TrimSpace(req.Ref), "/")
+	fullRef := strings.Trim(namespace+"/"+ref, "/")
+	if err := b.verifyLaunchIdentityLease(req.IdentityLease, signingKey, strings.TrimSpace(req.Identity.ServiceID), "", operation, []string{fullRef}, []string{namespace}); err != nil {
+		_ = b.audit("launch_identity", fullRef, launchIdentityOutcome(err), strings.TrimSpace(req.Identity.ServiceID), req.RequestID)
+		return err
+	}
+	req.Identity.ServiceID = strings.TrimSpace(req.IdentityLease.ServiceID)
+	req.Identity.ExpiresAt = strings.TrimSpace(req.IdentityLease.ExpiresAt)
+	if len(req.Policy.AllowedNamespaces) == 0 && len(req.IdentityLease.AllowedNamespaces) > 0 {
+		req.Policy.AllowedNamespaces = safeList(req.IdentityLease.AllowedNamespaces)
+	}
+	if len(req.Policy.AllowedOperations) == 0 && len(req.IdentityLease.AllowedOperations) > 0 {
+		req.Policy.AllowedOperations = safeList(req.IdentityLease.AllowedOperations)
+	}
+	_ = b.audit("launch_identity", fullRef, "allowed", req.Identity.ServiceID, req.RequestID)
+	return nil
+}
+
+func (b *localBackend) authorizeResolveLaunchLease(req *resolveRequest, signingKey string) error {
+	if req == nil {
+		return errIdentityInvalid
+	}
+	if err := b.verifyLaunchIdentityLease(req.IdentityLease, signingKey, strings.TrimSpace(req.ServiceID), strings.TrimSpace(req.WorkspaceID), "resolve", req.Refs, nil); err != nil {
+		_ = b.audit("launch_identity", "", launchIdentityOutcome(err), strings.TrimSpace(req.ServiceID), req.RequestID)
+		return err
+	}
+	req.ServiceID = strings.TrimSpace(req.IdentityLease.ServiceID)
+	if strings.TrimSpace(req.WorkspaceID) == "" {
+		req.WorkspaceID = strings.TrimSpace(req.IdentityLease.WorkspaceID)
+	}
+	if req.Secrets == nil && len(req.IdentityLease.AllowedRefs) > 0 {
+		req.Secrets = &serviceSecretsPolicy{Resolve: safeList(req.IdentityLease.AllowedRefs)}
+	}
+	_ = b.audit("launch_identity", "", "allowed", req.ServiceID, req.RequestID)
+	return nil
+}
+
+func (b *localBackend) verifyLaunchIdentityLease(lease *launchIdentityLease, signingKey, expectedServiceID, expectedWorkspaceID, operation string, refs, namespaces []string) error {
+	if lease == nil || strings.TrimSpace(signingKey) == "" || strings.TrimSpace(lease.Signature) == "" || strings.TrimSpace(lease.ServiceID) == "" || strings.TrimSpace(lease.Issuer) == "" || strings.TrimSpace(lease.JTI) == "" {
+		return errIdentityInvalid
+	}
+	if expectedServiceID != "" && strings.TrimSpace(lease.ServiceID) != expectedServiceID {
+		return errPolicyDenied
+	}
+	if expectedWorkspaceID != "" && strings.TrimSpace(lease.WorkspaceID) != "" && strings.TrimSpace(lease.WorkspaceID) != expectedWorkspaceID {
+		return errPolicyDenied
+	}
+	now := b.now()
+	issuedAt, err := time.Parse(time.RFC3339, strings.TrimSpace(lease.IssuedAt))
+	if err != nil || issuedAt.After(now.Add(5*time.Minute)) {
+		return errIdentityInvalid
+	}
+	expiresAt, err := time.Parse(time.RFC3339, strings.TrimSpace(lease.ExpiresAt))
+	if err != nil {
+		return errIdentityInvalid
+	}
+	if !expiresAt.After(now) {
+		return errIdentityExpired
+	}
+	if !launchLeaseOperationAllowed(operation, lease.AllowedOperations) {
+		return errPolicyDenied
+	}
+	if !launchLeaseRefsAllowed(refs, namespaces, lease.AllowedRefs, lease.AllowedNamespaces) {
+		return errPolicyDenied
+	}
+	input, err := launchIdentitySignatureInput(*lease)
+	if err != nil {
+		return errIdentityInvalid
+	}
+	mac := hmac.New(sha256.New, []byte(signingKey))
+	_, _ = mac.Write(input)
+	want := "hmac-sha256:" + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	if !constantTimeTokenEqual(lease.Signature, want) {
+		return errIdentityInvalid
+	}
+	if !b.rememberLaunchLeaseJTI(*lease, expiresAt, now) {
+		return errIdentityReplayed
+	}
+	return nil
+}
+
+func launchLeaseOperationAllowed(operation string, allowed []string) bool {
+	operation = strings.TrimSpace(operation)
+	for _, candidate := range allowed {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "*" || candidate == operation || (operation != "resolve" && candidate == "writeback") {
+			return true
+		}
+	}
+	return false
+}
+
+func launchLeaseRefsAllowed(refs, namespaces, allowedRefs, allowedNamespaces []string) bool {
+	allowedRefs = safeList(allowedRefs)
+	allowedNamespaces = safeList(allowedNamespaces)
+	if len(allowedRefs) == 0 && len(allowedNamespaces) == 0 {
+		return false
+	}
+	for _, ref := range refs {
+		ref = strings.Trim(strings.TrimSpace(ref), "/")
+		if ref == "" || !validSecretRef(ref) {
+			continue
+		}
+		if !launchLeaseRefAllowed(ref, allowedRefs, allowedNamespaces) {
+			return false
+		}
+	}
+	for _, namespace := range namespaces {
+		namespace = strings.Trim(strings.TrimSpace(namespace), "/")
+		if namespace == "" || !validSecretRef(namespace) {
+			continue
+		}
+		if !launchLeaseNamespaceAllowed(namespace, allowedNamespaces) {
+			return false
+		}
+	}
+	return true
+}
+
+func launchLeaseRefAllowed(ref string, allowedRefs, allowedNamespaces []string) bool {
+	for _, pattern := range allowedRefs {
+		if secretPolicyPatternMatches(ref, pattern) {
+			return true
+		}
+	}
+	for _, namespace := range allowedNamespaces {
+		namespace = strings.Trim(strings.TrimSpace(namespace), "/")
+		if namespace == "*" || ref == namespace || strings.HasPrefix(ref, namespace+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func launchLeaseNamespaceAllowed(namespace string, allowedNamespaces []string) bool {
+	for _, pattern := range allowedNamespaces {
+		if secretPolicyPatternMatches(namespace, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func (b *localBackend) rememberLaunchLeaseJTI(lease launchIdentityLease, expiresAt, now time.Time) bool {
+	if b == nil {
+		return true
+	}
+	key := strings.TrimSpace(lease.Issuer) + ":" + strings.TrimSpace(lease.JTI)
+	b.launchLeaseMu.Lock()
+	defer b.launchLeaseMu.Unlock()
+	if b.seenLaunchLeaseJTI == nil {
+		b.seenLaunchLeaseJTI = map[string]time.Time{}
+	}
+	for jti, expiry := range b.seenLaunchLeaseJTI {
+		if !expiry.After(now) {
+			delete(b.seenLaunchLeaseJTI, jti)
+		}
+	}
+	if expiry, ok := b.seenLaunchLeaseJTI[key]; ok && expiry.After(now) {
+		return false
+	}
+	b.seenLaunchLeaseJTI[key] = expiresAt
+	return true
+}
+
+func launchIdentityOutcome(err error) string {
+	switch {
+	case errors.Is(err, errIdentityExpired):
+		return "identity_expired"
+	case errors.Is(err, errIdentityReplayed):
+		return "identity_replayed"
+	case errors.Is(err, errPolicyDenied):
+		return "policy_denied"
+	default:
+		return "identity_invalid"
+	}
 }
 
 func (b *localBackend) captureGeneratedSecret(req generatedSecretCaptureRequest) (generatedSecretCaptureResponse, error) {
@@ -808,6 +1052,10 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, secur
 			writeDecodeError(w, err)
 			return
 		}
+		if err := backend.authorizeWritebackLaunchLease(&req, firstNonEmpty(backend.launchIdentitySigningKey, security.token)); err != nil {
+			writeLaunchIdentityAPIError(w, err)
+			return
+		}
 		res, err := backend.captureGeneratedSecret(req)
 		switch {
 		case err == nil:
@@ -842,6 +1090,10 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, secur
 			writeDecodeError(w, err)
 			return
 		}
+		if err := backend.authorizeResolveLaunchLease(&req, firstNonEmpty(backend.launchIdentitySigningKey, security.token)); err != nil {
+			writeLaunchIdentityAPIError(w, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, backend.resolve(req))
 	})
 }
@@ -862,4 +1114,17 @@ func writeDecodeError(w http.ResponseWriter, err error) {
 
 func writeAPIError(w http.ResponseWriter, status int, code, message, outcome, nextAction string) {
 	writeJSON(w, status, ErrorEnvelope{Error: APIError{Code: code, Message: message, Outcome: outcome, NextAction: nextAction, AffectedRefs: []string{}, AffectedServices: []string{}}})
+}
+
+func writeLaunchIdentityAPIError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, errIdentityExpired):
+		writeAPIError(w, http.StatusUnauthorized, "identity_expired", "Launch identity lease is expired.", "identity_expired", "renew_launch_identity")
+	case errors.Is(err, errIdentityReplayed):
+		writeAPIError(w, http.StatusUnauthorized, "identity_replayed", "Launch identity lease has already been used.", "identity_replayed", "renew_launch_identity")
+	case errors.Is(err, errPolicyDenied):
+		writeAPIError(w, http.StatusForbidden, "policy_denied", "Launch identity lease does not allow this request.", "policy_denied", "renew_launch_identity")
+	default:
+		writeAPIError(w, http.StatusUnauthorized, "identity_invalid", "Launch identity lease is missing or invalid.", "identity_invalid", "renew_launch_identity")
+	}
 }

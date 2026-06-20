@@ -60,8 +60,9 @@ Threats:
 - Replays launch identity after expiry.
 
 Current mitigations:
+- Resolve and write-back HTTP requests require a signed launch identity lease with service id, workspace id, allowed refs/namespaces, allowed operations, expiry, and one-time `jti`.
 - Write-back capture validates namespace, ref, operation, launch identity service id, expiry, allowed namespaces, and allowed operations before storing generated values.
-- Invalid, denied, expired, and source-auth-required write-back attempts produce typed errors and audit events without storing values.
+- Invalid, denied, expired, replayed, and source-auth-required attempts produce typed errors and audit events without storing values.
 - Secret-bearing HTTP endpoints require the local API token before request bodies are processed.
 - Request-size limits apply to write, resolve, and write-back endpoints.
 
@@ -107,12 +108,12 @@ Threats:
 - A service broadens operation or namespace in its request body.
 
 Current mitigations:
-- Write-back capture rejects missing or expired identities.
-- Write-back capture requires the requested namespace and operation to be allowed by the provided policy.
-- Denied/expired attempts are audited with metadata only.
+- Resolve and write-back HTTP requests reject missing, tampered, expired, replayed, or out-of-scope signed launch identity leases before secret access.
+- Write-back capture requires the requested namespace and operation to be allowed by both the signed lease scope and the provided policy.
+- Denied/expired/replayed attempts are audited with metadata only.
 
 Residual risk:
-- The current request shape is foundation-level and does not yet include signed/issuer-verified launch identities. A follow-up policy/identity issue should add signed scoped leases.
+- Bootstrap mode can fall back to the local API token as the HMAC key when `SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY` is not configured. Production deployments should configure a distinct launcher-owned signing key.
 
 ### Backup exfiltration
 
@@ -139,7 +140,6 @@ Residual risk:
 
 These are intentionally out of scope for this bounded slice unless already tracked elsewhere:
 
-1. Add signed, scoped launch identity leases for resolve/write-back requests: [#29](https://github.com/service-lasso/lasso-secretsbroker/issues/29).
-2. Add per-service/ref resolve authorization policy enforcement: [#30](https://github.com/service-lasso/lasso-secretsbroker/issues/30).
-3. Replace production loopback HTTP with OS-authenticated named pipe / Unix socket transport: [#31](https://github.com/service-lasso/lasso-secretsbroker/issues/31).
-4. Add source config file permission checks and audit tamper-evidence: [#32](https://github.com/service-lasso/lasso-secretsbroker/issues/32).
+1. Add per-service/ref resolve authorization policy enforcement: [#30](https://github.com/service-lasso/lasso-secretsbroker/issues/30).
+2. Replace production loopback HTTP with OS-authenticated named pipe / Unix socket transport: [#31](https://github.com/service-lasso/lasso-secretsbroker/issues/31).
+3. Add source config file permission checks and audit tamper-evidence: [#32](https://github.com/service-lasso/lasso-secretsbroker/issues/32).

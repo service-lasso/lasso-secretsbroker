@@ -41,7 +41,9 @@ var typedOutcomes = []string{
 	"missing_ref",
 	"invalid_ref",
 	"source_unavailable",
+	"identity_invalid",
 	"identity_expired",
+	"identity_replayed",
 	"lockout_active",
 	"cleared",
 	"not_found",
@@ -280,6 +282,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"file-source",
 			"exec-source",
 			"service-json-secret-policy",
+			"signed-launch-identity-leases",
 			"write-back-policy",
 			"generated-secret-capture",
 			"encrypted-backup-restore",
@@ -321,6 +324,7 @@ func serve(args []string) error {
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "local development master key; empty means locked")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
 	apiToken := fs.String("api-token", getenvDefault("SECRETSBROKER_API_TOKEN", ""), "local API token for secret-bearing endpoints")
+	launchIdentitySigningKey := fs.String("launch-identity-signing-key", getenvDefault("SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY", ""), "HMAC key for signed scoped launch identity leases; defaults to local API token in bootstrap mode")
 	sourcesPath := fs.String("sources", getenvDefault("SECRETSBROKER_SOURCES_PATH", ""), "source adapter config path")
 	affectedRefs := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_REFS", "")))
 	affectedServices := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_SERVICES", "")))
@@ -350,6 +354,7 @@ func serve(args []string) error {
 	backend := newLocalBackend(*storePath, *auditPath, material.Value)
 	backend.eventPath = eventsPathValue
 	backend.auditHashChain = *auditHashChain
+	backend.launchIdentitySigningKey = strings.TrimSpace(*launchIdentitySigningKey)
 	sources, err := loadSourceConfig(*sourcesPath)
 	if err != nil {
 		return err

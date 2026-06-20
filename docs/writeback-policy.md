@@ -2,7 +2,7 @@
 
 _Status: initial bounded contract implemented for issue #9._
 
-`@secretsbroker` accepts generated or refreshed secrets through `POST /v1/writeback` only when the caller presents an explicit launch identity and write-back policy.
+`@secretsbroker` accepts generated or refreshed secrets through `POST /v1/writeback` only when the caller presents a signed launch identity lease and write-back policy.
 
 ## Endpoint
 
@@ -20,6 +20,18 @@ Request shape:
   "identity": {
     "serviceId": "api-service",
     "expiresAt": "2026-05-07T00:05:00Z"
+  },
+  "identityLease": {
+    "issuer": "service-lasso-local-launcher",
+    "serviceId": "api-service",
+    "workspaceId": "workspace-local",
+    "allowedRefs": ["services/api-service/*"],
+    "allowedNamespaces": ["services/api-service"],
+    "allowedOperations": ["create", "update", "rotate"],
+    "issuedAt": "2026-05-07T00:00:00Z",
+    "expiresAt": "2026-05-07T00:05:00Z",
+    "jti": "01J...",
+    "signature": "hmac-sha256:..."
   },
   "policy": {
     "allowedNamespaces": ["services/api-service"],
@@ -59,16 +71,18 @@ Response shape:
 }
 ```
 
-## Policy model
+## Policy and identity model
 
-- `identity.serviceId` scopes ownership and audit attribution.
-- `identity.expiresAt` is optional in local bootstrap mode, but when present it must be a future RFC3339 timestamp.
+- `identityLease` is required on the HTTP endpoint and is verified before policy checks or store access.
+- The lease signature covers issuer, service id, workspace id, allowed refs/namespaces, allowed operations, issued-at, expiry, and `jti`.
+- `identity.serviceId` is retained for compatibility and audit attribution, but it must match the signed lease service id.
+- `identity.expiresAt` is retained for compatibility, but the signed lease expiry is the authority.
 - `policy.allowedNamespaces` must include the requested namespace, or `*`.
 - `policy.allowedOperations` must include the requested operation.
 - Supported operations are `create`, `update`, `rotate`, and `delete`.
 - The stored secret ref is `namespace/ref`; the payload is encrypted in the local store.
 
-This first slice keeps policy explicit in the capture request so Service Lasso can pass a scoped launch-time grant. Later policy storage can move the grants into durable broker-owned config without changing the outcome vocabulary.
+The signed lease is documented in `docs/launch-identity-leases.md`. This slice keeps policy explicit in the capture request so Service Lasso can pass a scoped launch-time grant. Later policy storage can move the grants into durable broker-owned config without changing the outcome vocabulary.
 
 ## Outcomes
 
@@ -76,7 +90,9 @@ This first slice keeps policy explicit in the capture request so Service Lasso c
 
 - `ready`: capture succeeded.
 - `invalid_ref`: namespace/ref/operation shape is malformed.
+- `identity_invalid`: signed launch identity lease is missing, malformed, unsigned, or tampered.
 - `identity_expired`: launch identity is missing, invalid, or expired.
+- `identity_replayed`: launch identity lease `jti` was already used.
 - `policy_denied`: namespace or operation is outside the supplied grant.
 - `locked`: local broker store is locked.
 - `source_auth_required`: source/backend authentication must be reconnected before write-back.

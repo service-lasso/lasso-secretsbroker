@@ -152,6 +152,17 @@ Request:
   "requestId": "01HV...",
   "workspaceId": "workspace-local",
   "serviceId": "openclaw",
+  "identityLease": {
+    "issuer": "service-lasso-local-launcher",
+    "serviceId": "openclaw",
+    "workspaceId": "workspace-local",
+    "allowedRefs": ["openclaw/*"],
+    "allowedOperations": ["resolve"],
+    "issuedAt": "2026-05-07T00:00:00Z",
+    "expiresAt": "2026-05-07T00:05:00Z",
+    "jti": "01J...",
+    "signature": "hmac-sha256:..."
+  },
   "purpose": "service-start",
   "refs": [
     "openclaw/anthropic/api_key",
@@ -188,6 +199,7 @@ Response:
 
 Rules:
 
+- HTTP resolve requests require a signed launch identity lease as documented in `docs/launch-identity-leases.md`.
 - Batch response reports per-ref outcomes.
 - Missing refs use `missing_ref`, not generic failure.
 - Invalid refs use `invalid_ref`.

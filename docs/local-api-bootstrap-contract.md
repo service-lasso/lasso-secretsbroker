@@ -55,7 +55,9 @@ Canonical outcome strings:
 - `missing_ref`
 - `invalid_ref`
 - `source_unavailable`
+- `identity_invalid`
 - `identity_expired`
+- `identity_replayed`
 
 ## Endpoints
 
@@ -174,6 +176,7 @@ Example response:
     "capabilities",
     "local-encrypted-store",
     "batched-resolve",
+    "signed-launch-identity-leases",
     "typed-errors",
     "audit-redaction",
     "audited-lockout-clear",
@@ -194,7 +197,9 @@ Example response:
     "missing_ref",
     "invalid_ref",
     "source_unavailable",
-    "identity_expired"
+    "identity_invalid",
+    "identity_expired",
+    "identity_replayed"
   ]
 }
 ```
