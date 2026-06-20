@@ -373,6 +373,47 @@ func TestLockedBackendResolveDoesNotRevealValues(t *testing.T) {
 	}
 }
 
+func TestAuditHashChainCanBeEnabledAndVerified(t *testing.T) {
+	backend := testBackend(t)
+	backend.auditHashChain = true
+	if err := backend.audit("write", "services/api/runtime/API_TOKEN", "ready", "@operator", "req-chain-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.audit("resolve", "services/api/runtime/API_TOKEN", "ready", "api", "req-chain-2"); err != nil {
+		t.Fatal(err)
+	}
+
+	exported, err := exportAuditEvents(backend.auditPath, "", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exported.Outcome != "ready" || exported.Chain.Status != "verified" || exported.Chain.Verified != 2 || exported.Chain.Failed != 0 {
+		t.Fatalf("chain verification = %#v", exported)
+	}
+	if exported.Events[0].PreviousHash != auditChainGenesisHash || exported.Events[0].EventHash == "" || exported.Events[0].ChainStatus != "verified" {
+		t.Fatalf("first chained event = %#v", exported.Events[0])
+	}
+	if exported.Events[1].PreviousHash != exported.Events[0].EventHash || exported.Events[1].EventHash == "" || exported.Events[1].ChainStatus != "verified" {
+		t.Fatalf("second chained event = %#v", exported.Events[1])
+	}
+
+	bytes, err := os.ReadFile(backend.auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := strings.Replace(string(bytes), `"outcome":"ready"`, `"outcome":"degraded"`, 1)
+	if err := os.WriteFile(backend.auditPath, []byte(tampered), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tamperedExport, err := exportAuditEvents(backend.auditPath, "", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tamperedExport.Outcome != "degraded" || tamperedExport.Chain.Status != "invalid" || tamperedExport.Chain.Failed == 0 {
+		t.Fatalf("tampered chain verification = %#v", tamperedExport)
+	}
+}
+
 func TestValidSecretRef(t *testing.T) {
 	valid := []string{"openclaw/anthropic/api_key", "workspace-local/github/token"}
 	invalid := []string{"", "/leading", "trailing/", "has space/ref", "a//b", "a/../b"}

@@ -138,6 +138,10 @@ secretsbroker admin audit export --audit .\data\secretsbroker-audit.jsonl --oper
 ```
 
 Audit export returns operation/ref/outcome/timestamp/request metadata only. Audit events must not contain raw values.
+When audit hash chaining is enabled for writers with `--audit-hash-chain` or
+`SECRETSBROKER_AUDIT_HASH_CHAIN=1`, export verifies `previousHash`/`eventHash` metadata and reports
+the chain status. Invalid chain metadata returns a degraded export outcome and `inspect_audit_chain`
+guidance without exposing secret values.
 
 ### Operational events
 

@@ -101,7 +101,9 @@ Implemented first slice:
 
 - Local audit JSONL records are normalized with `requestId`, `operation`, `serviceId`, `actorKind`, `ref`, `refHash`, `providerId` where applicable, `outcome`, `reasonCode`, and `auditStatus`.
 - Audit fields are trimmed, control characters are stripped, and long metadata fields are bounded before persistence.
+- Optional tamper-evident local JSONL hash chaining can be enabled with `--audit-hash-chain` or `SECRETSBROKER_AUDIT_HASH_CHAIN=1`. Chained records include `previousHash`, `eventHash`, and `chainStatus` metadata only; the hash is over the normalized metadata event and never over plaintext secret values.
 - `secretsbroker admin audit export --ref-hash-only` omits raw refs from exported events while preserving `refHash` for correlation.
+- `secretsbroker admin audit export` verifies hash-chain metadata when present and reports `chain.status` as `verified`, `partial`, `invalid`, or `not_enabled`. An invalid chain returns `outcome: "degraded"` with `nextAction: "inspect_audit_chain"`.
 - Tests cover metadata-only audit export and prove secret payload values/master-key material are not serialized.
 
 ## Telemetry model

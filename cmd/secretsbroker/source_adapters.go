@@ -19,7 +19,8 @@ import (
 )
 
 type sourceConfigFile struct {
-	Sources []sourceConfig `json:"sources"`
+	Sources  []sourceConfig       `json:"sources"`
+	Security sourceConfigSecurity `json:"-"`
 }
 
 type sourceConfig struct {
@@ -65,11 +66,12 @@ type sourceResolveResult struct {
 
 func loadSourceConfig(path string) (sourceConfigFile, error) {
 	if strings.TrimSpace(path) == "" {
-		return sourceConfigFile{}, nil
+		return sourceConfigFile{Security: defaultSourceConfigSecurity()}, nil
 	}
+	security := inspectSourceConfigSecurity(path)
 	bytes, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return sourceConfigFile{}, nil
+		return sourceConfigFile{Security: security}, nil
 	}
 	if err != nil {
 		return sourceConfigFile{}, err
@@ -78,6 +80,7 @@ func loadSourceConfig(path string) (sourceConfigFile, error) {
 	if err := json.Unmarshal(bytes, &cfg); err != nil {
 		return sourceConfigFile{}, err
 	}
+	cfg.Security = security
 	return cfg, nil
 }
 

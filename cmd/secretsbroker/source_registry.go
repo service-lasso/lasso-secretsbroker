@@ -7,7 +7,8 @@ import (
 )
 
 type SourceRegistry struct {
-	Sources []SourceStatus `json:"sources"`
+	SourceConfig sourceConfigSecurity `json:"sourceConfig"`
+	Sources      []SourceStatus       `json:"sources"`
 }
 
 type SourceStatus struct {
@@ -30,9 +31,10 @@ type SourceStatus struct {
 }
 
 type sourceStatusResponse struct {
-	ServiceID  string         `json:"serviceId"`
-	APIVersion string         `json:"apiVersion"`
-	Sources    []SourceStatus `json:"sources"`
+	ServiceID    string               `json:"serviceId"`
+	APIVersion   string               `json:"apiVersion"`
+	SourceConfig sourceConfigSecurity `json:"sourceConfig"`
+	Sources      []SourceStatus       `json:"sources"`
 }
 
 func defaultSourceRegistry(backend *localBackend) SourceRegistry {
@@ -88,7 +90,11 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 			sources = append(sources, status)
 		}
 	}
-	return SourceRegistry{Sources: sources}
+	configSecurity := defaultSourceConfigSecurity()
+	if backend != nil {
+		configSecurity = normalizeSourceConfigSecurity(backend.sources.Security)
+	}
+	return SourceRegistry{SourceConfig: configSecurity, Sources: sources}
 }
 
 func sourceRegistryLifecycle(source sourceConfig) SourceLifecycle {
@@ -211,6 +217,6 @@ func registerSourceRegistryHandlers(mux *http.ServeMux, backend *localBackend) {
 			return
 		}
 		registry := defaultSourceRegistry(backend)
-		writeJSON(w, http.StatusOK, sourceStatusResponse{ServiceID: serviceID, APIVersion: apiVersion, Sources: registry.Sources})
+		writeJSON(w, http.StatusOK, sourceStatusResponse{ServiceID: serviceID, APIVersion: apiVersion, SourceConfig: registry.SourceConfig, Sources: registry.Sources})
 	})
 }

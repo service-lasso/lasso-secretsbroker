@@ -137,6 +137,14 @@ Outcomes:
 
 `GET /v1/sources/status` includes configured env/file/exec sources without exposing values.
 
+When a source config path is configured, the response also includes a metadata-only `sourceConfig`
+summary. The summary reports whether the config was checked, the platform, a path hash, the observed
+permission mode where meaningful, and safe lifecycle fields such as `state`, `outcome`, and
+`nextAction`. It never includes the raw config path, source tokens, provider credentials, mapped file
+contents, or resolved values. POSIX-style broad group/other permissions are reported as degraded with
+`nextAction: "restrict_source_config_permissions"`; Windows ACLs are reported as not verified with
+`nextAction: "review_os_acl"` because mode bits are not a complete ACL proof there.
+
 ## Audit
 
 Each source resolve attempt is audited by ref/source/outcome without secret values.

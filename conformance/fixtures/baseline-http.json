@@ -131,6 +131,12 @@
       "expectedResponse": {
         "serviceId": "@secretsbroker",
         "apiVersion": "secretsbroker.local/v1",
+        "sourceConfig": {
+          "configured": false,
+          "checked": false,
+          "state": "not_configured",
+          "outcome": "not_configured"
+        },
         "sources": [
           {
             "sourceId": "disabled-source",

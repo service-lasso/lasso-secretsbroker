@@ -36,14 +36,15 @@ var (
 )
 
 type localBackend struct {
-	storePath string
-	auditPath string
-	eventPath string
-	masterKey string
-	sources   sourceConfigFile
-	now       func() time.Time
-	lockouts  *lockoutStore
-	campaigns map[string]bulkCampaignResponse
+	storePath      string
+	auditPath      string
+	eventPath      string
+	masterKey      string
+	auditHashChain bool
+	sources        sourceConfigFile
+	now            func() time.Time
+	lockouts       *lockoutStore
+	campaigns      map[string]bulkCampaignResponse
 }
 
 type localStoreFile struct {
@@ -161,21 +162,24 @@ type resolveResult struct {
 }
 
 type auditEvent struct {
-	TS          time.Time `json:"ts"`
-	RequestID   string    `json:"requestId,omitempty"`
-	Operation   string    `json:"operation"`
-	ServiceID   string    `json:"serviceId,omitempty"`
-	ActorKind   string    `json:"actorKind"`
-	Ref         string    `json:"ref,omitempty"`
-	RefHash     string    `json:"refHash,omitempty"`
-	ProviderID  string    `json:"providerId,omitempty"`
-	SourceID    string    `json:"sourceId,omitempty"`
-	PolicyID    string    `json:"policyId,omitempty"`
-	KeyID       string    `json:"keyId,omitempty"`
-	Outcome     string    `json:"outcome"`
-	ReasonCode  string    `json:"reasonCode"`
-	State       string    `json:"state,omitempty"`
-	AuditStatus string    `json:"auditStatus"`
+	TS           time.Time `json:"ts"`
+	RequestID    string    `json:"requestId,omitempty"`
+	Operation    string    `json:"operation"`
+	ServiceID    string    `json:"serviceId,omitempty"`
+	ActorKind    string    `json:"actorKind"`
+	Ref          string    `json:"ref,omitempty"`
+	RefHash      string    `json:"refHash,omitempty"`
+	ProviderID   string    `json:"providerId,omitempty"`
+	SourceID     string    `json:"sourceId,omitempty"`
+	PolicyID     string    `json:"policyId,omitempty"`
+	KeyID        string    `json:"keyId,omitempty"`
+	Outcome      string    `json:"outcome"`
+	ReasonCode   string    `json:"reasonCode"`
+	State        string    `json:"state,omitempty"`
+	AuditStatus  string    `json:"auditStatus"`
+	PreviousHash string    `json:"previousHash,omitempty"`
+	EventHash    string    `json:"eventHash,omitempty"`
+	ChainStatus  string    `json:"chainStatus,omitempty"`
 }
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
@@ -616,6 +620,9 @@ func (b *localBackend) writeAuditEvent(event auditEvent) error {
 		return nil
 	}
 	event = normalizeAuditEvent(event)
+	if b.auditHashChain {
+		event = b.prepareChainedAuditEvent(event)
+	}
 	if err := os.MkdirAll(filepath.Dir(b.auditPath), 0o700); err != nil {
 		return err
 	}
@@ -644,6 +651,9 @@ func normalizeAuditEvent(event auditEvent) auditEvent {
 	event.ReasonCode = scrubAuditField(event.ReasonCode)
 	event.ActorKind = scrubAuditField(event.ActorKind)
 	event.AuditStatus = scrubAuditField(event.AuditStatus)
+	event.PreviousHash = scrubAuditField(event.PreviousHash)
+	event.EventHash = scrubAuditField(event.EventHash)
+	event.ChainStatus = scrubAuditField(event.ChainStatus)
 	if event.Operation == "" {
 		event.Operation = "unknown"
 	}
