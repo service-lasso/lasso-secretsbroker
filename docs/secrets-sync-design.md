@@ -155,6 +155,22 @@ Request:
 }
 ```
 
+The implementation also accepts an optional metadata-only `destination` object for headless/local dry-run callers that do not yet have a persisted destination registry. This object may include destination id, kind, auth model, credential ref, name template, granularity, collision/delete policy, audit status, and GitHub scope metadata. It must not contain private keys, tokens, REST request bodies, encrypted secret payloads, or plaintext secret values. Any plaintext `credentialValue` input is rejected and is not echoed.
+
+Headless CLI equivalent:
+
+```powershell
+secretsbroker admin sync dry-run `
+  --ref services/api/runtime/API_TOKEN `
+  --policy-ref services/api/* `
+  --destination-id github-actions-service-lasso `
+  --owner service-lasso `
+  --repository service-lasso `
+  --secrets-location environment `
+  --environment demo `
+  --credential-ref providers/github/service-lasso-sync/app
+```
+
 Response:
 
 ```json
