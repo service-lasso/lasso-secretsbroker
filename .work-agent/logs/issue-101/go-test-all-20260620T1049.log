@@ -1,0 +1,10 @@
+# go test ./...
+--- FAIL: TestOnePasswordCLIAdapterNormalizesFailuresWithoutLeakingOutput (12.41s)
+    --- FAIL: TestOnePasswordCLIAdapterNormalizesFailuresWithoutLeakingOutput/missing_item (5.06s)
+        source_adapters_test.go:317: 1Password CLI result = main.sourceResolveResult{Found:false, Value:"", SourceID:"", Outcome:"source_unavailable", Message:"1Password CLI timed out.", Lifecycle:main.SourceLifecycle{State:"", Outcome:"", NextAction:"", Retryable:false, RetryAfterMs:0}}
+    --- FAIL: TestOnePasswordCLIAdapterNormalizesFailuresWithoutLeakingOutput/missing_field (7.24s)
+        source_adapters_test.go:317: 1Password CLI result = main.sourceResolveResult{Found:false, Value:"", SourceID:"", Outcome:"source_unavailable", Message:"1Password CLI timed out.", Lifecycle:main.SourceLifecycle{State:"", Outcome:"", NextAction:"", Retryable:false, RetryAfterMs:0}}
+FAIL
+FAIL	github.com/service-lasso/lasso-secretsbroker/cmd/secretsbroker	16.098s
+ok  	github.com/service-lasso/lasso-secretsbroker/cmd/secretsbroker-resolve	(cached)
+FAIL

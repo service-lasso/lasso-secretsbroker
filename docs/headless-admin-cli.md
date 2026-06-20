@@ -96,6 +96,23 @@ secretsbroker admin migration dry-run `
 
 Migration dry-run is metadata-only. Apply requires `--confirm`, `--operation-id`, and `--reason` and still does not print raw values.
 
+### Secrets Sync dry-run
+
+```powershell
+secretsbroker admin sync dry-run `
+  --ref services/@serviceadmin/runtime/API_TOKEN `
+  --policy-ref services/@serviceadmin/* `
+  --destination-id github-actions-service-lasso `
+  --owner service-lasso `
+  --repository service-lasso `
+  --secrets-location environment `
+  --environment demo `
+  --credential-ref providers/github/service-lasso-sync/app `
+  --operation-id sync-plan-2026-06-20-a
+```
+
+Secrets Sync dry-run is metadata-only and does not write to GitHub or any other destination. It returns destination scope/status metadata, per-ref policy/capability/audit/drift/delete-risk outcomes, idempotency keys, and next action guidance. Plaintext destination credentials are rejected; use `--credential-ref` only.
+
 ### Recovery policy metadata
 
 ```powershell

@@ -61,6 +61,8 @@ func executeAdmin(args []string, out io.Writer) error {
 		return runAdminProviders(args[1:], out)
 	case "migration":
 		return runAdminMigration(args[1:], out)
+	case "sync":
+		return runAdminSync(args[1:], out)
 	case "recovery":
 		return runAdminRecovery(args[1:], out)
 	case "audit":
@@ -242,6 +244,82 @@ func runAdminMigration(args []string, out io.Writer) error {
 	default:
 		return fmt.Errorf("unknown admin migration command %q", sub)
 	}
+}
+
+func runAdminSync(args []string, out io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("unknown admin sync command %q", "")
+	}
+	if args[0] != "dry-run" {
+		return fmt.Errorf("unknown admin sync command %q", args[0])
+	}
+	fs, opts := newAdminFlagSet("admin sync dry-run")
+	requestID := fs.String("request-id", "", "request id")
+	service := fs.String("service-id", "@operator", "requesting service/operator id")
+	operationID := fs.String("operation-id", "", "operation id")
+	destinationID := fs.String("destination-id", "", "sync destination id")
+	destinationKind := fs.String("destination-kind", "github-actions", "sync destination kind")
+	owner := fs.String("owner", "", "GitHub owner or organization")
+	repository := fs.String("repository", "", "GitHub repository")
+	environment := fs.String("environment", "", "GitHub environment")
+	secretsLocation := fs.String("secrets-location", "repository", "GitHub secrets location: repository, environment, or organization")
+	visibility := fs.String("visibility", "", "GitHub organization secret visibility metadata")
+	enterpriseURL := fs.String("enterprise-url", "", "GitHub Enterprise URL metadata")
+	authModel := fs.String("auth-model", "github-app", "destination auth model")
+	credentialRef := fs.String("credential-ref", "", "destination credential ref/handle")
+	credentialValue := fs.String("credential-value", "", "plaintext credential value; rejected")
+	nameTemplate := fs.String("name-template", "SERVICE_LASSO_{{ refBase | upper }}", "destination secret name template")
+	collisionPolicy := fs.String("collision-policy", "fail_if_unmanaged", "destination collision policy")
+	deletePolicy := fs.String("delete-policy", "delete_managed_destination_secret", "destination delete behavior")
+	reason := fs.String("reason", "", "audit reason")
+	refs := multiFlag{}
+	policyRefs := multiFlag{}
+	selectedRepos := multiFlag{}
+	fs.Var(&refs, "ref", "secret ref; repeatable")
+	fs.Var(&policyRefs, "policy-ref", "allowed management policy ref/pattern; repeatable")
+	fs.Var(&selectedRepos, "selected-repository", "selected repository metadata for organization secrets; repeatable")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	backend, _, err := backendFromAdminOptions(opts)
+	if err != nil {
+		return err
+	}
+	req := syncDryRunRequest{
+		RequestID:       *requestID,
+		ServiceID:       *service,
+		OperationID:     *operationID,
+		Refs:            []string(refs),
+		DestinationID:   *destinationID,
+		Reason:          *reason,
+		CredentialValue: *credentialValue,
+		Secrets:         &serviceSecretsPolicy{Manage: []string(policyRefs)},
+		Destination: syncDestinationConfig{
+			DestinationID:   *destinationID,
+			Kind:            *destinationKind,
+			Enabled:         true,
+			CredentialRef:   *credentialRef,
+			AuthModel:       *authModel,
+			NameTemplate:    *nameTemplate,
+			CollisionPolicy: *collisionPolicy,
+			DeletePolicy:    *deletePolicy,
+			Scope: syncDestinationScope{
+				Owner:                *owner,
+				Repository:           *repository,
+				Environment:          *environment,
+				SecretsLocation:      *secretsLocation,
+				Visibility:           *visibility,
+				SelectedRepositories: []string(selectedRepos),
+				EnterpriseURL:        *enterpriseURL,
+			},
+		},
+	}
+	res, err := backend.syncDryRun(req)
+	if err != nil {
+		_ = encodeAdminJSON(out, res)
+		return err
+	}
+	return encodeAdminJSON(out, res)
 }
 
 func runAdminRecovery(args []string, out io.Writer) error {

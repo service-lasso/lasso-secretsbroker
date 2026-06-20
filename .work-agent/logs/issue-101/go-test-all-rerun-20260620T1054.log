@@ -1,0 +1,3 @@
+# go test ./... (rerun)
+ok  	github.com/service-lasso/lasso-secretsbroker/cmd/secretsbroker	3.186s
+ok  	github.com/service-lasso/lasso-secretsbroker/cmd/secretsbroker-resolve	(cached)

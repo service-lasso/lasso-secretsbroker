@@ -1,0 +1,4 @@
+# powershell -File scripts/test.ps1
+ok  	github.com/service-lasso/lasso-secretsbroker/cmd/secretsbroker	(cached)
+ok  	github.com/service-lasso/lasso-secretsbroker/cmd/secretsbroker-resolve	(cached)
+Secrets Broker tests passed (Windows)
