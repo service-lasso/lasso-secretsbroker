@@ -232,7 +232,7 @@ Preferred transports:
 Planned session model:
 
 - short-lived scoped sessions/tokens
-- service identity authentication for launched services
+- signed launch identity leases for launched services (implemented for HTTP resolve/write-back; OS transport binding remains future work)
 - per-service/ref policy checks before resolve/write-back
 - lease/renew/revoke for runtime identities where applicable
 - audit events for allow/deny/resolve/write-back without plaintext values
@@ -242,6 +242,6 @@ Planned session model:
 
 - full policy engine
 - named pipe/Unix socket implementation
-- service identity leases
+- OS-bound service identity leases
 - user-facing unlock/setup wizard
 - broad plaintext dump command

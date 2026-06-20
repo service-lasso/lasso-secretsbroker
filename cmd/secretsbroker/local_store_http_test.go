@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHTTPGeneratedSecretWritebackCapture(t *testing.T) {
@@ -16,7 +17,8 @@ func TestHTTPGeneratedSecretWritebackCapture(t *testing.T) {
 	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
 	defer server.Close()
 
-	body := []byte(`{"requestId":"req-writeback-http","identity":{"serviceId":"api-service","expiresAt":"2026-05-07T00:05:00Z"},"policy":{"allowedNamespaces":["services/api-service"],"allowedOperations":["create","update"]},"operation":"create","namespace":"services/api-service","ref":"runtime/API_TOKEN","value":"generated-http-secret","refreshRequired":true}`)
+	lease := testLaunchIdentityLease(t, backend, "api-service", []string{"services/api-service/*"}, []string{"services/api-service"}, []string{"create", "update"}, "jti-writeback-http")
+	body := []byte(`{"requestId":"req-writeback-http","identity":{"serviceId":"api-service","expiresAt":"2026-05-07T00:05:00Z"},"identityLease":` + mustLeaseJSON(t, lease) + `,"policy":{"allowedNamespaces":["services/api-service"],"allowedOperations":["create","update"]},"operation":"create","namespace":"services/api-service","ref":"runtime/API_TOKEN","value":"generated-http-secret","refreshRequired":true}`)
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/writeback", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -46,8 +48,9 @@ func TestHTTPGeneratedSecretWritebackLockoutResponseIsMetadataOnly(t *testing.T)
 	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
 	defer server.Close()
 
-	body := []byte(`{"requestId":"req-writeback-http-lockout","identity":{"serviceId":"api-service","expiresAt":"2026-05-07T00:05:00Z"},"policy":{"allowedNamespaces":["services/api-service"],"allowedOperations":["create"]},"operation":"create","namespace":"services/api-service","ref":"runtime/API_TOKEN","value":"generated-http-secret","sourceAuthRequired":true}`)
 	for i := 1; i <= localAPILockoutThreshold; i++ {
+		lease := testLaunchIdentityLease(t, backend, "api-service", []string{"services/api-service/*"}, []string{"services/api-service"}, []string{"create"}, "jti-writeback-lockout-"+string(rune('0'+i)))
+		body := []byte(`{"requestId":"req-writeback-http-lockout","identity":{"serviceId":"api-service","expiresAt":"2026-05-07T00:05:00Z"},"identityLease":` + mustLeaseJSON(t, lease) + `,"policy":{"allowedNamespaces":["services/api-service"],"allowedOperations":["create"]},"operation":"create","namespace":"services/api-service","ref":"runtime/API_TOKEN","value":"generated-http-secret","sourceAuthRequired":true}`)
 		req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/writeback", bytes.NewReader(body))
 		if err != nil {
 			t.Fatal(err)
@@ -236,7 +239,8 @@ func TestLocalStoreHTTPWriteAndResolve(t *testing.T) {
 		t.Fatalf("write response = %#v", written)
 	}
 
-	resolveBody := []byte(`{"requestId":"req-1","serviceId":"openclaw","refs":["openclaw/anthropic/api_key"]}`)
+	lease := testLaunchIdentityLease(t, backend, "openclaw", []string{"openclaw/*"}, nil, []string{"resolve"}, "jti-resolve-http")
+	resolveBody := []byte(`{"requestId":"req-1","serviceId":"openclaw","identityLease":` + mustLeaseJSON(t, lease) + `,"refs":["openclaw/anthropic/api_key"]}`)
 	resolveReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/resolve", bytes.NewReader(resolveBody))
 	if err != nil {
 		t.Fatal(err)
@@ -258,4 +262,80 @@ func TestLocalStoreHTTPWriteAndResolve(t *testing.T) {
 	if len(resolved.Results) != 1 || resolved.Results[0].Outcome != "ready" || resolved.Results[0].Value != "secret-value" {
 		t.Fatalf("resolve response = %#v", resolved)
 	}
+}
+
+func TestHTTPLocalStoreRequiresSignedLaunchIdentityLease(t *testing.T) {
+	backend := testBackend(t)
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	secretValue := "lease-required-secret"
+	missingLeaseBody := []byte(`{"requestId":"req-missing-lease","identity":{"serviceId":"api-service","expiresAt":"2026-05-07T00:05:00Z"},"policy":{"allowedNamespaces":["services/api-service"],"allowedOperations":["create"]},"operation":"create","namespace":"services/api-service","ref":"runtime/API_TOKEN","value":"` + secretValue + `"}`)
+	res, payload := postJSON(t, server.URL+"/v1/writeback", "test-token", missingLeaseBody)
+	if res.StatusCode != http.StatusUnauthorized || !bytes.Contains(payload, []byte(`"code":"identity_invalid"`)) {
+		t.Fatalf("missing lease status=%d body=%s", res.StatusCode, payload)
+	}
+	assertNoSecretMaterial(t, payload, secretValue, "test-token")
+
+	if _, err := backend.writeSecret(writeSecretRequest{Ref: "openclaw/anthropic/api_key", Value: secretValue}); err != nil {
+		t.Fatal(err)
+	}
+	tampered := testLaunchIdentityLease(t, backend, "openclaw", []string{"openclaw/*"}, nil, []string{"resolve"}, "jti-tampered")
+	tampered.Signature = "hmac-sha256:invalid"
+	tamperedBody := []byte(`{"requestId":"req-tampered","serviceId":"openclaw","identityLease":` + mustLeaseJSON(t, tampered) + `,"refs":["openclaw/anthropic/api_key"]}`)
+	res, payload = postJSON(t, server.URL+"/v1/resolve", "test-token", tamperedBody)
+	if res.StatusCode != http.StatusUnauthorized || !bytes.Contains(payload, []byte(`"code":"identity_invalid"`)) {
+		t.Fatalf("tampered lease status=%d body=%s", res.StatusCode, payload)
+	}
+	assertNoSecretMaterial(t, payload, secretValue, "test-token")
+
+	broadened := testLaunchIdentityLease(t, backend, "openclaw", []string{"openclaw/*"}, nil, []string{"resolve"}, "jti-broadened")
+	broadenedBody := []byte(`{"requestId":"req-broadened","serviceId":"openclaw","identityLease":` + mustLeaseJSON(t, broadened) + `,"refs":["other-service/private/api_key"]}`)
+	res, payload = postJSON(t, server.URL+"/v1/resolve", "test-token", broadenedBody)
+	if res.StatusCode != http.StatusForbidden || !bytes.Contains(payload, []byte(`"code":"policy_denied"`)) {
+		t.Fatalf("broadened lease status=%d body=%s", res.StatusCode, payload)
+	}
+	assertNoSecretMaterial(t, payload, secretValue, "test-token")
+
+	replayed := testLaunchIdentityLease(t, backend, "openclaw", []string{"openclaw/*"}, nil, []string{"resolve"}, "jti-replayed")
+	replayBody := []byte(`{"requestId":"req-replayed","serviceId":"openclaw","identityLease":` + mustLeaseJSON(t, replayed) + `,"refs":["openclaw/anthropic/api_key"]}`)
+	res, payload = postJSON(t, server.URL+"/v1/resolve", "test-token", replayBody)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("first lease use status=%d body=%s", res.StatusCode, payload)
+	}
+	res, payload = postJSON(t, server.URL+"/v1/resolve", "test-token", replayBody)
+	if res.StatusCode != http.StatusUnauthorized || !bytes.Contains(payload, []byte(`"code":"identity_replayed"`)) {
+		t.Fatalf("replayed lease status=%d body=%s", res.StatusCode, payload)
+	}
+	assertNoSecretMaterial(t, payload, secretValue, "test-token")
+}
+
+func testLaunchIdentityLease(t *testing.T, backend *localBackend, serviceID string, refs, namespaces, operations []string, jti string) launchIdentityLease {
+	t.Helper()
+	issuedAt := backend.now()
+	lease, err := signLaunchIdentityLease(launchIdentityLease{
+		Issuer:            "service-lasso-local-launcher",
+		ServiceID:         serviceID,
+		WorkspaceID:       "local",
+		AllowedRefs:       refs,
+		AllowedNamespaces: namespaces,
+		AllowedOperations: operations,
+		IssuedAt:          issuedAt.Format(time.RFC3339),
+		ExpiresAt:         issuedAt.Add(5 * time.Minute).Format(time.RFC3339),
+		JTI:               jti,
+	}, "test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return lease
+}
+
+func mustLeaseJSON(t *testing.T, value any) string {
+	t.Helper()
+	bytes, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(bytes)
 }

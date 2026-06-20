@@ -55,6 +55,21 @@
         "requestId": "req-parity-resolve",
         "workspaceId": "workspace-dev",
         "serviceId": "openclaw",
+        "identityLease": {
+          "issuer": "service-lasso-local-launcher",
+          "serviceId": "openclaw",
+          "workspaceId": "workspace-dev",
+          "allowedRefs": [
+            "openclaw/*"
+          ],
+          "allowedOperations": [
+            "resolve"
+          ],
+          "issuedAt": "2026-05-07T00:00:00Z",
+          "expiresAt": "2026-05-07T00:05:00Z",
+          "jti": "fixture-resolve-ready",
+          "signature": "hmac-sha256:0P-l6fbhrbgwKTZVsWJXS0QcDs-r8_znS6ndE_JanEs"
+        },
         "purpose": "runtime-env",
         "refs": [
           "openclaw/openai/api_key"
@@ -91,6 +106,24 @@
         "identity": {
           "serviceId": "api-service",
           "expiresAt": "2026-05-07T00:05:00Z"
+        },
+        "identityLease": {
+          "issuer": "service-lasso-local-launcher",
+          "serviceId": "api-service",
+          "workspaceId": "workspace-dev",
+          "allowedRefs": [
+            "services/other-service/*"
+          ],
+          "allowedNamespaces": [
+            "services/other-service"
+          ],
+          "allowedOperations": [
+            "create"
+          ],
+          "issuedAt": "2026-05-07T00:00:00Z",
+          "expiresAt": "2026-05-07T00:05:00Z",
+          "jti": "fixture-writeback-denied",
+          "signature": "hmac-sha256:cEx1hUVpLOjF611n_iPctdnJcZGKMgPXXTqBfClmtXE"
         },
         "policy": {
           "allowedNamespaces": [

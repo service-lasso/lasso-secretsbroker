@@ -38,8 +38,8 @@ Implementations MAY:
 | `GET /capabilities` | none | implementation capabilities, endpoints, and typed outcomes |
 | `GET /v1/sources/status` | none | safe source registry/lifecycle status; no source credentials or values |
 | `POST /v1/secrets` | local API token | write one local secret value |
-| `POST /v1/writeback` | local API token | capture generated secret write-back with identity/policy checks |
-| `POST /v1/resolve` | local API token | batched secret resolution |
+| `POST /v1/writeback` | local API token + signed launch lease | capture generated secret write-back with identity/policy checks |
+| `POST /v1/resolve` | local API token + signed launch lease | batched secret resolution |
 
 Secret-bearing endpoints MUST require a configured local API token and MUST fail closed when no token is configured.
 
@@ -51,6 +51,8 @@ X-SecretsBroker-Token: <token>
 ```
 
 Implementations MUST NOT echo either token form in errors, logs, audit events, or diagnostics.
+
+Resolve and write-back requests MUST include a signed `identityLease` as documented in `docs/launch-identity-leases.md`. The lease must fail closed before secret access when missing, tampered, expired, replayed, or broader than its signed scope.
 
 ## Shared CLI behavior
 
@@ -102,7 +104,9 @@ All implementations MUST preserve these outcome strings where the scenario appli
 - `missing_ref`
 - `invalid_ref`
 - `policy_denied`
+- `identity_invalid`
 - `identity_expired`
+- `identity_replayed`
 - `source_auth_required`
 - `source_unavailable`
 - `degraded`
