@@ -188,11 +188,14 @@ type resolveResponse struct {
 }
 
 type resolveResult struct {
-	Ref      string          `json:"ref"`
-	Outcome  string          `json:"outcome"`
-	Value    string          `json:"value,omitempty"`
-	Metadata *SecretMetadata `json:"metadata,omitempty"`
-	Message  string          `json:"message,omitempty"`
+	Ref          string          `json:"ref"`
+	Outcome      string          `json:"outcome"`
+	Value        string          `json:"value,omitempty"`
+	Metadata     *SecretMetadata `json:"metadata,omitempty"`
+	Message      string          `json:"message,omitempty"`
+	PolicyResult string          `json:"policyResult,omitempty"`
+	NextAction   string          `json:"nextAction,omitempty"`
+	ReasonCode   string          `json:"reasonCode,omitempty"`
 }
 
 type auditEvent struct {
@@ -777,9 +780,12 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 			result.Message = "Secret ref is invalid."
 		case req.Secrets != nil && evaluateServiceSecretsPolicy(req.ServiceID, "resolve", ref, req.Secrets).Outcome != "allowed":
 			decision := evaluateServiceSecretsPolicy(req.ServiceID, "resolve", ref, req.Secrets)
-			_ = b.audit("policy_decision", ref, decision.Outcome, req.ServiceID, req.RequestID)
+			_ = b.auditPolicyDecision(ref, decision, req.RequestID)
 			result.Outcome = "policy_denied"
 			result.Message = "Service secret policy denied resolve."
+			result.PolicyResult = decision.Outcome
+			result.NextAction = decision.NextAction
+			result.ReasonCode = decision.ReasonCode
 		case b.locked():
 			result.Outcome = "locked"
 			result.Message = "Secrets Broker local store is locked."
@@ -853,6 +859,10 @@ func (b *localBackend) saveStore(store localStoreFile) error {
 
 func (b *localBackend) audit(operation, ref, outcome, requestServiceID, requestID string) error {
 	return b.writeAuditEvent(auditEvent{TS: b.now(), Operation: operation, Ref: ref, Outcome: outcome, ServiceID: requestServiceID, RequestID: requestID})
+}
+
+func (b *localBackend) auditPolicyDecision(ref string, decision secretPolicyDecision, requestID string) error {
+	return b.writeAuditEvent(auditEvent{TS: b.now(), Operation: "policy_decision", Ref: ref, Outcome: decision.Outcome, ServiceID: decision.ServiceID, RequestID: requestID, ReasonCode: decision.ReasonCode})
 }
 
 func (b *localBackend) auditSourceLifecycle(ref string, result sourceResolveResult, requestServiceID, requestID string) error {
