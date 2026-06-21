@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
@@ -68,11 +69,22 @@ func TestResolveHonorsManifestPolicyWithoutLeakingValue(t *testing.T) {
 	if res.Results[1].Outcome != "policy_denied" || res.Results[1].Value != "" {
 		t.Fatalf("denied result = %#v", res.Results[1])
 	}
+	if res.Results[1].PolicyResult != "denied" || res.Results[1].ReasonCode != "policy_no_match" || res.Results[1].NextAction != "add_service_secret_policy_assignment" {
+		t.Fatalf("denied policy metadata = %#v", res.Results[1])
+	}
 	encoded, err := json.Marshal(res.Results[1])
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertNoSecretMaterial(t, encoded, deniedValue)
+	auditBytes, err := os.ReadFile(backend.auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecretMaterial(t, auditBytes, deniedValue)
+	if !strings.Contains(string(auditBytes), `"operation":"policy_decision"`) || !strings.Contains(string(auditBytes), `"reasonCode":"policy_no_match"`) {
+		t.Fatalf("audit missing policy decision reason: %s", auditBytes)
+	}
 }
 
 func TestWritebackHonorsManifestPolicyWithoutLeakingValue(t *testing.T) {

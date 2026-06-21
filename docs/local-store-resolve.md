@@ -190,8 +190,11 @@ Response:
     },
     {
       "ref": "openclaw/telegram/bot_token",
-      "outcome": "missing_ref",
-      "message": "Secret ref was not found."
+      "outcome": "policy_denied",
+      "message": "Service secret policy denied resolve.",
+      "policyResult": "denied",
+      "nextAction": "add_service_secret_policy_assignment",
+      "reasonCode": "policy_no_match"
     }
   ]
 }
@@ -203,9 +206,10 @@ Rules:
 - Batch response reports per-ref outcomes.
 - Missing refs use `missing_ref`, not generic failure.
 - Invalid refs use `invalid_ref`.
+- Denied refs use `policy_denied` with safe policy metadata only: `policyResult`, `nextAction`, and `reasonCode`.
 - Locked store uses `locked` per requested ref.
 - `value` is present only when outcome is `ready`.
-- Audit logs redact values.
+- Policy decisions and resolve outcomes are audited with metadata only. Audit logs redact values.
 
 ## Ref validation
 

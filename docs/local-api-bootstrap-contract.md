@@ -299,9 +299,11 @@ Response:
     },
     {
       "ref": "openclaw/telegram/bot_token",
-      "outcome": "source_auth_required",
-      "message": "Telegram source needs reconnect before this ref can be resolved.",
-      "nextAction": "reconnect_source"
+      "outcome": "policy_denied",
+      "message": "Service secret policy denied resolve.",
+      "policyResult": "denied",
+      "nextAction": "add_service_secret_policy_assignment",
+      "reasonCode": "policy_no_match"
     }
   ]
 }
@@ -311,7 +313,8 @@ Rules:
 
 - Values are present only for refs allowed by policy and only on resolve endpoints.
 - Missing/denied/invalid/auth-required entries use per-result outcomes.
-- Audit records must redact secret values.
+- Resolve policy denials include only safe metadata: `policyResult`, `nextAction`, and `reasonCode`.
+- Policy decision and resolve audit records must redact secret values and credential material.
 
 ## Planned write-back contract
 
