@@ -1,6 +1,6 @@
 # OS-Authenticated IPC Transport
 
-Status: foundation slice  
+Status: foundation slice
 Issue: #31
 
 ## Purpose
@@ -68,4 +68,3 @@ secretsbroker serve --listen 127.0.0.1:17890
 ```
 
 Secret-bearing HTTP endpoints still require the local API token and existing launch identity checks. The IPC work changes the process boundary; it does not remove endpoint authentication or policy checks.
-
