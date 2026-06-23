@@ -40,8 +40,54 @@ func TestCapabilitiesExposeBootstrapContract(t *testing.T) {
 	assertContains(t, caps.Endpoints, "GET /ready")
 	assertContains(t, caps.Features, "readiness")
 	assertContains(t, caps.Features, "batched-resolve")
+	assertContains(t, caps.Features, "os-ipc-transport-policy")
+	assertContains(t, caps.FutureFeatures, "windows-named-pipe-listener")
 	assertContains(t, caps.Outcomes, "source_auth_required")
 	assertContains(t, caps.Outcomes, "policy_denied")
+}
+
+func TestServeTransportDefaultsToLoopbackHTTP(t *testing.T) {
+	binding, err := resolveServeTransport(serveTransportOptions{Listen: "127.0.0.1:17890"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binding.Kind != "loopback-http" || binding.Network != "tcp" || binding.Address != "127.0.0.1:17890" {
+		t.Fatalf("binding = %#v", binding)
+	}
+}
+
+func TestServeTransportRejectsNonLoopbackHTTP(t *testing.T) {
+	_, err := resolveServeTransport(serveTransportOptions{Transport: "loopback-http", Listen: "0.0.0.0:17890"})
+	if err == nil {
+		t.Fatalf("expected non-loopback listen rejection")
+	}
+}
+
+func TestProductionModeRejectsLoopbackHTTP(t *testing.T) {
+	_, err := resolveServeTransport(serveTransportOptions{Mode: "production", Transport: "loopback-http", Listen: "127.0.0.1:17890"})
+	if err == nil {
+		t.Fatalf("expected production loopback rejection")
+	}
+}
+
+func TestProductionAutoSelectsOSTransport(t *testing.T) {
+	binding, err := resolveServeTransport(serveTransportOptions{Mode: "production", Transport: "auto"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binding.Kind != "windows-named-pipe" && binding.Kind != "unix-socket" {
+		t.Fatalf("production auto binding = %#v", binding)
+	}
+	if binding.Address == "" {
+		t.Fatalf("production auto address should be populated")
+	}
+}
+
+func TestWindowsNamedPipeRequiresPipeNamespace(t *testing.T) {
+	_, err := resolveServeTransport(serveTransportOptions{Transport: "windows-named-pipe", NamedPipe: `C:\tmp\not-a-pipe`})
+	if err == nil {
+		t.Fatalf("expected named pipe namespace rejection")
+	}
 }
 
 func TestReadyEndpointDistinguishesLivenessFromReadiness(t *testing.T) {

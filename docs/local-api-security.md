@@ -229,6 +229,8 @@ Preferred transports:
 - Unix socket with filesystem permissions and peer credential checks where available
 - loopback HTTP only for development/bootstrap compatibility
 
+The first #31 foundation is now implemented as an explicit transport policy. `secretsbroker serve` accepts `--mode`, `--transport`, `--unix-socket`, and `--named-pipe`; production mode rejects loopback HTTP rather than falling back silently. See `docs/os-authenticated-ipc-transport.md` for the current supported behavior and remaining named-pipe/peer-credential work.
+
 Planned session model:
 
 - short-lived scoped sessions/tokens
