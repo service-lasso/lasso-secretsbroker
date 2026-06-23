@@ -72,6 +72,7 @@ The first bootstrap slice provides:
 - package/test/verify scripts following the service-template contract
 
 The first local encrypted store and batched resolve MVP is documented in `docs/local-store-resolve.md`. Portable master-key identity/unlock foundation is documented in `docs/portable-master-key.md`; the implemented initialize/unlock/import/re-wrap lifecycle is documented in `docs/master-key-lifecycle.md`; encrypted backup, restore, and key rotation are documented in `docs/backup-restore-rotation.md`; the recommended secure initialization and recovery-key model is documented in `docs/secure-initialization-recovery.md`. Local API token/session security is documented in `docs/local-api-security.md`, and signed scoped launch identity leases are documented in `docs/launch-identity-leases.md`. The provider/source registry model is documented in `docs/provider-source-registry.md`; the external source adapter contract is documented in `docs/external-adapter-contract.md`; env/file/exec source adapters are documented in `docs/env-file-exec-sources.md`; Vault/OpenBao source support is documented in `docs/vault-openbao-source.md`; AWS Secrets Manager source support is documented in `docs/aws-secrets-manager-source.md`. The headless admin CLI is documented in `docs/headless-admin-cli.md`; the first metadata-only MCP adapter is documented in `docs/mcp-adapter.md`. The initial generated secret write-back/capture policy is documented in `docs/writeback-policy.md`. The operational-control baseline for service-json policy assignment, audit, telemetry, events/filtering, and lockout is documented in `docs/operational-controls-baseline.md`. Advanced capability classification for MCP, Secrets Sync, HSM, FIPS, MFA, and automated credential rotation is documented in `docs/advanced-capabilities-roadmap.md`; the focused enterprise security readiness assessment is documented in `docs/enterprise-security-readiness.md`; the focused Secrets Sync design and GitHub Actions first-target plan is documented in `docs/secrets-sync-design.md`. The OpenClaw SecretRef exec resolver is documented in `docs/openclaw-secretref-resolver.md`. OS wrapper enrollment and durable policy storage are intentionally future issues. The initial local API/bootstrap contract is documented in `docs/local-api-bootstrap-contract.md`; lifecycle/source-auth state behavior is documented in `docs/lifecycle-states.md`. Cross-language Node/Go compatibility expectations and reusable fixture format are documented in `docs/parity-contract.md`, with baseline fixtures under `conformance/fixtures/`.
+The OS-authenticated local IPC transport foundation is documented in `docs/os-authenticated-ipc-transport.md`.
 
 ## Local development
 
@@ -94,6 +95,16 @@ $env:SECRETSBROKER_MASTER_KEY = "local-dev-key"
 $env:SECRETSBROKER_API_TOKEN = "local-api-token"
 go run .\cmd\secretsbroker serve --listen 127.0.0.1:17890
 ```
+
+Production-mode startup must use an OS IPC transport instead of loopback HTTP:
+
+```powershell
+$env:SECRETSBROKER_MODE = "production"
+$env:SECRETSBROKER_TRANSPORT = "auto"
+go run .\cmd\secretsbroker serve
+```
+
+On Windows this currently fails closed until named-pipe client identity checks are implemented. On Unix-like platforms, `auto` serves over a Unix socket.
 
 Check status:
 

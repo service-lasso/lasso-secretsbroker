@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -294,9 +293,12 @@ func defaultCapabilities() CapabilitiesResponse {
 			"threshold-recovery-shares",
 			"headless-admin-cli",
 			"metadata-only-mcp-adapter",
+			"os-ipc-transport-policy",
 		},
 		FutureFeatures: []string{
 			"external-backend-write-back",
+			"windows-named-pipe-listener",
+			"unix-socket-peer-credential-checks",
 		},
 		Outcomes: append([]string(nil), typedOutcomes...),
 	}
@@ -316,6 +318,10 @@ func printStatus(args []string) error {
 func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	listen := fs.String("listen", getenvDefault("SECRETSBROKER_LISTEN", "127.0.0.1:17890"), "listen address")
+	mode := fs.String("mode", getenvDefault("SECRETSBROKER_MODE", "development"), "runtime mode: development or production")
+	transport := fs.String("transport", getenvDefault("SECRETSBROKER_TRANSPORT", "loopback-http"), "serve transport: loopback-http, unix-socket, windows-named-pipe, or auto")
+	unixSocket := fs.String("unix-socket", getenvDefault("SECRETSBROKER_UNIX_SOCKET", ""), "Unix socket path for unix-socket transport")
+	namedPipe := fs.String("named-pipe", getenvDefault("SECRETSBROKER_NAMED_PIPE", ""), "Windows named pipe path for windows-named-pipe transport")
 	state := fs.String("state", getenvDefault("SECRETSBROKER_STATE", "setup_needed"), "state to report")
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
 	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
@@ -361,14 +367,25 @@ func serve(args []string) error {
 	}
 	backend.sources = sources
 
-	ln, err := net.Listen("tcp", *listen)
+	binding, err := resolveServeTransport(serveTransportOptions{
+		Mode:       *mode,
+		Transport:  *transport,
+		Listen:     *listen,
+		UnixSocket: *unixSocket,
+		NamedPipe:  *namedPipe,
+	})
 	if err != nil {
 		return err
 	}
+	ln, cleanup, err := listenForTransport(binding)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 
 	server := &http.Server{Handler: newHandler(stateView, backend, localAPISecurity{token: *apiToken}), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
-		slog.Info("@secretsbroker listening", "addr", ln.Addr().String(), "state", *state)
+		slog.Info("@secretsbroker listening", "transport", binding.Kind, "addr", binding.DisplayAddress, "state", *state)
 		if err := server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server failed", "error", err)
 		}
