@@ -104,7 +104,7 @@ $env:SECRETSBROKER_TRANSPORT = "auto"
 go run .\cmd\secretsbroker serve
 ```
 
-On Windows this currently fails closed until named-pipe client identity checks are implemented. On Unix-like platforms, `auto` serves over a Unix socket.
+On Windows, `auto` serves over a named pipe with connected-client identity checks. On Unix-like platforms, `auto` serves over a Unix socket with peer credential checks where supported.
 
 Check status:
 

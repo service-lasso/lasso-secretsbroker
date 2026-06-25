@@ -295,10 +295,10 @@ func defaultCapabilities() CapabilitiesResponse {
 			"metadata-only-mcp-adapter",
 			"os-ipc-transport-policy",
 			"unix-socket-peer-credential-checks",
+			"windows-named-pipe-identity-checks",
 		},
 		FutureFeatures: []string{
 			"external-backend-write-back",
-			"windows-named-pipe-listener",
 		},
 		Outcomes: append([]string(nil), typedOutcomes...),
 	}

@@ -229,7 +229,7 @@ Preferred transports:
 - Unix socket with filesystem permissions and peer credential checks where available
 - loopback HTTP only for development/bootstrap compatibility
 
-The first #31 foundation is now implemented as an explicit transport policy. `secretsbroker serve` accepts `--mode`, `--transport`, `--unix-socket`, and `--named-pipe`; production mode rejects loopback HTTP rather than falling back silently. See `docs/os-authenticated-ipc-transport.md` for the current supported behavior and remaining named-pipe/peer-credential work.
+The #31 IPC foundation is implemented as an explicit transport policy. `secretsbroker serve` accepts `--mode`, `--transport`, `--unix-socket`, and `--named-pipe`; production mode rejects loopback HTTP rather than falling back silently. Unix sockets enforce same-UID peer credentials where supported, and Windows named pipes use a restricted security descriptor plus connected-client token checks before HTTP handling. See `docs/os-authenticated-ipc-transport.md` for the current supported behavior and remaining launcher-policy hardening.
 
 Planned session model:
 
@@ -243,7 +243,7 @@ Planned session model:
 ## Non-goals for this slice
 
 - full policy engine
-- named pipe/Unix socket implementation
+- transport identity binding for signed launch identity leases
 - OS-bound service identity leases
 - user-facing unlock/setup wizard
 - broad plaintext dump command

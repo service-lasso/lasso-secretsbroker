@@ -42,7 +42,7 @@ func TestCapabilitiesExposeBootstrapContract(t *testing.T) {
 	assertContains(t, caps.Features, "batched-resolve")
 	assertContains(t, caps.Features, "os-ipc-transport-policy")
 	assertContains(t, caps.Features, "unix-socket-peer-credential-checks")
-	assertContains(t, caps.FutureFeatures, "windows-named-pipe-listener")
+	assertContains(t, caps.Features, "windows-named-pipe-identity-checks")
 	assertContains(t, caps.Outcomes, "source_auth_required")
 	assertContains(t, caps.Outcomes, "policy_denied")
 }
