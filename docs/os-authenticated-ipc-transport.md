@@ -1,6 +1,6 @@
 # OS-Authenticated IPC Transport
 
-Status: foundation slice
+Status: Windows and Unix identity-check foundation
 Issue: #31
 
 ## Purpose
@@ -39,21 +39,28 @@ Implemented behavior:
 - `auto` chooses `loopback-http` in development mode.
 - `auto` chooses the platform IPC transport in production mode: Windows named pipe on Windows, Unix socket elsewhere.
 - Unix-like platforms can serve HTTP over a Unix socket, set the socket path to owner-only mode, and check OS peer credentials before passing a connection to the HTTP server. Linux uses `SO_PEERCRED`; macOS/FreeBSD use `LOCAL_PEERCRED`.
-- Windows named-pipe configuration is parsed and validated, but serving fails closed until the listener enforces local client identity checks.
+- Windows can serve HTTP over a named pipe with a restricted security descriptor and a connected-client identity check before passing the connection to the HTTP server.
 
 ## Production gate
 
 The broker must not silently fall back to loopback HTTP in production mode. If the requested IPC listener cannot enforce the required local identity boundary, startup fails before serving secret-bearing APIs.
 
-## Windows named-pipe requirements
+## Windows named-pipe behavior
 
-Before enabling the Windows named-pipe listener:
+Current Windows named-pipe support:
 
 - The pipe path must be under `\\.\pipe\`.
-- The pipe security descriptor must limit access to the current user, local administrators, and LocalSystem as appropriate for the Service Lasso launcher model.
-- The listener must identify the connected local client process or user token before accepting secret-bearing requests.
+- The pipe security descriptor limits access to the broker user SID, local administrators, and LocalSystem.
+- The listener identifies the connected client process with `GetNamedPipeClientProcessId`, inspects the client process token, and accepts only the same user SID, LocalSystem, or an enabled local Administrators group membership.
+- Connections that cannot be identified or authorized are closed before the HTTP server sees the request.
 - Identity metadata must be safe: no access tokens, environment values, command lines, or raw credentials in responses, logs, or audit events.
-- Tests must cover unauthorized client rejection and safe error output.
+- Secret-bearing endpoints still require the existing local API token/session/launch-identity checks on top of the named-pipe boundary.
+
+Remaining hardening:
+
+- Define the final Service Lasso launcher policy for administrator and service-account access.
+- Add cross-user denial evidence in an integration environment that can create a second local Windows principal.
+- Bind signed launch identity leases to transport identity where required by a later policy slice.
 
 ## Unix socket requirements
 
