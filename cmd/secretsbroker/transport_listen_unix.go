@@ -18,6 +18,13 @@ func listenForTransport(binding serveTransportBinding) (net.Listener, func(), er
 		if err != nil {
 			return nil, func() {}, err
 		}
+		rawLn := ln
+		ln, err = authenticatedUnixSocketListener(rawLn)
+		if err != nil {
+			_ = rawLn.Close()
+			_ = os.Remove(binding.Address)
+			return nil, func() {}, err
+		}
 		_ = os.Chmod(binding.Address, 0o600)
 		return ln, func() { _ = os.Remove(binding.Address) }, nil
 	case "windows-named-pipe":

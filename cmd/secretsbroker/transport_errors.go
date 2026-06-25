@@ -10,6 +10,10 @@ func errUnixSocketUnsupported() error {
 	return fmt.Errorf("unix-socket transport is only available on Unix-like platforms")
 }
 
+func errUnixSocketRequiresPeerCredentials() error {
+	return fmt.Errorf("unix-socket transport requires OS peer credential checks before serving secret-bearing APIs")
+}
+
 func errWindowsNamedPipeUnsupported() error {
 	return fmt.Errorf("windows-named-pipe transport is only available on Windows")
 }

@@ -294,11 +294,11 @@ func defaultCapabilities() CapabilitiesResponse {
 			"headless-admin-cli",
 			"metadata-only-mcp-adapter",
 			"os-ipc-transport-policy",
+			"unix-socket-peer-credential-checks",
 		},
 		FutureFeatures: []string{
 			"external-backend-write-back",
 			"windows-named-pipe-listener",
-			"unix-socket-peer-credential-checks",
 		},
 		Outcomes: append([]string(nil), typedOutcomes...),
 	}

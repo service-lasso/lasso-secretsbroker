@@ -38,7 +38,7 @@ Implemented behavior:
 - `production` mode rejects `loopback-http`.
 - `auto` chooses `loopback-http` in development mode.
 - `auto` chooses the platform IPC transport in production mode: Windows named pipe on Windows, Unix socket elsewhere.
-- Unix-like platforms can serve HTTP over a Unix socket and set the socket path to owner-only mode.
+- Unix-like platforms can serve HTTP over a Unix socket, set the socket path to owner-only mode, and check OS peer credentials before passing a connection to the HTTP server. Linux uses `SO_PEERCRED`; macOS/FreeBSD use `LOCAL_PEERCRED`.
 - Windows named-pipe configuration is parsed and validated, but serving fails closed until the listener enforces local client identity checks.
 
 ## Production gate
@@ -57,7 +57,12 @@ Before enabling the Windows named-pipe listener:
 
 ## Unix socket requirements
 
-Current Unix socket support is a first serving path. Closure-grade production work still needs peer credential checks where the platform exposes them. Until then, the socket path is owner-only and production startup uses the Unix socket instead of loopback HTTP, but validation must not claim full peer identity enforcement.
+Current Unix socket support enforces same-UID peer credentials on platforms where Go exposes the required OS APIs:
+
+- Linux: `SO_PEERCRED`.
+- macOS and FreeBSD: `LOCAL_PEERCRED`.
+
+Unsupported Unix-like platforms fail closed before serving secret-bearing APIs until an equivalent peer-credential check is implemented. The socket path remains owner-only, and endpoint token/session/launch-identity checks still apply on top of the IPC boundary.
 
 ## Compatibility
 
