@@ -41,9 +41,21 @@ func TestCapabilitiesExposeBootstrapContract(t *testing.T) {
 	assertContains(t, caps.Features, "readiness")
 	assertContains(t, caps.Features, "batched-resolve")
 	assertContains(t, caps.Features, "os-ipc-transport-policy")
+	assertContains(t, caps.Features, "unix-socket-peer-credential-checks")
 	assertContains(t, caps.FutureFeatures, "windows-named-pipe-listener")
 	assertContains(t, caps.Outcomes, "source_auth_required")
 	assertContains(t, caps.Outcomes, "policy_denied")
+}
+
+func TestUnixPeerUIDAuthorizationRequiresSameUID(t *testing.T) {
+	if !unixPeerUIDAuthorized(501, 501) {
+		t.Fatalf("same uid should be authorized")
+	}
+	for _, uid := range []int{-1, 0, 502} {
+		if unixPeerUIDAuthorized(uid, 501) {
+			t.Fatalf("peer uid %d should not be authorized for allowed uid 501", uid)
+		}
+	}
 }
 
 func TestServeTransportDefaultsToLoopbackHTTP(t *testing.T) {
