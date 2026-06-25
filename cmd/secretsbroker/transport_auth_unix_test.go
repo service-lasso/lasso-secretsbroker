@@ -6,12 +6,15 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
 
 func TestUnixSocketListenerAcceptsSameUIDPeer(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "secretsbroker.sock")
+	path := filepath.Join(os.TempDir(), "sb-"+strconv.Itoa(os.Getpid())+".sock")
+	_ = os.Remove(path)
+	t.Cleanup(func() { _ = os.Remove(path) })
 	ln, cleanup, err := listenForTransport(serveTransportBinding{Kind: "unix-socket", Address: path})
 	if err != nil {
 		t.Fatal(err)
