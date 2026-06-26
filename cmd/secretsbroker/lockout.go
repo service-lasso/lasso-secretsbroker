@@ -113,6 +113,27 @@ func (s *lockoutStore) clear(scope string) bool {
 	return existed
 }
 
+func (s *lockoutStore) activeCount() int {
+	if s == nil {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := s.now()
+	count := 0
+	for scope, entry := range s.entries {
+		if entry.ActiveUntil.After(now) {
+			count++
+			continue
+		}
+		if !entry.ActiveUntil.IsZero() {
+			delete(s.entries, scope)
+		}
+	}
+	return count
+}
+
 func (s *lockoutStore) activeLocked(scope string, now time.Time) lockoutDecision {
 	entry, ok := s.entries[scope]
 	if !ok {

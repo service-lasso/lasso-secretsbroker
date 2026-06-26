@@ -259,7 +259,7 @@ func buildTelemetryResponse(backend *localBackend) (telemetryResponse, error) {
 	res.Counters.Operations = auditOperationCounters(audit.Events)
 	res.Counters.PolicyDecisions = policyDecisionCounters(audit.Events)
 	res.Counters.LocalAPIAuthFailures = localAPIAuthFailureCount(audit.Events)
-	res.Counters.ActiveLockouts = 0
+	res.Counters.ActiveLockouts = backend.lockouts.activeCount()
 	res.Counters.AuditRecords = auditRecordCounters(audit.Events)
 	res.Counters.SourceStates = sourceStateCounters(defaultSourceRegistry(backend).Sources)
 	res.Counters.ProviderStates = providerStateCounters(backend.providerConfigStatusResponse().Providers)
