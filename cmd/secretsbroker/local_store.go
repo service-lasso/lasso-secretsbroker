@@ -49,6 +49,7 @@ type localBackend struct {
 	now                      func() time.Time
 	lockouts                 *lockoutStore
 	campaigns                map[string]bulkCampaignResponse
+	telemetry                *telemetryRequestRecorder
 	launchIdentitySigningKey string
 	launchLeaseMu            sync.Mutex
 	seenLaunchLeaseJTI       map[string]time.Time
@@ -227,7 +228,7 @@ type auditEvent struct {
 }
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
-	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}, seenLaunchLeaseJTI: map[string]time.Time{}}
+	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}, telemetry: newTelemetryRequestRecorder(50), seenLaunchLeaseJTI: map[string]time.Time{}}
 	backend.lockouts = newLockoutStore(func() time.Time {
 		if backend.now == nil {
 			return time.Now().UTC()
