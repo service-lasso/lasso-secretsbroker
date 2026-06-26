@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 const telemetrySecretValue = "fixture-telemetry-secret-value"
@@ -51,6 +53,51 @@ func TestTelemetryCountsOperationalMetadataWithoutSecretMaterial(t *testing.T) {
 	}
 	if len(res.Counters.SourceStates) == 0 || len(res.Counters.ProviderStates) == 0 {
 		t.Fatalf("missing source/provider state counters: %#v", res.Counters)
+	}
+}
+
+func TestTelemetryCountsActiveLockoutsWithoutScopeMaterial(t *testing.T) {
+	backend := testBackend(t)
+	now := time.Date(2026, 6, 26, 13, 40, 0, 0, time.UTC)
+	backend.now = func() time.Time { return now }
+	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	if _, err := backend.writeSecret(writeSecretRequest{Ref: ref, Value: telemetrySecretValue}); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 1; i <= localAPILockoutThreshold; i++ {
+		res, err := backend.managedEditApply(managedSecretActionRequest{RequestID: "req-lockout-telemetry", ServiceID: "@serviceadmin", Ref: ref, Value: "replacement-value"})
+		if i < localAPILockoutThreshold && !errors.Is(err, errPolicyDenied) {
+			t.Fatalf("attempt %d err=%v res=%#v", i, err, res)
+		}
+		if i == localAPILockoutThreshold && !errors.Is(err, errLockoutActive) {
+			t.Fatalf("lockout attempt err=%v res=%#v", err, res)
+		}
+	}
+
+	res, err := buildTelemetryResponse(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecretMaterial(t, encoded, telemetrySecretValue, "replacement-value", ref, "management:edit:@serviceadmin:"+ref)
+	if res.Counters.ActiveLockouts != 1 {
+		t.Fatalf("activeLockouts = %d, want 1", res.Counters.ActiveLockouts)
+	}
+	if !hasLockoutActiveSignal(res.Signals, 1) {
+		t.Fatalf("missing active lockout signal count: %#v", res.Signals)
+	}
+
+	now = now.Add(localAPILockoutCooldown + time.Second)
+	res, err = buildTelemetryResponse(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Counters.ActiveLockouts != 0 || !hasLockoutActiveSignal(res.Signals, 0) {
+		t.Fatalf("expired lockout should not remain active: counters=%#v signals=%#v", res.Counters, res.Signals)
 	}
 }
 
@@ -380,6 +427,17 @@ func hasSignal(signals []telemetrySignalPreview, name string) bool {
 		if signal.Name == name {
 			return true
 		}
+	}
+	return false
+}
+
+func hasLockoutActiveSignal(signals []telemetrySignalPreview, count int) bool {
+	for _, signal := range signals {
+		if signal.Name != "secretsbroker.lockout.active" {
+			continue
+		}
+		value, ok := signal.Attributes["broker.lockout.active_count"].(int)
+		return ok && value == count
 	}
 	return false
 }

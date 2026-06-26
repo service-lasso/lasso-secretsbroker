@@ -154,6 +154,12 @@ Implemented API request latency slice:
 - The request telemetry may expose method, route template, route group, status class, outcome, mutating flag, bucket, and count.
 - Raw URL paths, query strings, route parameters, headers, request bodies, response bodies, tokens, refs, provider credentials, environment values, and secret-shaped values are not stored in request telemetry, duration histograms, signals, export previews, or export payloads.
 
+Implemented active-lockout telemetry slice:
+
+- `GET /v1/telemetry` now wires `counters.activeLockouts` and the OTEL-shaped `secretsbroker.lockout.active` signal to the broker lockout store instead of returning a static zero.
+- The lockout metric is aggregate-only. It may expose the active lockout count but not lockout scopes, raw refs, client addresses, presented tokens, expected tokens, reasons, request bodies, or secret values.
+- Expired lockouts are pruned before counting so the telemetry value reflects currently active cooldowns only.
+
 ## Events and filtering
 
 Events represent operator-relevant state transitions and decisions. The broker should maintain a bounded recent event store and expose filtered reads.
