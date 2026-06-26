@@ -177,6 +177,122 @@ func TestTelemetryOTelPreviewIsDryRunAndRedacted(t *testing.T) {
 	}
 }
 
+func TestTelemetryExportActionSendsSanitizedMetadataOnlyWhenExplicitlyEnabled(t *testing.T) {
+	var collectorBody bytes.Buffer
+	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collector method = %s", r.Method)
+		}
+		if got := r.Header.Get("authorization"); !strings.Contains(got, "ghp_fakeTelemetryHeaderToken1234567890") {
+			t.Fatalf("collector did not receive configured header")
+		}
+		if _, err := collectorBody.ReadFrom(r.Body); err != nil {
+			t.Fatal(err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer collector.Close()
+
+	t.Setenv("SECRETSBROKER_OTEL_ENABLED", "1")
+	t.Setenv("SECRETSBROKER_OTEL_EXPORT_MODE", "export")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", collector.URL+"/v1/traces?token=SERVICE_LASSO_FAKE_OTEL_TOKEN_DO_NOT_USE")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer ghp_fakeTelemetryHeaderToken1234567890,x-safe-route=local")
+
+	backend := testBackend(t)
+	ref := "services/api/runtime/API_TOKEN"
+	if _, err := backend.writeSecret(writeSecretRequest{Ref: ref, Value: telemetrySecretValue}); err != nil {
+		t.Fatal(err)
+	}
+	_ = backend.audit("provider_validate", "providers/vault/token", "source_auth_required", "@operator", "req-provider")
+
+	res, err := buildTelemetryResponse(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ExportPreview.Mode != "export_configured" || res.ExportPreview.Status != "not_sent" {
+		t.Fatalf("export preview = %#v", res.ExportPreview)
+	}
+	result := sendTelemetryExportFromResponse(res, collector.Client())
+	encodedResult, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecretMaterial(
+		t,
+		encodedResult,
+		telemetrySecretValue,
+		ref,
+		"providers/vault/token",
+		"SERVICE_LASSO_FAKE_OTEL_TOKEN_DO_NOT_USE",
+		"ghp_fakeTelemetryHeaderToken1234567890",
+		collector.URL,
+	)
+	assertNoSecretMaterial(
+		t,
+		collectorBody.Bytes(),
+		telemetrySecretValue,
+		ref,
+		"providers/vault/token",
+		"SERVICE_LASSO_FAKE_OTEL_TOKEN_DO_NOT_USE",
+		"ghp_fakeTelemetryHeaderToken1234567890",
+	)
+	if result.Mode != "export" || result.Status != "sent" || result.ExporterStatusCode == nil || *result.ExporterStatusCode != http.StatusAccepted {
+		t.Fatalf("export result = %#v", result)
+	}
+	if !result.EndpointConfigured || result.EndpointValueReturned || !result.HeadersConfigured || result.HeadersValueReturned || result.BodyValueReturned {
+		t.Fatalf("export result leaked unsafe state: %#v", result)
+	}
+	var payload telemetryExportPayload
+	if err := json.Unmarshal(collectorBody.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Resource.ServiceName != "secretsbroker" || len(payload.Signals) == 0 {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
+func TestTelemetryExportActionBlocksUnsafeConfigurationWithoutLeaking(t *testing.T) {
+	t.Setenv("SECRETSBROKER_OTEL_ENABLED", "1")
+	t.Setenv("SECRETSBROKER_OTEL_EXPORT_MODE", "export")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "file:///tmp/SERVICE_LASSO_FAKE_OTEL_TOKEN_DO_NOT_USE")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "")
+
+	backend := testBackend(t)
+	ref := "services/api/runtime/API_TOKEN"
+	if _, err := backend.writeSecret(writeSecretRequest{Ref: ref, Value: telemetrySecretValue}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := buildTelemetryResponse(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := sendTelemetryExportFromResponse(res, http.DefaultClient)
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecretMaterial(t, encoded, telemetrySecretValue, ref, "SERVICE_LASSO_FAKE_OTEL_TOKEN_DO_NOT_USE")
+	if result.Status != "blocked" || result.EndpointValueReturned || result.HeadersValueReturned || result.BodyValueReturned {
+		t.Fatalf("unsupported endpoint result = %#v", result)
+	}
+
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:9/v1/traces")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "bad header=Bearer ghp_fakeTelemetryHeaderToken1234567890")
+	res, err = buildTelemetryResponse(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result = sendTelemetryExportFromResponse(res, http.DefaultClient)
+	encoded, err = json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecretMaterial(t, encoded, "ghp_fakeTelemetryHeaderToken1234567890", "127.0.0.1:9")
+	if result.Status != "blocked" || !result.HeadersConfigured {
+		t.Fatalf("unsupported header result = %#v", result)
+	}
+}
+
 func validTraceparent(value string, traceID string, spanID string) bool {
 	return value == "00-"+traceID+"-"+spanID+"-01" &&
 		len(traceID) == 32 &&
