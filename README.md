@@ -106,6 +106,17 @@ go run .\cmd\secretsbroker serve
 
 On Windows, `auto` serves over a named pipe with connected-client identity checks. On Unix-like platforms, `auto` serves over a Unix socket with peer credential checks where supported.
 
+Windows named-pipe production profiles can make launcher/service-account access explicit:
+
+```powershell
+$env:SECRETSBROKER_NAMED_PIPE_ALLOWED_SIDS = "S-1-5-80-..."
+$env:SECRETSBROKER_NAMED_PIPE_ALLOW_ADMIN = "false"
+$env:SECRETSBROKER_NAMED_PIPE_ALLOW_LOCAL_SYSTEM = "true"
+go run .\cmd\secretsbroker serve --mode production --transport windows-named-pipe
+```
+
+The broker process user SID is always included in the named-pipe ACL. Additional SIDs are for a stable Service Lasso launcher or service account. Local Administrators and LocalSystem stay enabled by default for compatibility, and production profiles can turn either off once the launcher identity is fixed.
+
 Check status:
 
 ```powershell

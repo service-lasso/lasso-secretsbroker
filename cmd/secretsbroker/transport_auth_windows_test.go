@@ -15,17 +15,29 @@ import (
 )
 
 func TestWindowsNamedPipeClientAuthorization(t *testing.T) {
-	if !windowsNamedPipeClientAuthorized(windowsClientIdentity{UserSID: "S-1-5-21-1000"}, "s-1-5-21-1000") {
+	policy := windowsNamedPipeAccessPolicy{
+		AllowedUserSIDs:    []string{"s-1-5-21-1000"},
+		AllowLocalSystem:   true,
+		AllowBuiltinAdmins: true,
+	}
+	if !windowsNamedPipeClientAuthorized(windowsClientIdentity{UserSID: "S-1-5-21-1000"}, policy) {
 		t.Fatalf("same user SID should be authorized")
 	}
-	if !windowsNamedPipeClientAuthorized(windowsClientIdentity{UserSID: "S-1-5-18", IsLocalSystem: true}, "S-1-5-21-1000") {
+	if !windowsNamedPipeClientAuthorized(windowsClientIdentity{UserSID: "S-1-5-18", IsLocalSystem: true}, policy) {
 		t.Fatalf("LocalSystem should be authorized")
 	}
-	if !windowsNamedPipeClientAuthorized(windowsClientIdentity{UserSID: "S-1-5-21-1001", IsBuiltinAdminMember: true}, "S-1-5-21-1000") {
+	if !windowsNamedPipeClientAuthorized(windowsClientIdentity{UserSID: "S-1-5-21-1001", IsBuiltinAdminMember: true}, policy) {
 		t.Fatalf("enabled builtin administrator member should be authorized")
 	}
-	if windowsNamedPipeClientAuthorized(windowsClientIdentity{UserSID: "S-1-5-21-1001"}, "S-1-5-21-1000") {
+	if windowsNamedPipeClientAuthorized(windowsClientIdentity{UserSID: "S-1-5-21-1001"}, policy) {
 		t.Fatalf("untrusted different user SID should be rejected")
+	}
+	strictPolicy := windowsNamedPipeAccessPolicy{AllowedUserSIDs: []string{"S-1-5-21-1000"}}
+	if windowsNamedPipeClientAuthorized(windowsClientIdentity{UserSID: "S-1-5-18", IsLocalSystem: true}, strictPolicy) {
+		t.Fatalf("strict policy should reject LocalSystem when not allowed")
+	}
+	if windowsNamedPipeClientAuthorized(windowsClientIdentity{UserSID: "S-1-5-21-1001", IsBuiltinAdminMember: true}, strictPolicy) {
+		t.Fatalf("strict policy should reject administrators when not allowed")
 	}
 }
 
@@ -34,8 +46,13 @@ func TestWindowsNamedPipeSecurityDescriptorContainsCurrentUser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sddl := windowsNamedPipeSecurityDescriptor(sid)
-	for _, want := range []string{"D:P", "SY", "BA", sid} {
+	policy := windowsNamedPipeAccessPolicyWithServerSID(windowsNamedPipeAccessPolicy{
+		AllowedUserSIDs:    []string{"S-1-5-80-12345", sid},
+		AllowLocalSystem:   true,
+		AllowBuiltinAdmins: true,
+	}, sid)
+	sddl := windowsNamedPipeSecurityDescriptor(policy)
+	for _, want := range []string{"D:P", "SY", "BA", sid, "S-1-5-80-12345"} {
 		if !strings.Contains(sddl, want) {
 			t.Fatalf("security descriptor %q missing %q", sddl, want)
 		}
@@ -147,7 +164,7 @@ func TestAuthorizeWindowsNamedPipeConnRejectsNonPipeConn(t *testing.T) {
 	server, client := net.Pipe()
 	defer server.Close()
 	defer client.Close()
-	if _, err := authorizeWindowsNamedPipeConn(server, "S-1-5-21-1000"); err == nil {
+	if _, err := authorizeWindowsNamedPipeConn(server, windowsNamedPipeAccessPolicy{AllowedUserSIDs: []string{"S-1-5-21-1000"}}); err == nil {
 		t.Fatalf("expected non-pipe connection rejection")
 	}
 }

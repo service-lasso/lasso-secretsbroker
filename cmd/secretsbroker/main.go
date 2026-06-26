@@ -298,6 +298,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"os-ipc-transport-policy",
 			"unix-socket-peer-credential-checks",
 			"windows-named-pipe-identity-checks",
+			"windows-named-pipe-service-account-policy",
 		},
 		FutureFeatures: []string{
 			"external-backend-write-back",
@@ -324,6 +325,9 @@ func serve(args []string) error {
 	transport := fs.String("transport", getenvDefault("SECRETSBROKER_TRANSPORT", "loopback-http"), "serve transport: loopback-http, unix-socket, windows-named-pipe, or auto")
 	unixSocket := fs.String("unix-socket", getenvDefault("SECRETSBROKER_UNIX_SOCKET", ""), "Unix socket path for unix-socket transport")
 	namedPipe := fs.String("named-pipe", getenvDefault("SECRETSBROKER_NAMED_PIPE", ""), "Windows named pipe path for windows-named-pipe transport")
+	namedPipeAllowedSIDs := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_NAMED_PIPE_ALLOWED_SIDS", "")))
+	namedPipeAllowAdmin := fs.Bool("named-pipe-allow-admin", envBoolDefault("SECRETSBROKER_NAMED_PIPE_ALLOW_ADMIN", true), "allow enabled local Administrators group members to connect to the Windows named-pipe transport")
+	namedPipeAllowLocalSystem := fs.Bool("named-pipe-allow-local-system", envBoolDefault("SECRETSBROKER_NAMED_PIPE_ALLOW_LOCAL_SYSTEM", true), "allow LocalSystem to connect to the Windows named-pipe transport")
 	state := fs.String("state", getenvDefault("SECRETSBROKER_STATE", "setup_needed"), "state to report")
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
 	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
@@ -336,6 +340,7 @@ func serve(args []string) error {
 	sourcesPath := fs.String("sources", getenvDefault("SECRETSBROKER_SOURCES_PATH", ""), "source adapter config path")
 	affectedRefs := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_REFS", "")))
 	affectedServices := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_SERVICES", "")))
+	fs.Var(&namedPipeAllowedSIDs, "named-pipe-allowed-sid", "additional Windows service-account/user SID allowed to connect to the named-pipe transport; repeatable")
 	fs.Var(&affectedRefs, "affected-ref", "affected secret ref to report for non-ready states; repeatable")
 	fs.Var(&affectedServices, "affected-service", "affected service id to report for non-ready states; repeatable")
 	if err := fs.Parse(args); err != nil {
@@ -370,11 +375,14 @@ func serve(args []string) error {
 	backend.sources = sources
 
 	binding, err := resolveServeTransport(serveTransportOptions{
-		Mode:       *mode,
-		Transport:  *transport,
-		Listen:     *listen,
-		UnixSocket: *unixSocket,
-		NamedPipe:  *namedPipe,
+		Mode:                        *mode,
+		Transport:                   *transport,
+		Listen:                      *listen,
+		UnixSocket:                  *unixSocket,
+		NamedPipe:                   *namedPipe,
+		NamedPipeAllowedSIDs:        []string(namedPipeAllowedSIDs),
+		NamedPipeAllowLocalSystem:   *namedPipeAllowLocalSystem,
+		NamedPipeAllowBuiltinAdmins: *namedPipeAllowAdmin,
 	})
 	if err != nil {
 		return err
