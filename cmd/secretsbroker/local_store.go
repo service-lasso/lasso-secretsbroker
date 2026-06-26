@@ -111,28 +111,35 @@ type writebackIdentity struct {
 }
 
 type launchIdentityLease struct {
-	Issuer            string   `json:"issuer"`
-	ServiceID         string   `json:"serviceId"`
-	WorkspaceID       string   `json:"workspaceId,omitempty"`
-	AllowedRefs       []string `json:"allowedRefs,omitempty"`
-	AllowedNamespaces []string `json:"allowedNamespaces,omitempty"`
-	AllowedOperations []string `json:"allowedOperations,omitempty"`
-	IssuedAt          string   `json:"issuedAt"`
-	ExpiresAt         string   `json:"expiresAt"`
-	JTI               string   `json:"jti"`
-	Signature         string   `json:"signature"`
+	Issuer            string                  `json:"issuer"`
+	ServiceID         string                  `json:"serviceId"`
+	WorkspaceID       string                  `json:"workspaceId,omitempty"`
+	AllowedRefs       []string                `json:"allowedRefs,omitempty"`
+	AllowedNamespaces []string                `json:"allowedNamespaces,omitempty"`
+	AllowedOperations []string                `json:"allowedOperations,omitempty"`
+	IssuedAt          string                  `json:"issuedAt"`
+	ExpiresAt         string                  `json:"expiresAt"`
+	JTI               string                  `json:"jti"`
+	Signature         string                  `json:"signature"`
+	TransportBinding  *launchTransportBinding `json:"transportBinding,omitempty"`
 }
 
 type launchIdentityLeasePayload struct {
-	Issuer            string   `json:"issuer"`
-	ServiceID         string   `json:"serviceId"`
-	WorkspaceID       string   `json:"workspaceId,omitempty"`
-	AllowedRefs       []string `json:"allowedRefs,omitempty"`
-	AllowedNamespaces []string `json:"allowedNamespaces,omitempty"`
-	AllowedOperations []string `json:"allowedOperations,omitempty"`
-	IssuedAt          string   `json:"issuedAt"`
-	ExpiresAt         string   `json:"expiresAt"`
-	JTI               string   `json:"jti"`
+	Issuer            string                  `json:"issuer"`
+	ServiceID         string                  `json:"serviceId"`
+	WorkspaceID       string                  `json:"workspaceId,omitempty"`
+	AllowedRefs       []string                `json:"allowedRefs,omitempty"`
+	AllowedNamespaces []string                `json:"allowedNamespaces,omitempty"`
+	AllowedOperations []string                `json:"allowedOperations,omitempty"`
+	IssuedAt          string                  `json:"issuedAt"`
+	ExpiresAt         string                  `json:"expiresAt"`
+	JTI               string                  `json:"jti"`
+	TransportBinding  *launchTransportBinding `json:"transportBinding,omitempty"`
+}
+
+type launchTransportBinding struct {
+	Kind    string `json:"kind"`
+	Subject string `json:"subject"`
 }
 
 type generatedSecretCaptureRequest struct {
@@ -369,11 +376,12 @@ func launchIdentitySignatureInput(lease launchIdentityLease) ([]byte, error) {
 		IssuedAt:          strings.TrimSpace(lease.IssuedAt),
 		ExpiresAt:         strings.TrimSpace(lease.ExpiresAt),
 		JTI:               strings.TrimSpace(lease.JTI),
+		TransportBinding:  normalizeLaunchTransportBinding(lease.TransportBinding),
 	}
 	return json.Marshal(payload)
 }
 
-func (b *localBackend) authorizeWritebackLaunchLease(req *generatedSecretCaptureRequest, signingKey string) error {
+func (b *localBackend) authorizeWritebackLaunchLease(req *generatedSecretCaptureRequest, signingKey string, peer transportPeerIdentity) error {
 	if req == nil {
 		return errIdentityInvalid
 	}
@@ -381,7 +389,7 @@ func (b *localBackend) authorizeWritebackLaunchLease(req *generatedSecretCapture
 	namespace := strings.Trim(strings.TrimSpace(req.Namespace), "/")
 	ref := strings.Trim(strings.TrimSpace(req.Ref), "/")
 	fullRef := strings.Trim(namespace+"/"+ref, "/")
-	if err := b.verifyLaunchIdentityLease(req.IdentityLease, signingKey, strings.TrimSpace(req.Identity.ServiceID), "", operation, []string{fullRef}, []string{namespace}); err != nil {
+	if err := b.verifyLaunchIdentityLease(req.IdentityLease, signingKey, strings.TrimSpace(req.Identity.ServiceID), "", operation, []string{fullRef}, []string{namespace}, peer); err != nil {
 		_ = b.audit("launch_identity", fullRef, launchIdentityOutcome(err), strings.TrimSpace(req.Identity.ServiceID), req.RequestID)
 		return err
 	}
@@ -397,11 +405,11 @@ func (b *localBackend) authorizeWritebackLaunchLease(req *generatedSecretCapture
 	return nil
 }
 
-func (b *localBackend) authorizeResolveLaunchLease(req *resolveRequest, signingKey string) error {
+func (b *localBackend) authorizeResolveLaunchLease(req *resolveRequest, signingKey string, peer transportPeerIdentity) error {
 	if req == nil {
 		return errIdentityInvalid
 	}
-	if err := b.verifyLaunchIdentityLease(req.IdentityLease, signingKey, strings.TrimSpace(req.ServiceID), strings.TrimSpace(req.WorkspaceID), "resolve", req.Refs, nil); err != nil {
+	if err := b.verifyLaunchIdentityLease(req.IdentityLease, signingKey, strings.TrimSpace(req.ServiceID), strings.TrimSpace(req.WorkspaceID), "resolve", req.Refs, nil, peer); err != nil {
 		_ = b.audit("launch_identity", "", launchIdentityOutcome(err), strings.TrimSpace(req.ServiceID), req.RequestID)
 		return err
 	}
@@ -416,8 +424,12 @@ func (b *localBackend) authorizeResolveLaunchLease(req *resolveRequest, signingK
 	return nil
 }
 
-func (b *localBackend) verifyLaunchIdentityLease(lease *launchIdentityLease, signingKey, expectedServiceID, expectedWorkspaceID, operation string, refs, namespaces []string) error {
+func (b *localBackend) verifyLaunchIdentityLease(lease *launchIdentityLease, signingKey, expectedServiceID, expectedWorkspaceID, operation string, refs, namespaces []string, peer transportPeerIdentity) error {
 	if lease == nil || strings.TrimSpace(signingKey) == "" || strings.TrimSpace(lease.Signature) == "" || strings.TrimSpace(lease.ServiceID) == "" || strings.TrimSpace(lease.Issuer) == "" || strings.TrimSpace(lease.JTI) == "" {
+		return errIdentityInvalid
+	}
+	binding := normalizeLaunchTransportBinding(lease.TransportBinding)
+	if lease.TransportBinding != nil && binding == nil {
 		return errIdentityInvalid
 	}
 	if expectedServiceID != "" && strings.TrimSpace(lease.ServiceID) != expectedServiceID {
@@ -454,10 +466,38 @@ func (b *localBackend) verifyLaunchIdentityLease(lease *launchIdentityLease, sig
 	if !constantTimeTokenEqual(lease.Signature, want) {
 		return errIdentityInvalid
 	}
+	if binding != nil && !launchTransportBindingMatchesPeer(binding, peer) {
+		return errPolicyDenied
+	}
 	if !b.rememberLaunchLeaseJTI(*lease, expiresAt, now) {
 		return errIdentityReplayed
 	}
 	return nil
+}
+
+func normalizeLaunchTransportBinding(binding *launchTransportBinding) *launchTransportBinding {
+	if binding == nil {
+		return nil
+	}
+	normalized := &launchTransportBinding{
+		Kind:    strings.ToLower(strings.TrimSpace(binding.Kind)),
+		Subject: strings.TrimSpace(binding.Subject),
+	}
+	if normalized.Kind == "" || normalized.Subject == "" {
+		return nil
+	}
+	return normalized
+}
+
+func launchTransportBindingMatchesPeer(binding *launchTransportBinding, peer transportPeerIdentity) bool {
+	if binding == nil {
+		return true
+	}
+	peer = normalizeTransportPeerIdentity(peer)
+	if peer.Kind == "" || peer.Subject == "" {
+		return false
+	}
+	return strings.EqualFold(binding.Kind, peer.Kind) && strings.EqualFold(binding.Subject, peer.Subject)
 }
 
 func launchLeaseOperationAllowed(operation string, allowed []string) bool {
@@ -1062,7 +1102,8 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, secur
 			writeDecodeError(w, err)
 			return
 		}
-		if err := backend.authorizeWritebackLaunchLease(&req, firstNonEmpty(backend.launchIdentitySigningKey, security.token)); err != nil {
+		peer := transportPeerIdentityFromContext(r.Context())
+		if err := backend.authorizeWritebackLaunchLease(&req, firstNonEmpty(backend.launchIdentitySigningKey, security.token), peer); err != nil {
 			writeLaunchIdentityAPIError(w, err)
 			return
 		}
@@ -1100,7 +1141,8 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, secur
 			writeDecodeError(w, err)
 			return
 		}
-		if err := backend.authorizeResolveLaunchLease(&req, firstNonEmpty(backend.launchIdentitySigningKey, security.token)); err != nil {
+		peer := transportPeerIdentityFromContext(r.Context())
+		if err := backend.authorizeResolveLaunchLease(&req, firstNonEmpty(backend.launchIdentitySigningKey, security.token), peer); err != nil {
 			writeLaunchIdentityAPIError(w, err)
 			return
 		}

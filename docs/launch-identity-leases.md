@@ -27,6 +27,10 @@ hmac-sha256:<base64url-no-padding>
   "issuedAt": "2026-06-20T08:00:00Z",
   "expiresAt": "2026-06-20T08:05:00Z",
   "jti": "01J...",
+  "transportBinding": {
+    "kind": "windows-sid",
+    "subject": "S-1-5-21-..."
+  },
   "signature": "hmac-sha256:..."
 }
 ```
@@ -36,6 +40,13 @@ Required claims:
 - `issuer`, `serviceId`, `issuedAt`, `expiresAt`, `jti`, and `signature`
 - at least one of `allowedRefs` or `allowedNamespaces`
 - `allowedOperations`, using `resolve` for resolve requests and write-back operations such as `create`, `update`, `rotate`, or `delete`
+
+Optional transport binding:
+
+- `transportBinding.kind`: `windows-sid` for Windows named-pipe clients or `unix-uid` for Unix socket clients.
+- `transportBinding.subject`: the broker-observed local peer subject, such as a Windows user SID or Unix UID.
+
+When present, `transportBinding` is part of the signed lease payload. The broker requires the request to arrive through an authenticated IPC transport with matching local peer metadata. A transport-bound lease fails closed on loopback HTTP or on a mismatched local peer.
 
 `jti` values are one-time use until their expiry. Replaying a lease returns `identity_replayed`.
 
@@ -47,5 +58,6 @@ The broker rejects the request before reading or writing secret values when:
 - the lease is expired: `identity_expired`
 - the `jti` has already been used: `identity_replayed`
 - the request service, workspace, refs, namespace, or operation exceed the signed scope: `policy_denied`
+- the lease is bound to a local transport identity and the authenticated IPC peer does not match: `policy_denied`
 
 Audit records use metadata only: operation, request id, service id, safe ref/hash where applicable, and typed outcome. Lease signatures, API tokens, and secret values are never written to audit JSONL.
