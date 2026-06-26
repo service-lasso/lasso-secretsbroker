@@ -91,9 +91,82 @@ func TestTelemetryEndpointAndAdminCLIAreMetadataOnly(t *testing.T) {
 	}
 }
 
+func TestTelemetryOTelPreviewIsDryRunAndRedacted(t *testing.T) {
+	t.Setenv("SECRETSBROKER_OTEL_ENABLED", "1")
+	t.Setenv("SECRETSBROKER_OTEL_EXPORT_MODE", "dry-run")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.example.invalid/v1/traces?token=SERVICE_LASSO_FAKE_OTEL_TOKEN_DO_NOT_USE")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer ghp_fakeTelemetryHeaderToken1234567890")
+
+	backend := testBackend(t)
+	ref := "services/api/runtime/API_TOKEN"
+	if _, err := backend.writeSecret(writeSecretRequest{Ref: ref, Value: telemetrySecretValue}); err != nil {
+		t.Fatal(err)
+	}
+	_ = backend.audit("provider_validate", "providers/vault/token", "source_auth_required", "@operator", "req-provider")
+
+	res, err := buildTelemetryResponse(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecretMaterial(
+		t,
+		encoded,
+		telemetrySecretValue,
+		ref,
+		"providers/vault/token",
+		"SERVICE_LASSO_FAKE_OTEL_TOKEN_DO_NOT_USE",
+		"ghp_fakeTelemetryHeaderToken1234567890",
+	)
+	if res.ContractVersion != secretsBrokerTelemetryContractVersion {
+		t.Fatalf("contract version = %q", res.ContractVersion)
+	}
+	if res.Exporter.Status != "configured" || !res.Exporter.EndpointConfigured || !res.Exporter.HeadersConfigured {
+		t.Fatalf("exporter = %#v", res.Exporter)
+	}
+	if res.Exporter.EndpointValueReturned || res.Exporter.HeadersValueReturned || res.Exporter.BodyValueReturned {
+		t.Fatalf("exporter leaked returned values: %#v", res.Exporter)
+	}
+	if res.ExportPreview.Mode != "dry_run" || res.ExportPreview.Status != "not_sent" || res.ExportPreview.SignalCount != len(res.Signals) {
+		t.Fatalf("export preview = %#v signals=%d", res.ExportPreview, len(res.Signals))
+	}
+	if res.ExportPreview.EndpointValueReturned || res.ExportPreview.HeadersValueReturned || res.ExportPreview.BodyValueReturned {
+		t.Fatalf("export preview leaked returned values: %#v", res.ExportPreview)
+	}
+	if !hasSignal(res.Signals, "secretsbroker.operation.count") || !hasSignal(res.Signals, "secretsbroker.audit.record.count") {
+		t.Fatalf("missing OTel-shaped signals: %#v", res.Signals)
+	}
+	allowed := map[string]bool{}
+	for _, key := range res.Redaction.AllowedAttributes {
+		allowed[key] = true
+	}
+	for _, signal := range res.Signals {
+		if signal.TraceID == "" || signal.SpanID == "" || signal.CorrelationID == "" {
+			t.Fatalf("signal missing trace identifiers: %#v", signal)
+		}
+		for key := range signal.Attributes {
+			if !allowed[key] {
+				t.Fatalf("signal used non-allowlisted attribute %q in %#v", key, signal)
+			}
+		}
+	}
+}
+
 func hasOperationCount(counters []telemetryOperationCounter, operation, outcome string, count int) bool {
 	for _, counter := range counters {
 		if counter.Operation == operation && counter.Outcome == outcome && counter.Count == count {
+			return true
+		}
+	}
+	return false
+}
+
+func hasSignal(signals []telemetrySignalPreview, name string) bool {
+	for _, signal := range signals {
+		if signal.Name == name {
 			return true
 		}
 	}

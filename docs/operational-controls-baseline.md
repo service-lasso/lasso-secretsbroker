@@ -129,6 +129,14 @@ Implemented first slice:
 - The first slice intentionally reports duration histograms as an empty array until operation-duration timing is recorded by the broker paths.
 - Telemetry uses `refHash`-only audit reads internally and does not serialize raw refs, secret values, provider credentials, bearer tokens, private keys, cookies, passwords, environment values, or provider response bodies.
 
+Implemented OpenTelemetry preview slice:
+
+- `GET /v1/telemetry` now includes contract `service-lasso.secretsbroker.telemetry-preview.v1`.
+- The response includes a redacted `resource`, allowlisted `redaction` policy, deterministic trace/span/correlation identifiers, and metadata-only metric `signals` for broker operation counts, policy decisions, provider/source states, audit-record outcomes, and active lockout counts.
+- The response includes `exporter` and `exportPreview` status for local OTLP readiness. Export remains disabled by default and reports `dry_run` only when `SECRETSBROKER_OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, and `SECRETSBROKER_OTEL_EXPORT_MODE=dry-run` are explicitly configured.
+- `/v1/telemetry` never sends telemetry. Endpoint values, OTLP headers, payload bodies, raw refs, secret values, provider credentials, tokens, cookies, private keys, recovery material, environment values, raw request/response bodies, provider response bodies, and raw config values are omitted.
+- `secretsbroker admin telemetry` returns the same OTel-shaped preview for headless checks without exposing endpoint/header/body values.
+
 ## Events and filtering
 
 Events represent operator-relevant state transitions and decisions. The broker should maintain a bounded recent event store and expose filtered reads.

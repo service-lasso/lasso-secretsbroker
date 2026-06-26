@@ -36,7 +36,7 @@ The daemon exposes loopback HTTP for development/bootstrap and now has explicit 
 ## Cross-cutting response rules
 
 - API version is visible in `status` and `capabilities` responses.
-- Secret values are never returned by status/capabilities/state/source-status endpoints.
+- Secret values are never returned by status/capabilities/state/source-status/telemetry endpoints.
 - Secret-bearing endpoints require local API token authentication for the loopback HTTP transport.
 - Resolve responses may include secret material only for requested refs allowed by policy.
 - Error responses use the typed error envelope below.
@@ -164,6 +164,7 @@ Example response:
     "GET /capabilities",
     "POST /v1/secrets",
     "POST /v1/resolve",
+    "GET /v1/telemetry",
     "GET|POST /v1/recovery/policy",
     "POST /v1/management/lockouts/clear",
     "GET /v1/sources/status"
@@ -182,7 +183,8 @@ Example response:
     "audited-lockout-clear",
     "recovery-policy-metadata",
     "recovery-policy-status",
-    "source-status"
+    "source-status",
+    "metadata-only-telemetry"
   ],
   "futureFeatures": [
     "write-back"
@@ -203,6 +205,18 @@ Example response:
   ]
 }
 ```
+
+### `GET /v1/telemetry`
+
+Read-only metadata telemetry for Service Admin and headless checks. It reports operational counters plus an OpenTelemetry-shaped preview contract:
+
+- `contractVersion`: `service-lasso.secretsbroker.telemetry-preview.v1`
+- `exporter`: configured/disabled status without endpoint or header values
+- `redaction`: allowlisted attributes and omitted field classes
+- `exportPreview`: dry-run/not-sent envelope metadata
+- `signals`: metric previews for operation counts, policy decisions, provider/source states, audit outcomes, and active lockout counts
+
+The endpoint never sends telemetry and never returns raw refs, secret values, provider credentials, tokens, cookies, private keys, recovery material, environment values, raw request/response bodies, OTLP endpoint values, OTLP headers, exported payload bodies, provider response bodies, or raw config values.
 
 ## Recovery policy metadata contract
 
