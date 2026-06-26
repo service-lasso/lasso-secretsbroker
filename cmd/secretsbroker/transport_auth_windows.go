@@ -35,27 +35,28 @@ func (l *windowsNamedPipeListener) Accept() (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := authorizeWindowsNamedPipeConn(conn, l.allowedUserSID); err != nil {
+		identity, err := authorizeWindowsNamedPipeConn(conn, l.allowedUserSID)
+		if err != nil {
 			_ = conn.Close()
 			continue
 		}
-		return conn, nil
+		return withTransportPeerIdentityConn(conn, identity), nil
 	}
 }
 
-func authorizeWindowsNamedPipeConn(conn net.Conn, allowedUserSID string) error {
+func authorizeWindowsNamedPipeConn(conn net.Conn, allowedUserSID string) (transportPeerIdentity, error) {
 	fdConn, ok := conn.(windowsPipeConnHandle)
 	if !ok {
-		return fmt.Errorf("windows-named-pipe transport connection is %T, want handle-bearing pipe connection", conn)
+		return transportPeerIdentity{}, fmt.Errorf("windows-named-pipe transport connection is %T, want handle-bearing pipe connection", conn)
 	}
 	identity, err := windowsNamedPipeClientIdentity(windows.Handle(fdConn.Fd()))
 	if err != nil {
-		return err
+		return transportPeerIdentity{}, err
 	}
 	if !windowsNamedPipeClientAuthorized(identity, allowedUserSID) {
-		return fmt.Errorf("windows-named-pipe transport rejected local peer sid")
+		return transportPeerIdentity{}, fmt.Errorf("windows-named-pipe transport rejected local peer sid")
 	}
-	return nil
+	return transportPeerIdentity{Kind: "windows-sid", Subject: identity.UserSID}, nil
 }
 
 func windowsNamedPipeClientAuthorized(identity windowsClientIdentity, allowedUserSID string) bool {

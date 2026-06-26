@@ -147,7 +147,7 @@ func TestAuthorizeWindowsNamedPipeConnRejectsNonPipeConn(t *testing.T) {
 	server, client := net.Pipe()
 	defer server.Close()
 	defer client.Close()
-	if err := authorizeWindowsNamedPipeConn(server, "S-1-5-21-1000"); err == nil {
+	if _, err := authorizeWindowsNamedPipeConn(server, "S-1-5-21-1000"); err == nil {
 		t.Fatalf("expected non-pipe connection rejection")
 	}
 }

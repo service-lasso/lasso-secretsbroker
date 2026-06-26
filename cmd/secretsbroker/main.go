@@ -283,6 +283,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"exec-source",
 			"service-json-secret-policy",
 			"signed-launch-identity-leases",
+			"launch-identity-transport-binding",
 			"write-back-policy",
 			"generated-secret-capture",
 			"encrypted-backup-restore",
@@ -384,7 +385,11 @@ func serve(args []string) error {
 	}
 	defer cleanup()
 
-	server := &http.Server{Handler: newHandler(stateView, backend, localAPISecurity{token: *apiToken}), ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{
+		Handler:           newHandler(stateView, backend, localAPISecurity{token: *apiToken}),
+		ReadHeaderTimeout: 5 * time.Second,
+		ConnContext:       transportPeerIdentityConnContext,
+	}
 	go func() {
 		slog.Info("@secretsbroker listening", "transport", binding.Kind, "addr", binding.DisplayAddress, "state", *state)
 		if err := server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {

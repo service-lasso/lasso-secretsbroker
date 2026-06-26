@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 )
 
 type unixPeerCredentialListener struct {
@@ -29,25 +30,26 @@ func (l *unixPeerCredentialListener) Accept() (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := authorizeUnixPeerConn(conn, l.allowedUID); err != nil {
+		identity, err := authorizeUnixPeerConn(conn, l.allowedUID)
+		if err != nil {
 			_ = conn.Close()
 			continue
 		}
-		return conn, nil
+		return withTransportPeerIdentityConn(conn, identity), nil
 	}
 }
 
-func authorizeUnixPeerConn(conn net.Conn, allowedUID int) error {
+func authorizeUnixPeerConn(conn net.Conn, allowedUID int) (transportPeerIdentity, error) {
 	unixConn, ok := conn.(*net.UnixConn)
 	if !ok {
-		return fmt.Errorf("unix-socket transport connection is %T, want *net.UnixConn", conn)
+		return transportPeerIdentity{}, fmt.Errorf("unix-socket transport connection is %T, want *net.UnixConn", conn)
 	}
 	uid, _, _, err := unixPeerCredentials(unixConn)
 	if err != nil {
-		return err
+		return transportPeerIdentity{}, err
 	}
 	if !unixPeerUIDAuthorized(uid, allowedUID) {
-		return fmt.Errorf("unix-socket transport rejected local peer uid %d", uid)
+		return transportPeerIdentity{}, fmt.Errorf("unix-socket transport rejected local peer uid %d", uid)
 	}
-	return nil
+	return transportPeerIdentity{Kind: "unix-uid", Subject: strconv.Itoa(uid)}, nil
 }

@@ -40,6 +40,7 @@ Implemented behavior:
 - `auto` chooses the platform IPC transport in production mode: Windows named pipe on Windows, Unix socket elsewhere.
 - Unix-like platforms can serve HTTP over a Unix socket, set the socket path to owner-only mode, and check OS peer credentials before passing a connection to the HTTP server. Linux uses `SO_PEERCRED`; macOS/FreeBSD use `LOCAL_PEERCRED`.
 - Windows can serve HTTP over a named pipe with a restricted security descriptor and a connected-client identity check before passing the connection to the HTTP server.
+- Authenticated IPC listeners attach safe local peer metadata to each accepted request: `windows-sid` for Windows named-pipe peers and `unix-uid` for Unix socket peers. Signed launch identity leases can optionally bind to that transport subject for secret-bearing resolve/write-back requests.
 
 ## Production gate
 
@@ -54,13 +55,13 @@ Current Windows named-pipe support:
 - The listener identifies the connected client process with `GetNamedPipeClientProcessId`, inspects the client process token, and accepts only the same user SID, LocalSystem, or an enabled local Administrators group membership.
 - Connections that cannot be identified or authorized are closed before the HTTP server sees the request.
 - Identity metadata must be safe: no access tokens, environment values, command lines, or raw credentials in responses, logs, or audit events.
-- Secret-bearing endpoints still require the existing local API token/session/launch-identity checks on top of the named-pipe boundary.
+- Secret-bearing endpoints still require the existing local API token/session/launch-identity checks on top of the named-pipe boundary. When a launch identity lease includes `transportBinding`, the request is denied unless the authenticated pipe peer matches that signed binding.
 
 Remaining hardening:
 
 - Define the final Service Lasso launcher policy for administrator and service-account access.
 - Add cross-user denial evidence in an integration environment that can create a second local Windows principal.
-- Bind signed launch identity leases to transport identity where required by a later policy slice.
+- Extend launcher-issued leases to include `transportBinding` by default once the core launcher has a stable broker transport identity policy.
 
 ## Unix socket requirements
 
@@ -80,3 +81,21 @@ secretsbroker serve --listen 127.0.0.1:17890
 ```
 
 Secret-bearing HTTP endpoints still require the local API token and existing launch identity checks. The IPC work changes the process boundary; it does not remove endpoint authentication or policy checks.
+
+## Launch identity transport binding
+
+Launch identity leases support an optional signed `transportBinding` object:
+
+```json
+{
+  "kind": "windows-sid",
+  "subject": "S-1-5-21-..."
+}
+```
+
+Supported binding kinds:
+
+- `windows-sid`: the connected Windows named-pipe client process token user SID.
+- `unix-uid`: the connected Unix socket peer UID.
+
+If a lease omits `transportBinding`, existing token/session and lease scope checks continue unchanged. If a lease includes it, the broker requires an authenticated IPC listener to provide matching peer metadata before `POST /v1/resolve` or `POST /v1/writeback` can proceed. Loopback HTTP does not provide OS peer identity, so transport-bound leases fail closed on loopback.
