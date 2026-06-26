@@ -3,7 +3,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -160,6 +163,86 @@ func TestWindowsNamedPipeTransportServesHTTP(t *testing.T) {
 	}
 }
 
+func TestWindowsNamedPipeTransportCarriesPeerIdentityToSecretEndpoints(t *testing.T) {
+	path := `\\.\pipe\service-lasso-secretsbroker-secret-test-` + time.Now().Format("20060102150405.000000000")
+	binding := serveTransportBinding{Kind: "windows-named-pipe", Network: "windows-named-pipe", Address: path, DisplayAddress: path}
+	ln, cleanup, err := listenForTransport(binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	backend := testBackend(t)
+	backend.now = func() time.Time { return time.Date(2026, 5, 7, 0, 1, 0, 0, time.UTC) }
+	if _, err := backend.writeSecret(writeSecretRequest{Ref: "services/api-service/runtime/API_TOKEN", Value: "pipe-bound-secret"}); err != nil {
+		t.Fatal(err)
+	}
+	state := "ready"
+	server := &http.Server{
+		Handler:           newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}),
+		ReadHeaderTimeout: 5 * time.Second,
+		ConnContext:       transportPeerIdentityConnContext,
+	}
+	done := make(chan error, 1)
+	go func() {
+		err := server.Serve(ln)
+		if err == http.ErrServerClosed {
+			err = nil
+		}
+		done <- err
+	}()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = server.Shutdown(ctx)
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	currentSID, err := currentWindowsUserSIDString()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := windowsNamedPipeHTTPClient(path)
+	peer := transportPeerIdentity{Kind: "windows-sid", Subject: currentSID}
+
+	matchingLease := boundTestLaunchIdentityLease(t, backend, "api-service", []string{"services/api-service/*"}, nil, []string{"resolve"}, "jti-named-pipe-resolve-ok", peer)
+	resolveBody := []byte(`{"requestId":"req-named-pipe-resolve-ok","serviceId":"api-service","identityLease":` + mustLeaseJSON(t, matchingLease) + `,"refs":["services/api-service/runtime/API_TOKEN"]}`)
+	res := doWindowsNamedPipeJSON(t, client, http.MethodPost, "http://secretsbroker.local/v1/resolve", "test-token", resolveBody)
+	defer res.Body.Close()
+	body := mustReadAll(t, res.Body)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("matching transport-bound resolve status=%d body=%s", res.StatusCode, string(body))
+	}
+	var resolved resolveResponse
+	if err := json.Unmarshal(body, &resolved); err != nil {
+		t.Fatal(err)
+	}
+	if len(resolved.Results) != 1 || resolved.Results[0].Outcome != "ready" || resolved.Results[0].Value != "pipe-bound-secret" {
+		t.Fatalf("matching transport-bound resolve = %#v", resolved)
+	}
+
+	mismatchedLease := boundTestLaunchIdentityLease(t, backend, "api-service", []string{"services/api-service/*"}, nil, []string{"resolve"}, "jti-named-pipe-resolve-mismatch", transportPeerIdentity{Kind: "windows-sid", Subject: "S-1-5-21-999999"})
+	mismatchBody := []byte(`{"requestId":"req-named-pipe-resolve-mismatch","serviceId":"api-service","identityLease":` + mustLeaseJSON(t, mismatchedLease) + `,"refs":["services/api-service/runtime/API_TOKEN"]}`)
+	res = doWindowsNamedPipeJSON(t, client, http.MethodPost, "http://secretsbroker.local/v1/resolve", "test-token", mismatchBody)
+	defer res.Body.Close()
+	body = mustReadAll(t, res.Body)
+	if res.StatusCode != http.StatusForbidden || !bytes.Contains(body, []byte(`"code":"policy_denied"`)) {
+		t.Fatalf("mismatched transport-bound resolve status=%d body=%s", res.StatusCode, string(body))
+	}
+	assertNoSecretMaterial(t, body, "pipe-bound-secret", "test-token")
+
+	writebackLease := boundTestLaunchIdentityLease(t, backend, "api-service", nil, []string{"services/api-service"}, []string{"create"}, "jti-named-pipe-writeback-ok", peer)
+	writebackBody := []byte(`{"requestId":"req-named-pipe-writeback-ok","identity":{"serviceId":"api-service","expiresAt":"2026-05-07T00:05:00Z"},"identityLease":` + mustLeaseJSON(t, writebackLease) + `,"policy":{"allowedNamespaces":["services/api-service"],"allowedOperations":["create"]},"operation":"create","namespace":"services/api-service","ref":"runtime/PIPE_WRITEBACK","value":"pipe-writeback-secret"}`)
+	res = doWindowsNamedPipeJSON(t, client, http.MethodPost, "http://secretsbroker.local/v1/writeback", "test-token", writebackBody)
+	defer res.Body.Close()
+	body = mustReadAll(t, res.Body)
+	if res.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`"outcome":"ready"`)) {
+		t.Fatalf("matching transport-bound writeback status=%d body=%s", res.StatusCode, string(body))
+	}
+}
+
 func TestAuthorizeWindowsNamedPipeConnRejectsNonPipeConn(t *testing.T) {
 	server, client := net.Pipe()
 	defer server.Close()
@@ -167,4 +250,39 @@ func TestAuthorizeWindowsNamedPipeConnRejectsNonPipeConn(t *testing.T) {
 	if _, err := authorizeWindowsNamedPipeConn(server, windowsNamedPipeAccessPolicy{AllowedUserSIDs: []string{"S-1-5-21-1000"}}); err == nil {
 		t.Fatalf("expected non-pipe connection rejection")
 	}
+}
+
+func windowsNamedPipeHTTPClient(path string) *http.Client {
+	timeout := 2 * time.Second
+	return &http.Client{Transport: &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return winio.DialPipe(path, &timeout)
+		},
+	}}
+}
+
+func doWindowsNamedPipeJSON(t *testing.T, client *http.Client, method, url, token string, body []byte) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(method, url, bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+func mustReadAll(t *testing.T, body io.Reader) []byte {
+	t.Helper()
+	bytes, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bytes
 }
