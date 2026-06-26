@@ -44,6 +44,7 @@ Implemented behavior:
 - Unix-like platforms can serve HTTP over a Unix socket, set the socket path to owner-only mode, and check OS peer credentials before passing a connection to the HTTP server. Linux uses `SO_PEERCRED`; macOS/FreeBSD use `LOCAL_PEERCRED`.
 - Windows can serve HTTP over a named pipe with a restricted security descriptor and a connected-client identity check before passing the connection to the HTTP server.
 - Authenticated IPC listeners attach safe local peer metadata to each accepted request: `windows-sid` for Windows named-pipe peers and `unix-uid` for Unix socket peers. Signed launch identity leases can optionally bind to that transport subject for secret-bearing resolve/write-back requests.
+- `secretsbroker admin launch-lease issue` can issue a signed lease with an explicit `transportBinding` so launcher integration tests and future core launch flows can produce the same bound payload the broker enforces.
 
 ## Production gate
 
@@ -108,3 +109,18 @@ Supported binding kinds:
 - `unix-uid`: the connected Unix socket peer UID.
 
 If a lease omits `transportBinding`, existing token/session and lease scope checks continue unchanged. If a lease includes it, the broker requires an authenticated IPC listener to provide matching peer metadata before `POST /v1/resolve` or `POST /v1/writeback` can proceed. Loopback HTTP does not provide OS peer identity, so transport-bound leases fail closed on loopback.
+
+The broker-side issuance helper supports the launcher payload shape:
+
+```powershell
+secretsbroker admin launch-lease issue `
+  --service-id api-service `
+  --workspace-id workspace-local `
+  --allowed-ref "services/api-service/runtime/*" `
+  --operation resolve `
+  --jti "<one-time-id>" `
+  --transport-binding-kind windows-sid `
+  --transport-binding-subject "S-1-5-21-..."
+```
+
+The helper signs with `SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY` or, for bootstrap compatibility only, `SECRETSBROKER_API_TOKEN`. It does not discover the current peer itself; the launcher must supply the subject it will run the client under, and the broker still verifies that the actual authenticated IPC peer matches before serving secret-bearing endpoints.

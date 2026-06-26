@@ -14,6 +14,22 @@ The signature algorithm is HMAC-SHA-256 over the canonical JSON lease payload, e
 hmac-sha256:<base64url-no-padding>
 ```
 
+The broker ships a bounded launcher-compatible issuer helper so the Service Lasso launcher can generate the exact signed payload shape the broker enforces:
+
+```powershell
+$env:SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY = "<launcher-owned-hmac-key>"
+secretsbroker admin launch-lease issue `
+  --service-id api-service `
+  --workspace-id workspace-local `
+  --allowed-ref "services/api-service/runtime/*" `
+  --operation resolve `
+  --jti "<one-time-id>" `
+  --transport-binding-kind windows-sid `
+  --transport-binding-subject "S-1-5-21-..."
+```
+
+For bootstrap compatibility only, the helper can fall back to `SECRETSBROKER_API_TOKEN` when the dedicated launch signing key is not configured. Production launchers should use a distinct signing key and avoid passing secrets as command-line flags.
+
 ## Lease shape
 
 ```json

@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type adminCommonOptions struct {
@@ -46,6 +47,13 @@ type adminAuditExportResponse struct {
 	Events      []auditEvent           `json:"events"`
 }
 
+type adminLaunchLeaseIssueResponse struct {
+	ServiceID  string              `json:"serviceId"`
+	APIVersion string              `json:"apiVersion"`
+	Outcome    string              `json:"outcome"`
+	Lease      launchIdentityLease `json:"lease"`
+}
+
 func runAdmin(args []string) error {
 	return executeAdmin(args, os.Stdout)
 }
@@ -75,9 +83,142 @@ func executeAdmin(args []string, out io.Writer) error {
 		return runAdminEvents(args[1:], out)
 	case "mcp":
 		return runAdminMCP(args[1:], out)
+	case "launch-lease":
+		return runAdminLaunchLease(args[1:], out)
 	default:
 		return fmt.Errorf("unknown admin command %q", args[0])
 	}
+}
+
+func runAdminLaunchLease(args []string, out io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("unknown admin launch-lease command %q", "")
+	}
+	sub := args[0]
+	fs := flag.NewFlagSet("admin launch-lease "+sub, flag.ContinueOnError)
+	service := fs.String("service-id", "", "launched service id")
+	workspace := fs.String("workspace-id", "", "workspace id")
+	issuer := fs.String("issuer", "service-lasso-local-launcher", "lease issuer")
+	jti := fs.String("jti", "", "one-time lease id")
+	signingKey := fs.String("signing-key", getenvDefault("SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY", ""), "HMAC signing key; prefer SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY")
+	apiToken := fs.String("api-token", getenvDefault("SECRETSBROKER_API_TOKEN", ""), "bootstrap fallback signing key when launch signing key is unset")
+	issuedAt := fs.String("issued-at", "", "issued-at timestamp, RFC3339; defaults to now")
+	expiresAt := fs.String("expires-at", "", "expires-at timestamp, RFC3339")
+	ttl := fs.Duration("ttl", 5*time.Minute, "lease lifetime when --expires-at is omitted")
+	transportKind := fs.String("transport-binding-kind", "", "optional transport binding kind: windows-sid or unix-uid")
+	transportSubject := fs.String("transport-binding-subject", "", "optional transport binding subject")
+	refs := multiFlag{}
+	namespaces := multiFlag{}
+	operations := multiFlag{}
+	fs.Var(&refs, "allowed-ref", "allowed secret ref or glob; repeatable")
+	fs.Var(&namespaces, "allowed-namespace", "allowed secret namespace; repeatable")
+	fs.Var(&operations, "operation", "allowed operation; repeatable")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if sub != "issue" {
+		return fmt.Errorf("unknown admin launch-lease command %q", sub)
+	}
+	key := firstNonEmpty(*signingKey, *apiToken)
+	if strings.TrimSpace(key) == "" {
+		return fmt.Errorf("launch lease issue requires SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY or --signing-key; bootstrap may use SECRETSBROKER_API_TOKEN or --api-token")
+	}
+	lease, err := buildAdminLaunchLease(adminLaunchLeaseOptions{
+		Issuer:                  *issuer,
+		ServiceID:               *service,
+		WorkspaceID:             *workspace,
+		JTI:                     *jti,
+		AllowedRefs:             []string(refs),
+		AllowedNamespaces:       []string(namespaces),
+		AllowedOperations:       []string(operations),
+		IssuedAt:                *issuedAt,
+		ExpiresAt:               *expiresAt,
+		TTL:                     *ttl,
+		TransportBindingKind:    *transportKind,
+		TransportBindingSubject: *transportSubject,
+	}, time.Now().UTC)
+	if err != nil {
+		return err
+	}
+	signed, err := signLaunchIdentityLease(lease, key)
+	if err != nil {
+		return err
+	}
+	return encodeAdminJSON(out, adminLaunchLeaseIssueResponse{
+		ServiceID:  serviceID,
+		APIVersion: apiVersion,
+		Outcome:    "ready",
+		Lease:      signed,
+	})
+}
+
+type adminLaunchLeaseOptions struct {
+	Issuer                  string
+	ServiceID               string
+	WorkspaceID             string
+	JTI                     string
+	AllowedRefs             []string
+	AllowedNamespaces       []string
+	AllowedOperations       []string
+	IssuedAt                string
+	ExpiresAt               string
+	TTL                     time.Duration
+	TransportBindingKind    string
+	TransportBindingSubject string
+}
+
+func buildAdminLaunchLease(opts adminLaunchLeaseOptions, now func() time.Time) (launchIdentityLease, error) {
+	issued, err := parseOptionalLeaseTime(opts.IssuedAt, now())
+	if err != nil {
+		return launchIdentityLease{}, fmt.Errorf("invalid issued-at: %w", err)
+	}
+	expires, err := parseOptionalLeaseTime(opts.ExpiresAt, issued.Add(opts.TTL))
+	if err != nil {
+		return launchIdentityLease{}, fmt.Errorf("invalid expires-at: %w", err)
+	}
+	lease := launchIdentityLease{
+		Issuer:            strings.TrimSpace(opts.Issuer),
+		ServiceID:         strings.TrimSpace(opts.ServiceID),
+		WorkspaceID:       strings.TrimSpace(opts.WorkspaceID),
+		AllowedRefs:       safeList(opts.AllowedRefs),
+		AllowedNamespaces: safeList(opts.AllowedNamespaces),
+		AllowedOperations: safeList(opts.AllowedOperations),
+		IssuedAt:          issued.Format(time.RFC3339),
+		ExpiresAt:         expires.Format(time.RFC3339),
+		JTI:               strings.TrimSpace(opts.JTI),
+	}
+	if strings.TrimSpace(lease.Issuer) == "" || strings.TrimSpace(lease.ServiceID) == "" || strings.TrimSpace(lease.JTI) == "" {
+		return launchIdentityLease{}, fmt.Errorf("launch lease issue requires issuer, service-id, and jti")
+	}
+	if !expires.After(issued) {
+		return launchIdentityLease{}, fmt.Errorf("launch lease expires-at must be after issued-at")
+	}
+	if len(lease.AllowedRefs) == 0 && len(lease.AllowedNamespaces) == 0 {
+		return launchIdentityLease{}, fmt.Errorf("launch lease issue requires at least one allowed-ref or allowed-namespace")
+	}
+	if len(lease.AllowedOperations) == 0 {
+		return launchIdentityLease{}, fmt.Errorf("launch lease issue requires at least one operation")
+	}
+	binding := normalizeLaunchTransportBinding(&launchTransportBinding{
+		Kind:    opts.TransportBindingKind,
+		Subject: opts.TransportBindingSubject,
+	})
+	if (strings.TrimSpace(opts.TransportBindingKind) != "" || strings.TrimSpace(opts.TransportBindingSubject) != "") && binding == nil {
+		return launchIdentityLease{}, fmt.Errorf("transport binding requires both kind and subject")
+	}
+	lease.TransportBinding = binding
+	return lease, nil
+}
+
+func parseOptionalLeaseTime(value string, fallback time.Time) (time.Time, error) {
+	if strings.TrimSpace(value) == "" {
+		return fallback.UTC().Truncate(time.Second), nil
+	}
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+	if err != nil {
+		return time.Time{}, err
+	}
+	return parsed.UTC(), nil
 }
 
 func runAdminStatus(args []string, out io.Writer) error {
