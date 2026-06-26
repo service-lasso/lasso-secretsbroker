@@ -138,6 +138,14 @@ Implemented OpenTelemetry preview slice:
 - `/v1/telemetry` never sends telemetry. Endpoint values, OTLP headers, payload bodies, raw refs, secret values, provider credentials, tokens, cookies, private keys, recovery material, environment values, raw request/response bodies, raw query strings, incoming trace headers, provider response bodies, and raw config values are omitted.
 - `secretsbroker admin telemetry` returns the same OTel-shaped preview for headless checks without exposing endpoint/header/body values.
 
+Implemented OTLP export-action slice:
+
+- `POST /v1/telemetry/export` is an explicit disabled-by-default send action for the same sanitized telemetry envelope used by the preview.
+- The action sends only when `SECRETSBROKER_OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, and `SECRETSBROKER_OTEL_EXPORT_MODE=export` are explicitly configured.
+- Unsupported endpoint schemes and malformed `OTEL_EXPORTER_OTLP_HEADERS` shapes are blocked before sending.
+- Responses report safe proof only: mode, status, protocol, content type, signal count, exporter status code, configured booleans, and non-return booleans for endpoint/header/body values.
+- Endpoint values, OTLP header values, exported payload bodies, raw refs, secret values, provider credentials, tokens, cookies, private keys, recovery material, environment values, raw URL paths/query strings, raw request/response bodies, provider response bodies, and raw config values remain omitted from responses and the export payload.
+
 ## Events and filtering
 
 Events represent operator-relevant state transitions and decisions. The broker should maintain a bounded recent event store and expose filtered reads.

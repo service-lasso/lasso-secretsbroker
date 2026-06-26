@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"sort"
@@ -101,6 +105,26 @@ type telemetryExportPreview struct {
 	DroppedFieldClasses   []string `json:"droppedFieldClasses"`
 	SafeEnvelopeFields    []string `json:"safeEnvelopeFields"`
 	Reason                string   `json:"reason"`
+}
+
+type telemetryExportActionResult struct {
+	Mode                  string `json:"mode"`
+	Status                string `json:"status"`
+	Protocol              string `json:"protocol"`
+	ContentType           string `json:"contentType"`
+	SignalCount           int    `json:"signalCount"`
+	EndpointConfigured    bool   `json:"endpointConfigured"`
+	EndpointValueReturned bool   `json:"endpointValueReturned"`
+	HeadersConfigured     bool   `json:"headersConfigured"`
+	HeadersValueReturned  bool   `json:"headersValueReturned"`
+	BodyValueReturned     bool   `json:"bodyValueReturned"`
+	ExporterStatusCode    *int   `json:"exporterStatusCode"`
+	Reason                string `json:"reason"`
+}
+
+type telemetryExportPayload struct {
+	Resource telemetryResourcePreview `json:"resource"`
+	Signals  []telemetrySignalPreview `json:"signals"`
 }
 
 type telemetryCounters struct {
@@ -211,6 +235,18 @@ func registerTelemetryHandlers(mux *http.ServeMux, backend *localBackend) {
 			return
 		}
 		writeJSON(w, http.StatusOK, res)
+	})
+	mux.HandleFunc("/v1/telemetry/export", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Use POST /v1/telemetry/export.", "invalid_ref", "")
+			return
+		}
+		res, err := buildTelemetryResponse(backend)
+		if err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, sendTelemetryExportFromResponse(res, http.DefaultClient))
+			return
+		}
+		writeJSON(w, http.StatusOK, sendTelemetryExportFromResponse(res, http.DefaultClient))
 	})
 }
 
@@ -419,9 +455,13 @@ func telemetryExporterStatusFromEnv() telemetryExporterPreview {
 func telemetryExportPreviewFromEnv(exporter telemetryExporterPreview, signalCount int, policy telemetryAttributePolicy) telemetryExportPreview {
 	mode := "disabled"
 	reason := "The preview endpoint did not send telemetry."
-	if exporter.Status == "configured" && strings.EqualFold(strings.TrimSpace(os.Getenv("SECRETSBROKER_OTEL_EXPORT_MODE")), "dry-run") {
+	requestedMode := strings.ToLower(strings.TrimSpace(os.Getenv("SECRETSBROKER_OTEL_EXPORT_MODE")))
+	if exporter.Status == "configured" && requestedMode == "dry-run" {
 		mode = "dry_run"
 		reason = "Dry-run OTLP export envelope is ready; the broker does not send telemetry from this preview API."
+	} else if exporter.Status == "configured" && requestedMode == "export" {
+		mode = "export_configured"
+		reason = "Explicit OTLP export is configured; the preview endpoint still does not send telemetry."
 	}
 	return telemetryExportPreview{
 		Mode:                  mode,
@@ -438,6 +478,133 @@ func telemetryExportPreviewFromEnv(exporter telemetryExporterPreview, signalCoun
 		SafeEnvelopeFields:    []string{"resource", "signals.kind", "signals.name", "signals.traceId", "signals.spanId", "signals.traceparent", "signals.correlationId", "signals.attributes"},
 		Reason:                reason,
 	}
+}
+
+func sendTelemetryExportFromResponse(res telemetryResponse, client *http.Client) telemetryExportActionResult {
+	requestedMode := strings.ToLower(strings.TrimSpace(os.Getenv("SECRETSBROKER_OTEL_EXPORT_MODE")))
+	mode := "disabled"
+	if res.Exporter.Status == "configured" && requestedMode == "export" {
+		mode = "export"
+	}
+	endpoint := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+	headers, headersOK := parseTelemetryOtlpHeaders()
+	statusCode := (*int)(nil)
+	base := telemetryExportActionResult{
+		Mode:                  mode,
+		Protocol:              "otlp-http",
+		ContentType:           "application/json",
+		SignalCount:           len(res.Signals),
+		EndpointConfigured:    res.Exporter.EndpointConfigured,
+		EndpointValueReturned: false,
+		HeadersConfigured:     strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")) != "",
+		HeadersValueReturned:  false,
+		BodyValueReturned:     false,
+		ExporterStatusCode:    statusCode,
+	}
+	if mode != "export" {
+		base.Status = "not_sent"
+		base.Reason = "Telemetry export is disabled; set SECRETSBROKER_OTEL_ENABLED, OTEL_EXPORTER_OTLP_ENDPOINT, and SECRETSBROKER_OTEL_EXPORT_MODE=export to send the sanitized envelope."
+		return base
+	}
+	if !headersOK {
+		base.Status = "blocked"
+		base.Reason = "OTLP export headers are configured with an unsupported header shape."
+		return base
+	}
+	if !isTelemetryHTTPEndpoint(endpoint) {
+		base.Status = "blocked"
+		base.Reason = "OTLP export requires an HTTP(S) endpoint."
+		return base
+	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+	payload, err := json.Marshal(buildTelemetryExportPayload(res))
+	if err != nil {
+		base.Status = "blocked"
+		base.Reason = "OTLP export payload could not be encoded."
+		return base
+	}
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		base.Status = "blocked"
+		base.Reason = "OTLP export endpoint could not be prepared."
+		return base
+	}
+	req.Header.Set("content-type", "application/json")
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		base.Status = "failed"
+		base.Reason = "OTLP export failed before the configured endpoint accepted the sanitized envelope."
+		return base
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
+	code := resp.StatusCode
+	base.ExporterStatusCode = &code
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		base.Status = "sent"
+		base.Reason = "Sanitized telemetry was sent to the configured OTLP HTTP endpoint."
+	} else {
+		base.Status = "failed"
+		base.Reason = "The configured OTLP HTTP endpoint returned a non-success response."
+	}
+	return base
+}
+
+func buildTelemetryExportPayload(res telemetryResponse) telemetryExportPayload {
+	return telemetryExportPayload{
+		Resource: res.Resource,
+		Signals:  append([]telemetrySignalPreview(nil), res.Signals...),
+	}
+}
+
+func parseTelemetryOtlpHeaders() (map[string]string, bool) {
+	rawHeaders := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_HEADERS"))
+	if rawHeaders == "" {
+		return map[string]string{}, true
+	}
+	headers := map[string]string{}
+	for _, entry := range strings.Split(rawHeaders, ",") {
+		separator := strings.Index(entry, "=")
+		if separator <= 0 {
+			return nil, false
+		}
+		name := strings.ToLower(strings.TrimSpace(entry[:separator]))
+		value := strings.TrimSpace(entry[separator+1:])
+		if !validTelemetryHeaderName(name) || name == "content-type" {
+			return nil, false
+		}
+		headers[name] = value
+	}
+	return headers, true
+}
+
+func validTelemetryHeaderName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, ch := range name {
+		if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') {
+			continue
+		}
+		if strings.ContainsRune("!#$%&'*+.^_`|~-", ch) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isTelemetryHTTPEndpoint(endpoint string) bool {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return false
+	}
+	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
 func buildTelemetrySignals(counters telemetryCounters) []telemetrySignalPreview {
