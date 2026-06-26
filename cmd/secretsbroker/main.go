@@ -219,7 +219,7 @@ func defaultCapabilities() CapabilitiesResponse {
 		ServiceID:  serviceID,
 		APIVersion: apiVersion,
 		Version:    version,
-		Transports: []string{"loopback-http"},
+		Transports: []string{"loopback-http", "unix-socket", "windows-named-pipe"},
 		Endpoints: []string{
 			"GET /health",
 			"GET /ready",

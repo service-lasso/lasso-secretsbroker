@@ -38,6 +38,9 @@ func TestCapabilitiesExposeBootstrapContract(t *testing.T) {
 	}
 	assertContains(t, caps.Endpoints, "GET /capabilities")
 	assertContains(t, caps.Endpoints, "GET /ready")
+	assertContains(t, caps.Transports, "loopback-http")
+	assertContains(t, caps.Transports, "unix-socket")
+	assertContains(t, caps.Transports, "windows-named-pipe")
 	assertContains(t, caps.Features, "readiness")
 	assertContains(t, caps.Features, "batched-resolve")
 	assertContains(t, caps.Features, "os-ipc-transport-policy")
