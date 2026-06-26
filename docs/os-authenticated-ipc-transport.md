@@ -73,6 +73,37 @@ Remaining hardening:
 - Add cross-user denial evidence in an integration environment that can create a second local Windows principal.
 - Extend launcher-issued leases to include `transportBinding` by default once the core launcher has a stable broker transport identity policy.
 
+## Windows cross-user denial verification
+
+The repeatable cross-user proof is `scripts/verify-windows-named-pipe-cross-user.ps1`. It is an integration verifier, not a unit test, because it requires a second local Windows principal and that principal's password.
+
+Required host capability:
+
+- Windows host with Go and PowerShell available.
+- Current broker user can run `secretsbroker`.
+- A separate local user account exists and is not the broker user.
+- The verifier process can call `CreateProcessWithLogonW` through PowerShell `Start-Process -Credential`.
+
+Safe invocation shape:
+
+```powershell
+$env:SECRETSBROKER_CROSS_USER_DENIED_USER = 'MACHINE\other-local-user'
+$env:SECRETSBROKER_CROSS_USER_PASSWORD = '<set in the shell only>'
+pwsh -NoLogo -NoProfile -File .\scripts\verify-windows-named-pipe-cross-user.ps1 `
+  -OutputDir .\.work-agent\logs\windows-named-pipe-cross-user
+```
+
+The verifier starts the broker with a strict Windows named-pipe transport:
+
+- `--mode production`
+- `--transport windows-named-pipe`
+- `--named-pipe-allow-admin=false`
+- `--named-pipe-allow-local-system=false`
+
+It first proves the broker user can reach `/health` over the pipe, then starts the denied user process and expects the pipe connection to fail with access denied before any HTTP request can reach the broker. The summary records safe metadata only: broker user/SID, denied username, pipe path, outcome, and reason. It must not write passwords, tokens, environment dumps, command lines containing secrets, or response bodies with secret material.
+
+If alternate-user credentials are missing, the verifier writes `blocked.json` and exits non-zero. That is environment evidence, not a pass.
+
 ## Unix socket requirements
 
 Current Unix socket support enforces same-UID peer credentials on platforms where Go exposes the required OS APIs:
