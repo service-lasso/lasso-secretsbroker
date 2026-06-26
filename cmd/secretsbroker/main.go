@@ -250,7 +250,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"CLI secretsbroker admin mcp tools|call",
 			"CLI secretsbroker backup create|restore",
 			"CLI secretsbroker key initialize|unlock|import|rewrap|wrapper-status|rotate|recovery generate|recovery import",
-			"CLI secretsbroker admin status|secrets|providers|migration|sync|recovery|audit|events",
+			"CLI secretsbroker admin status|secrets|providers|migration|sync|recovery|audit|telemetry|events",
 		},
 		Features: []string{
 			"liveness",
@@ -266,6 +266,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"provider-config-status",
 			"provider-config-validation",
 			"redacted-telemetry",
+			"otel-telemetry-preview",
 			"bounded-operational-events",
 			"scoped-local-api-lockout",
 			"audited-lockout-clear",
