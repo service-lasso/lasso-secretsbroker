@@ -12,7 +12,7 @@ import (
 
 type windowsNamedPipeListener struct {
 	net.Listener
-	allowedUserSID string
+	policy windowsNamedPipeAccessPolicy
 }
 
 type windowsPipeConnHandle interface {
@@ -25,8 +25,8 @@ type windowsClientIdentity struct {
 	IsBuiltinAdminMember bool
 }
 
-func authenticatedWindowsNamedPipeListener(ln net.Listener, allowedUserSID string) net.Listener {
-	return &windowsNamedPipeListener{Listener: ln, allowedUserSID: allowedUserSID}
+func authenticatedWindowsNamedPipeListener(ln net.Listener, policy windowsNamedPipeAccessPolicy) net.Listener {
+	return &windowsNamedPipeListener{Listener: ln, policy: normalizeWindowsNamedPipeAccessPolicy(policy)}
 }
 
 func (l *windowsNamedPipeListener) Accept() (net.Conn, error) {
@@ -35,7 +35,7 @@ func (l *windowsNamedPipeListener) Accept() (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		identity, err := authorizeWindowsNamedPipeConn(conn, l.allowedUserSID)
+		identity, err := authorizeWindowsNamedPipeConn(conn, l.policy)
 		if err != nil {
 			_ = conn.Close()
 			continue
@@ -44,7 +44,7 @@ func (l *windowsNamedPipeListener) Accept() (net.Conn, error) {
 	}
 }
 
-func authorizeWindowsNamedPipeConn(conn net.Conn, allowedUserSID string) (transportPeerIdentity, error) {
+func authorizeWindowsNamedPipeConn(conn net.Conn, policy windowsNamedPipeAccessPolicy) (transportPeerIdentity, error) {
 	fdConn, ok := conn.(windowsPipeConnHandle)
 	if !ok {
 		return transportPeerIdentity{}, fmt.Errorf("windows-named-pipe transport connection is %T, want handle-bearing pipe connection", conn)
@@ -53,18 +53,23 @@ func authorizeWindowsNamedPipeConn(conn net.Conn, allowedUserSID string) (transp
 	if err != nil {
 		return transportPeerIdentity{}, err
 	}
-	if !windowsNamedPipeClientAuthorized(identity, allowedUserSID) {
+	if !windowsNamedPipeClientAuthorized(identity, policy) {
 		return transportPeerIdentity{}, fmt.Errorf("windows-named-pipe transport rejected local peer sid")
 	}
 	return transportPeerIdentity{Kind: "windows-sid", Subject: identity.UserSID}, nil
 }
 
-func windowsNamedPipeClientAuthorized(identity windowsClientIdentity, allowedUserSID string) bool {
-	allowedUserSID = strings.TrimSpace(allowedUserSID)
-	if allowedUserSID != "" && strings.EqualFold(identity.UserSID, allowedUserSID) {
+func windowsNamedPipeClientAuthorized(identity windowsClientIdentity, policy windowsNamedPipeAccessPolicy) bool {
+	policy = normalizeWindowsNamedPipeAccessPolicy(policy)
+	for _, sid := range policy.AllowedUserSIDs {
+		if strings.EqualFold(identity.UserSID, sid) {
+			return true
+		}
+	}
+	if identity.IsLocalSystem && policy.AllowLocalSystem {
 		return true
 	}
-	return identity.IsLocalSystem || identity.IsBuiltinAdminMember
+	return identity.IsBuiltinAdminMember && policy.AllowBuiltinAdmins
 }
 
 func windowsNamedPipeClientIdentity(pipe windows.Handle) (windowsClientIdentity, error) {
@@ -160,10 +165,45 @@ func windowsSIDIsWellKnown(sidString string, sidType windows.WELL_KNOWN_SID_TYPE
 	return sid.Equals(want), nil
 }
 
-func windowsNamedPipeSecurityDescriptor(userSID string) string {
-	userSID = strings.TrimSpace(userSID)
-	if userSID == "" {
-		return "D:P(A;;GA;;;SY)(A;;GA;;;BA)"
+func windowsNamedPipeAccessPolicyWithServerSID(policy windowsNamedPipeAccessPolicy, serverUserSID string) windowsNamedPipeAccessPolicy {
+	policy = normalizeWindowsNamedPipeAccessPolicy(policy)
+	serverUserSID = strings.TrimSpace(serverUserSID)
+	if serverUserSID != "" {
+		policy.AllowedUserSIDs = append(policy.AllowedUserSIDs, serverUserSID)
 	}
-	return fmt.Sprintf("D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;%s)", userSID)
+	return normalizeWindowsNamedPipeAccessPolicy(policy)
+}
+
+func normalizeWindowsNamedPipeAccessPolicy(policy windowsNamedPipeAccessPolicy) windowsNamedPipeAccessPolicy {
+	seen := map[string]struct{}{}
+	allowed := make([]string, 0, len(policy.AllowedUserSIDs))
+	for _, sid := range policy.AllowedUserSIDs {
+		sid = strings.TrimSpace(sid)
+		if sid == "" {
+			continue
+		}
+		key := strings.ToLower(sid)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		allowed = append(allowed, sid)
+	}
+	policy.AllowedUserSIDs = allowed
+	return policy
+}
+
+func windowsNamedPipeSecurityDescriptor(policy windowsNamedPipeAccessPolicy) string {
+	policy = normalizeWindowsNamedPipeAccessPolicy(policy)
+	aces := []string{}
+	if policy.AllowLocalSystem {
+		aces = append(aces, "(A;;GA;;;SY)")
+	}
+	if policy.AllowBuiltinAdmins {
+		aces = append(aces, "(A;;GA;;;BA)")
+	}
+	for _, sid := range policy.AllowedUserSIDs {
+		aces = append(aces, fmt.Sprintf("(A;;GA;;;%s)", sid))
+	}
+	return "D:P" + strings.Join(aces, "")
 }

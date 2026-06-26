@@ -43,6 +43,7 @@ func TestCapabilitiesExposeBootstrapContract(t *testing.T) {
 	assertContains(t, caps.Features, "os-ipc-transport-policy")
 	assertContains(t, caps.Features, "unix-socket-peer-credential-checks")
 	assertContains(t, caps.Features, "windows-named-pipe-identity-checks")
+	assertContains(t, caps.Features, "windows-named-pipe-service-account-policy")
 	assertContains(t, caps.Features, "launch-identity-transport-binding")
 	assertContains(t, caps.Outcomes, "source_auth_required")
 	assertContains(t, caps.Outcomes, "policy_denied")
@@ -100,6 +101,28 @@ func TestWindowsNamedPipeRequiresPipeNamespace(t *testing.T) {
 	_, err := resolveServeTransport(serveTransportOptions{Transport: "windows-named-pipe", NamedPipe: `C:\tmp\not-a-pipe`})
 	if err == nil {
 		t.Fatalf("expected named pipe namespace rejection")
+	}
+}
+
+func TestWindowsNamedPipeCarriesAccessPolicy(t *testing.T) {
+	binding, err := resolveServeTransport(serveTransportOptions{
+		Transport:                   "windows-named-pipe",
+		NamedPipe:                   `\\.\pipe\service-lasso-secretsbroker-test`,
+		NamedPipeAllowedSIDs:        []string{"S-1-5-80-12345", " "},
+		NamedPipeAllowLocalSystem:   true,
+		NamedPipeAllowBuiltinAdmins: false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binding.WindowsNamedPipeAccessPolicy.AllowBuiltinAdmins {
+		t.Fatalf("builtin admin policy should remain disabled")
+	}
+	if !binding.WindowsNamedPipeAccessPolicy.AllowLocalSystem {
+		t.Fatalf("LocalSystem policy should remain enabled")
+	}
+	if len(binding.WindowsNamedPipeAccessPolicy.AllowedUserSIDs) != 1 || binding.WindowsNamedPipeAccessPolicy.AllowedUserSIDs[0] != "S-1-5-80-12345" {
+		t.Fatalf("allowed SID policy = %#v", binding.WindowsNamedPipeAccessPolicy.AllowedUserSIDs)
 	}
 }
 

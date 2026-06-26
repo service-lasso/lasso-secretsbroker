@@ -30,6 +30,9 @@ SECRETSBROKER_TRANSPORT=auto|loopback-http|unix-socket|windows-named-pipe
 SECRETSBROKER_LISTEN=127.0.0.1:17890
 SECRETSBROKER_UNIX_SOCKET=/tmp/service-lasso-secretsbroker.sock
 SECRETSBROKER_NAMED_PIPE=\\.\pipe\service-lasso-secretsbroker
+SECRETSBROKER_NAMED_PIPE_ALLOWED_SIDS=S-1-5-80-...
+SECRETSBROKER_NAMED_PIPE_ALLOW_ADMIN=true|false
+SECRETSBROKER_NAMED_PIPE_ALLOW_LOCAL_SYSTEM=true|false
 ```
 
 Implemented behavior:
@@ -51,15 +54,21 @@ The broker must not silently fall back to loopback HTTP in production mode. If t
 Current Windows named-pipe support:
 
 - The pipe path must be under `\\.\pipe\`.
-- The pipe security descriptor limits access to the broker user SID, local administrators, and LocalSystem.
-- The listener identifies the connected client process with `GetNamedPipeClientProcessId`, inspects the client process token, and accepts only the same user SID, LocalSystem, or an enabled local Administrators group membership.
+- The pipe security descriptor limits access to the broker user SID, explicitly configured service-account SIDs, and optionally local administrators and LocalSystem.
+- The listener identifies the connected client process with `GetNamedPipeClientProcessId`, inspects the client process token, and accepts only the broker user SID, configured service-account SIDs, LocalSystem when allowed, or an enabled local Administrators group membership when allowed.
 - Connections that cannot be identified or authorized are closed before the HTTP server sees the request.
 - Identity metadata must be safe: no access tokens, environment values, command lines, or raw credentials in responses, logs, or audit events.
 - Secret-bearing endpoints still require the existing local API token/session/launch-identity checks on top of the named-pipe boundary. When a launch identity lease includes `transportBinding`, the request is denied unless the authenticated pipe peer matches that signed binding.
 
+Windows service-account policy:
+
+- `--named-pipe-allowed-sid` is repeatable and adds explicit service-account or launcher user SIDs to the named-pipe ACL and runtime authorization allowlist. `SECRETSBROKER_NAMED_PIPE_ALLOWED_SIDS` accepts a comma-separated list for service managers that prefer environment configuration.
+- `--named-pipe-allow-admin` / `SECRETSBROKER_NAMED_PIPE_ALLOW_ADMIN` controls whether enabled local Administrators group members can connect. The default is `true` for compatibility with existing local administrator launch flows; production profiles can set it to `false` once the launcher runs under a stable service account.
+- `--named-pipe-allow-local-system` / `SECRETSBROKER_NAMED_PIPE_ALLOW_LOCAL_SYSTEM` controls whether LocalSystem can connect. The default is `true` for service-manager compatibility; production profiles can set it to `false` when LocalSystem is not the launcher identity.
+- The Service Lasso core launcher should eventually issue transport-bound launch identity leases only after the selected launcher account SID is known and present in this policy. Until then, leases without `transportBinding` remain compatible and are still scoped by token/session/lease policy.
+
 Remaining hardening:
 
-- Define the final Service Lasso launcher policy for administrator and service-account access.
 - Add cross-user denial evidence in an integration environment that can create a second local Windows principal.
 - Extend launcher-issued leases to include `transportBinding` by default once the core launcher has a stable broker transport identity policy.
 

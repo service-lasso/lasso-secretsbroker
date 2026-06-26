@@ -31,7 +31,7 @@ Development/bootstrap compatibility transport:
 
 - loopback HTTP bound to `127.0.0.1`
 
-The daemon exposes loopback HTTP for development/bootstrap and now has explicit transport selection for production mode. Production mode rejects loopback HTTP and selects the OS IPC transport with `--transport auto`; Unix-like platforms can serve over a Unix socket with same-UID peer credential checks, while Windows can serve over a named pipe with a restricted security descriptor and connected-client token identity checks. Named pipe/Unix socket transports preserve the same request/response schema. See `docs/os-authenticated-ipc-transport.md`.
+The daemon exposes loopback HTTP for development/bootstrap and now has explicit transport selection for production mode. Production mode rejects loopback HTTP and selects the OS IPC transport with `--transport auto`; Unix-like platforms can serve over a Unix socket with same-UID peer credential checks, while Windows can serve over a named pipe with a restricted security descriptor and connected-client token identity checks. Windows named-pipe profiles can add explicit launcher/service-account SIDs and can separately allow or deny Local Administrators and LocalSystem. Named pipe/Unix socket transports preserve the same request/response schema. See `docs/os-authenticated-ipc-transport.md`.
 
 ## Cross-cutting response rules
 

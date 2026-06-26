@@ -11,18 +11,28 @@ import (
 )
 
 type serveTransportOptions struct {
-	Mode       string
-	Transport  string
-	Listen     string
-	UnixSocket string
-	NamedPipe  string
+	Mode                        string
+	Transport                   string
+	Listen                      string
+	UnixSocket                  string
+	NamedPipe                   string
+	NamedPipeAllowedSIDs        []string
+	NamedPipeAllowLocalSystem   bool
+	NamedPipeAllowBuiltinAdmins bool
 }
 
 type serveTransportBinding struct {
-	Kind           string
-	Network        string
-	Address        string
-	DisplayAddress string
+	Kind                         string
+	Network                      string
+	Address                      string
+	DisplayAddress               string
+	WindowsNamedPipeAccessPolicy windowsNamedPipeAccessPolicy
+}
+
+type windowsNamedPipeAccessPolicy struct {
+	AllowedUserSIDs    []string
+	AllowLocalSystem   bool
+	AllowBuiltinAdmins bool
 }
 
 func resolveServeTransport(opts serveTransportOptions) (serveTransportBinding, error) {
@@ -55,7 +65,17 @@ func resolveServeTransport(opts serveTransportOptions) (serveTransportBinding, e
 		if !strings.HasPrefix(strings.ToLower(path), `\\.\pipe\`) {
 			return serveTransportBinding{}, fmt.Errorf("windows named pipe path must start with \\\\.\\pipe\\")
 		}
-		return serveTransportBinding{Kind: kind, Network: "windows-named-pipe", Address: path, DisplayAddress: path}, nil
+		return serveTransportBinding{
+			Kind:           kind,
+			Network:        "windows-named-pipe",
+			Address:        path,
+			DisplayAddress: path,
+			WindowsNamedPipeAccessPolicy: windowsNamedPipeAccessPolicy{
+				AllowedUserSIDs:    safeList(opts.NamedPipeAllowedSIDs),
+				AllowLocalSystem:   opts.NamedPipeAllowLocalSystem,
+				AllowBuiltinAdmins: opts.NamedPipeAllowBuiltinAdmins,
+			},
+		}, nil
 	default:
 		return serveTransportBinding{}, fmt.Errorf("unsupported serve transport %q", opts.Transport)
 	}
