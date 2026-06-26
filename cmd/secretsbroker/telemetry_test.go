@@ -63,13 +63,29 @@ func TestTelemetryEndpointAndAdminCLIAreMetadataOnly(t *testing.T) {
 
 	server := httptest.NewServer(newHandler(runtimeState{}, backend, localAPISecurity{token: "local-token"}))
 	defer server.Close()
-	resp, err := http.Get(server.URL + "/v1/telemetry")
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/v1/telemetry?token=SERVICE_LASSO_FAKE_OTEL_TOKEN_DO_NOT_USE", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("traceparent", "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01")
+	req.Header.Set("authorization", "Bearer ghp_fakeTelemetryHeaderToken1234567890")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("telemetry status = %d", resp.StatusCode)
+	}
+	expectedIdentity := telemetryAPIIdentity(http.MethodGet, "/v1/telemetry")
+	if resp.Header.Get(telemetryCorrelationIDHeader) != expectedIdentity.CorrelationID {
+		t.Fatalf("correlation header = %q, want %q", resp.Header.Get(telemetryCorrelationIDHeader), expectedIdentity.CorrelationID)
+	}
+	if resp.Header.Get(telemetryTraceIDHeader) != expectedIdentity.TraceID {
+		t.Fatalf("trace id header = %q, want %q", resp.Header.Get(telemetryTraceIDHeader), expectedIdentity.TraceID)
+	}
+	if got := resp.Header.Get(telemetryTraceparentHeader); got != expectedIdentity.Traceparent || got == req.Header.Get("traceparent") {
+		t.Fatalf("traceparent header = %q, expected broker-generated %q", got, expectedIdentity.Traceparent)
 	}
 	var apiBody telemetryResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiBody); err != nil {
@@ -79,7 +95,13 @@ func TestTelemetryEndpointAndAdminCLIAreMetadataOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertNoSecretMaterial(t, apiEncoded, telemetrySecretValue, ref)
+	assertNoSecretMaterial(t, apiEncoded, telemetrySecretValue, ref, "SERVICE_LASSO_FAKE_OTEL_TOKEN_DO_NOT_USE", "ghp_fakeTelemetryHeaderToken1234567890")
+	if apiBody.TraceContext.Propagation != "w3c-trace-context" || apiBody.TraceContext.IncomingHeadersAccepted || apiBody.TraceContext.IncomingHeadersReturned || apiBody.TraceContext.RawHeadersReturned {
+		t.Fatalf("unsafe trace context posture: %#v", apiBody.TraceContext)
+	}
+	if apiBody.TraceContext.ResponseHeaders.Traceparent != telemetryTraceparentHeader || !apiBody.TraceContext.RouteTemplateOnly {
+		t.Fatalf("trace context response headers = %#v", apiBody.TraceContext)
+	}
 
 	var cli bytes.Buffer
 	if err := executeAdmin([]string{"telemetry", "--store", backend.storePath, "--audit", backend.auditPath, "--master-key", "test-master-key"}, &cli); err != nil {
@@ -144,7 +166,7 @@ func TestTelemetryOTelPreviewIsDryRunAndRedacted(t *testing.T) {
 		allowed[key] = true
 	}
 	for _, signal := range res.Signals {
-		if signal.TraceID == "" || signal.SpanID == "" || signal.CorrelationID == "" {
+		if signal.TraceID == "" || signal.SpanID == "" || signal.CorrelationID == "" || !validTraceparent(signal.Traceparent, signal.TraceID, signal.SpanID) {
 			t.Fatalf("signal missing trace identifiers: %#v", signal)
 		}
 		for key := range signal.Attributes {
@@ -153,6 +175,14 @@ func TestTelemetryOTelPreviewIsDryRunAndRedacted(t *testing.T) {
 			}
 		}
 	}
+}
+
+func validTraceparent(value string, traceID string, spanID string) bool {
+	return value == "00-"+traceID+"-"+spanID+"-01" &&
+		len(traceID) == 32 &&
+		len(spanID) == 16 &&
+		len(value) == 55 &&
+		strings.Count(value, "-") == 3
 }
 
 func hasOperationCount(counters []telemetryOperationCounter, operation, outcome string, count int) bool {

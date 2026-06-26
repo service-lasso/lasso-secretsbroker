@@ -132,9 +132,10 @@ Implemented first slice:
 Implemented OpenTelemetry preview slice:
 
 - `GET /v1/telemetry` now includes contract `service-lasso.secretsbroker.telemetry-preview.v1`.
-- The response includes a redacted `resource`, allowlisted `redaction` policy, deterministic trace/span/correlation identifiers, and metadata-only metric `signals` for broker operation counts, policy decisions, provider/source states, audit-record outcomes, and active lockout counts.
+- The response includes a redacted `resource`, allowlisted `redaction` policy, deterministic trace/span/correlation identifiers, W3C-shaped `traceparent`, and metadata-only metric `signals` for broker operation counts, policy decisions, provider/source states, audit-record outcomes, and active lockout counts.
+- The response includes `traceContext` posture for Service Lasso response headers: `x-service-lasso-correlation-id`, `x-service-lasso-trace-id`, and `traceparent`. The broker generates these values from safe route templates only; incoming trace headers, raw headers, query strings, request bodies, and response bodies are not accepted, stored, or returned.
 - The response includes `exporter` and `exportPreview` status for local OTLP readiness. Export remains disabled by default and reports `dry_run` only when `SECRETSBROKER_OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, and `SECRETSBROKER_OTEL_EXPORT_MODE=dry-run` are explicitly configured.
-- `/v1/telemetry` never sends telemetry. Endpoint values, OTLP headers, payload bodies, raw refs, secret values, provider credentials, tokens, cookies, private keys, recovery material, environment values, raw request/response bodies, provider response bodies, and raw config values are omitted.
+- `/v1/telemetry` never sends telemetry. Endpoint values, OTLP headers, payload bodies, raw refs, secret values, provider credentials, tokens, cookies, private keys, recovery material, environment values, raw request/response bodies, raw query strings, incoming trace headers, provider response bodies, and raw config values are omitted.
 - `secretsbroker admin telemetry` returns the same OTel-shaped preview for headless checks without exposing endpoint/header/body values.
 
 ## Events and filtering

@@ -15,12 +15,19 @@ import (
 
 const secretsBrokerTelemetryContractVersion = "service-lasso.secretsbroker.telemetry-preview.v1"
 
+const (
+	telemetryCorrelationIDHeader = "x-service-lasso-correlation-id"
+	telemetryTraceIDHeader       = "x-service-lasso-trace-id"
+	telemetryTraceparentHeader   = "traceparent"
+)
+
 type telemetryResponse struct {
 	ContractVersion    string                       `json:"contractVersion"`
 	ServiceID          string                       `json:"serviceId"`
 	APIVersion         string                       `json:"apiVersion"`
 	Outcome            string                       `json:"outcome"`
 	GeneratedAt        time.Time                    `json:"generatedAt"`
+	TraceContext       telemetryTraceContextPreview `json:"traceContext"`
 	Exporter           telemetryExporterPreview     `json:"exporter"`
 	Resource           telemetryResourcePreview     `json:"resource"`
 	Redaction          telemetryAttributePolicy     `json:"redaction"`
@@ -46,6 +53,29 @@ type telemetryResourcePreview struct {
 	ServiceName       string `json:"serviceName"`
 	ServiceNamespace  string `json:"serviceNamespace"`
 	ServiceInstanceID string `json:"serviceInstanceId"`
+}
+
+type telemetryTraceContextPreview struct {
+	Propagation             string                       `json:"propagation"`
+	ResponseHeaders         telemetryTraceContextHeaders `json:"responseHeaders"`
+	IncomingHeadersAccepted bool                         `json:"incomingHeadersAccepted"`
+	IncomingHeadersReturned bool                         `json:"incomingHeadersReturned"`
+	RawHeadersReturned      bool                         `json:"rawHeadersReturned"`
+	RouteTemplateOnly       bool                         `json:"routeTemplateOnly"`
+	TraceparentSampled      bool                         `json:"traceparentSampled"`
+	Safety                  telemetryTraceContextSafety  `json:"safety"`
+}
+
+type telemetryTraceContextHeaders struct {
+	CorrelationID string `json:"correlationId"`
+	TraceID       string `json:"traceId"`
+	Traceparent   string `json:"traceparent"`
+}
+
+type telemetryTraceContextSafety struct {
+	RequestBodiesReturned  bool `json:"requestBodiesReturned"`
+	ResponseBodiesReturned bool `json:"responseBodiesReturned"`
+	QueryStringsReturned   bool `json:"queryStringsReturned"`
 }
 
 type telemetryAttributePolicy struct {
@@ -118,6 +148,7 @@ type telemetrySignalPreview struct {
 	Name          string         `json:"name"`
 	TraceID       string         `json:"traceId"`
 	SpanID        string         `json:"spanId"`
+	Traceparent   string         `json:"traceparent"`
 	CorrelationID string         `json:"correlationId"`
 	Attributes    map[string]any `json:"attributes"`
 }
@@ -134,6 +165,7 @@ func buildTelemetryResponse(backend *localBackend) (telemetryResponse, error) {
 		APIVersion:         apiVersion,
 		Outcome:            "ready",
 		GeneratedAt:        time.Now().UTC(),
+		TraceContext:       telemetryTraceContextPreviewStatus(),
 		Exporter:           telemetryExporterStatusFromEnv(),
 		Resource:           telemetryResourcePreview{ServiceName: "secretsbroker", ServiceNamespace: "service-lasso", ServiceInstanceID: "local-broker"},
 		Redaction:          secretsBrokerTelemetryAttributePolicy(),
@@ -180,6 +212,27 @@ func registerTelemetryHandlers(mux *http.ServeMux, backend *localBackend) {
 		}
 		writeJSON(w, http.StatusOK, res)
 	})
+}
+
+func telemetryTraceContextPreviewStatus() telemetryTraceContextPreview {
+	return telemetryTraceContextPreview{
+		Propagation: "w3c-trace-context",
+		ResponseHeaders: telemetryTraceContextHeaders{
+			CorrelationID: telemetryCorrelationIDHeader,
+			TraceID:       telemetryTraceIDHeader,
+			Traceparent:   telemetryTraceparentHeader,
+		},
+		IncomingHeadersAccepted: false,
+		IncomingHeadersReturned: false,
+		RawHeadersReturned:      false,
+		RouteTemplateOnly:       true,
+		TraceparentSampled:      true,
+		Safety: telemetryTraceContextSafety{
+			RequestBodiesReturned:  false,
+			ResponseBodiesReturned: false,
+			QueryStringsReturned:   false,
+		},
+	}
 }
 
 func auditOperationCounters(events []auditEvent) []telemetryOperationCounter {
@@ -382,7 +435,7 @@ func telemetryExportPreviewFromEnv(exporter telemetryExporterPreview, signalCoun
 		BodyValueReturned:     false,
 		AllowedAttributeCount: len(policy.AllowedAttributes),
 		DroppedFieldClasses:   append([]string(nil), policy.ForbiddenFieldClasses...),
-		SafeEnvelopeFields:    []string{"resource", "signals.kind", "signals.name", "signals.traceId", "signals.spanId", "signals.correlationId", "signals.attributes"},
+		SafeEnvelopeFields:    []string{"resource", "signals.kind", "signals.name", "signals.traceId", "signals.spanId", "signals.traceparent", "signals.correlationId", "signals.attributes"},
 		Reason:                reason,
 	}
 }
@@ -433,14 +486,67 @@ func buildTelemetrySignals(counters telemetryCounters) []telemetrySignalPreview 
 }
 
 func telemetrySignal(kind string, name string, attrs map[string]any) telemetrySignalPreview {
+	traceID := telemetryHash("trace:"+name, 32)
+	spanID := telemetryHash("span:"+name, 16)
 	return telemetrySignalPreview{
 		Kind:          kind,
 		Name:          name,
-		TraceID:       telemetryHash("trace:"+name, 32),
-		SpanID:        telemetryHash("span:"+name, 16),
+		TraceID:       traceID,
+		SpanID:        spanID,
+		Traceparent:   telemetryTraceparent(traceID, spanID),
 		CorrelationID: "sl-" + telemetryHash("correlation:"+name, 16),
 		Attributes:    sanitizeTelemetryAttributes(attrs),
 	}
+}
+
+func telemetryTraceparent(traceID string, spanID string) string {
+	if len(traceID) != 32 || len(spanID) != 16 {
+		return ""
+	}
+	return "00-" + traceID + "-" + spanID + "-01"
+}
+
+func telemetryAPIIdentity(method string, routeTemplate string) telemetrySignalPreview {
+	method = strings.ToUpper(strings.TrimSpace(method))
+	if method == "" {
+		method = "GET"
+	}
+	routeTemplate = strings.TrimSpace(routeTemplate)
+	if routeTemplate == "" {
+		routeTemplate = "/"
+	}
+	seed := method + ":" + routeTemplate
+	traceID := telemetryHash("api-request-trace:"+seed, 32)
+	spanID := telemetryHash("api-request-span:"+seed, 16)
+	return telemetrySignalPreview{
+		Kind:          "span",
+		Name:          "secretsbroker.api.request",
+		TraceID:       traceID,
+		SpanID:        spanID,
+		Traceparent:   telemetryTraceparent(traceID, spanID),
+		CorrelationID: "sl-" + telemetryHash("api-request-correlation:"+seed, 16),
+		Attributes: sanitizeTelemetryAttributes(map[string]any{
+			"broker.operation":         "api_request",
+			"broker.operation.outcome": "ready",
+			"service.id":               serviceID,
+			"service.api_version":      apiVersion,
+		}),
+	}
+}
+
+func applyTelemetryResponseHeaders(w http.ResponseWriter, r *http.Request) {
+	method := "GET"
+	path := "/"
+	if r != nil {
+		method = r.Method
+		if r.URL != nil {
+			path = r.URL.Path
+		}
+	}
+	identity := telemetryAPIIdentity(method, path)
+	w.Header().Set(telemetryCorrelationIDHeader, identity.CorrelationID)
+	w.Header().Set(telemetryTraceIDHeader, identity.TraceID)
+	w.Header().Set(telemetryTraceparentHeader, identity.Traceparent)
 }
 
 func telemetryHash(value string, length int) string {

@@ -442,7 +442,10 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		registerEventsHandlers(mux, backend)
 		registerLockoutManagementHandlers(mux, backend, security)
 	}
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		applyTelemetryResponseHeaders(w, r)
+		mux.ServeHTTP(w, r)
+	})
 }
 
 type runtimeState struct {
