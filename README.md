@@ -117,6 +117,20 @@ go run .\cmd\secretsbroker serve --mode production --transport windows-named-pip
 
 The broker process user SID is always included in the named-pipe ACL. Additional SIDs are for a stable Service Lasso launcher or service account. Local Administrators and LocalSystem stay enabled by default for compatibility, and production profiles can turn either off once the launcher identity is fixed.
 
+Launcher-issued transport-bound leases can be produced with the broker helper while core launcher integration is being wired:
+
+```powershell
+$env:SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY = "<launcher-owned-hmac-key>"
+go run .\cmd\secretsbroker admin launch-lease issue `
+  --service-id api-service `
+  --workspace-id workspace-local `
+  --allowed-ref "services/api-service/runtime/*" `
+  --operation resolve `
+  --jti "<one-time-id>" `
+  --transport-binding-kind windows-sid `
+  --transport-binding-subject "S-1-5-21-..."
+```
+
 Check status:
 
 ```powershell

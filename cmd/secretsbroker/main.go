@@ -252,6 +252,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"CLI secretsbroker backup create|restore",
 			"CLI secretsbroker key initialize|unlock|import|rewrap|wrapper-status|rotate|recovery generate|recovery import",
 			"CLI secretsbroker admin status|secrets|providers|migration|sync|recovery|audit|telemetry|events",
+			"CLI secretsbroker admin launch-lease issue",
 		},
 		Features: []string{
 			"liveness",
@@ -301,6 +302,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"unix-socket-peer-credential-checks",
 			"windows-named-pipe-identity-checks",
 			"windows-named-pipe-service-account-policy",
+			"launcher-issued-transport-bound-leases",
 		},
 		FutureFeatures: []string{
 			"external-backend-write-back",

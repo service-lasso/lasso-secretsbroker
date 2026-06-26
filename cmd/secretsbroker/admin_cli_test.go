@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const adminCLISecretValue = "fixture-admin-cli-secret-value"
@@ -145,6 +146,71 @@ func TestAdminCLIProviderValidationMigrationAndAuditAreScrubbed(t *testing.T) {
 	if len(hashOnlyExport.Events) == 0 || hashOnlyExport.Events[0].Ref != "" || hashOnlyExport.Events[0].RefHash == "" {
 		t.Fatalf("hash-only audit export = %#v", hashOnlyExport)
 	}
+}
+
+func TestAdminLaunchLeaseIssuesTransportBoundSignedLease(t *testing.T) {
+	var out bytes.Buffer
+	err := executeAdmin([]string{
+		"launch-lease", "issue",
+		"--service-id", "api-service",
+		"--workspace-id", "workspace-local",
+		"--allowed-ref", "services/api-service/runtime/*",
+		"--allowed-namespace", "services/api-service",
+		"--operation", "resolve",
+		"--operation", "create",
+		"--jti", "jti-admin-launch-lease",
+		"--issued-at", "2026-06-27T03:45:00Z",
+		"--expires-at", "2026-06-27T03:50:00Z",
+		"--transport-binding-kind", "windows-sid",
+		"--transport-binding-subject", "S-1-5-21-1000",
+		"--signing-key", "issuer-secret-key",
+	}, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecretMaterial(t, out.Bytes(), "issuer-secret-key")
+
+	var issued adminLaunchLeaseIssueResponse
+	if err := json.Unmarshal(out.Bytes(), &issued); err != nil {
+		t.Fatal(err)
+	}
+	if issued.Outcome != "ready" || issued.Lease.Signature == "" {
+		t.Fatalf("launch lease response missing signed ready lease: %#v", issued)
+	}
+	if issued.Lease.TransportBinding == nil || issued.Lease.TransportBinding.Kind != "windows-sid" || issued.Lease.TransportBinding.Subject != "S-1-5-21-1000" {
+		t.Fatalf("transport binding = %#v", issued.Lease.TransportBinding)
+	}
+
+	backend := testBackend(t)
+	backend.now = func() time.Time { return time.Date(2026, 6, 27, 3, 46, 0, 0, time.UTC) }
+	peer := transportPeerIdentity{Kind: "windows-sid", Subject: "S-1-5-21-1000"}
+	if err := backend.verifyLaunchIdentityLease(&issued.Lease, "issuer-secret-key", "api-service", "workspace-local", "resolve", []string{"services/api-service/runtime/API_TOKEN"}, nil, peer); err != nil {
+		t.Fatalf("issued transport-bound lease should verify: %v", err)
+	}
+
+	replayBackend := testBackend(t)
+	replayBackend.now = backend.now
+	if err := replayBackend.verifyLaunchIdentityLease(&issued.Lease, "issuer-secret-key", "api-service", "workspace-local", "resolve", []string{"services/api-service/runtime/API_TOKEN"}, nil, transportPeerIdentity{Kind: "windows-sid", Subject: "S-1-5-21-9999"}); !errors.Is(err, errPolicyDenied) {
+		t.Fatalf("mismatched transport-bound lease err=%v, want policy denied", err)
+	}
+}
+
+func TestAdminLaunchLeaseRejectsIncompleteTransportBinding(t *testing.T) {
+	var out bytes.Buffer
+	err := executeAdmin([]string{
+		"launch-lease", "issue",
+		"--service-id", "api-service",
+		"--allowed-ref", "services/api-service/runtime/*",
+		"--operation", "resolve",
+		"--jti", "jti-incomplete-binding",
+		"--issued-at", "2026-06-27T03:45:00Z",
+		"--transport-binding-kind", "windows-sid",
+		"--signing-key", "issuer-secret-key",
+	}, &out)
+	if err == nil || !strings.Contains(err.Error(), "transport binding requires both kind and subject") {
+		t.Fatalf("expected incomplete transport binding rejection, got err=%v body=%s", err, out.String())
+	}
+	assertNoSecretMaterial(t, out.Bytes(), "issuer-secret-key")
 }
 
 func TestAdminCLILockedListFailsClosed(t *testing.T) {
