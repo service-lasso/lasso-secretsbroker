@@ -146,6 +146,14 @@ Implemented OTLP export-action slice:
 - Responses report safe proof only: mode, status, protocol, content type, signal count, exporter status code, configured booleans, and non-return booleans for endpoint/header/body values.
 - Endpoint values, OTLP header values, exported payload bodies, raw refs, secret values, provider credentials, tokens, cookies, private keys, recovery material, environment values, raw URL paths/query strings, raw request/response bodies, provider response bodies, and raw config values remain omitted from responses and the export payload.
 
+Implemented API request latency slice:
+
+- The HTTP server records a bounded in-memory view of recent broker API requests and folds it into `GET /v1/telemetry` as `durationHistograms` plus OTEL-shaped `secretsbroker.api.request.duration_bucket` metric signals.
+- Route labels are template-only and low-cardinality. Known routes such as `/health`, `/v1/resolve`, and `/v1/management/secrets/reveal` may appear; unmatched routes are collapsed to `/unmatched`.
+- Latency uses fixed bucket labels: `lt_50ms`, `50_249ms`, `250_999ms`, and `1s_plus`.
+- The request telemetry may expose method, route template, route group, status class, outcome, mutating flag, bucket, and count.
+- Raw URL paths, query strings, route parameters, headers, request bodies, response bodies, tokens, refs, provider credentials, environment values, and secret-shaped values are not stored in request telemetry, duration histograms, signals, export previews, or export payloads.
+
 ## Events and filtering
 
 Events represent operator-relevant state transitions and decisions. The broker should maintain a bounded recent event store and expose filtered reads.

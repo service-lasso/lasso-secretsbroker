@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -167,6 +168,23 @@ type telemetryDurationHistogram struct {
 	Buckets   map[string]int `json:"buckets"`
 }
 
+type telemetryRequestSummary struct {
+	RouteTemplate string `json:"routeTemplate"`
+	RouteGroup    string `json:"routeGroup"`
+	Method        string `json:"method"`
+	StatusClass   string `json:"statusClass"`
+	Outcome       string `json:"outcome"`
+	DurationMs    int    `json:"durationMs"`
+	Mutating      bool   `json:"mutating"`
+}
+
+type telemetryRequestRecorder struct {
+	mu           sync.Mutex
+	capacity     int
+	requests     []telemetryRequestSummary
+	droppedCount int
+}
+
 type telemetrySignalPreview struct {
 	Kind          string         `json:"kind"`
 	Name          string         `json:"name"`
@@ -180,6 +198,37 @@ type telemetrySignalPreview struct {
 type telemetrySafety struct {
 	LowCardinalityLabels  bool `json:"lowCardinalityLabels"`
 	ValueMaterialIncluded bool `json:"valueMaterialIncluded"`
+}
+
+func newTelemetryRequestRecorder(capacity int) *telemetryRequestRecorder {
+	if capacity < 1 {
+		capacity = 50
+	}
+	return &telemetryRequestRecorder{capacity: capacity}
+}
+
+func (r *telemetryRequestRecorder) record(request telemetryRequestSummary) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.requests) >= r.capacity {
+		copy(r.requests, r.requests[1:])
+		r.requests[len(r.requests)-1] = request
+		r.droppedCount++
+		return
+	}
+	r.requests = append(r.requests, request)
+}
+
+func (r *telemetryRequestRecorder) snapshot() ([]telemetryRequestSummary, int) {
+	if r == nil {
+		return nil, 0
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]telemetryRequestSummary(nil), r.requests...), r.droppedCount
 }
 
 func buildTelemetryResponse(backend *localBackend) (telemetryResponse, error) {
@@ -214,7 +263,13 @@ func buildTelemetryResponse(backend *localBackend) (telemetryResponse, error) {
 	res.Counters.AuditRecords = auditRecordCounters(audit.Events)
 	res.Counters.SourceStates = sourceStateCounters(defaultSourceRegistry(backend).Sources)
 	res.Counters.ProviderStates = providerStateCounters(backend.providerConfigStatusResponse().Providers)
+	var requests []telemetryRequestSummary
+	if backend.telemetry != nil {
+		requests, _ = backend.telemetry.snapshot()
+	}
+	res.DurationHistograms = requestDurationHistograms(requests)
 	res.Signals = buildTelemetrySignals(res.Counters)
+	res.Signals = append(res.Signals, buildRequestDurationSignals(requests)...)
 	res.ExportPreview = telemetryExportPreviewFromEnv(res.Exporter, len(res.Signals), res.Redaction)
 	return res, nil
 }
@@ -277,7 +332,11 @@ func auditOperationCounters(events []auditEvent) []telemetryOperationCounter {
 		event = normalizeAuditEvent(event)
 		counts[event.Operation+"\x00"+event.Outcome]++
 	}
-	keys := sortedKeys(counts)
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
 	out := make([]telemetryOperationCounter, 0, len(keys))
 	for _, key := range keys {
 		operation, outcome := splitCounterKey(key)
@@ -294,7 +353,11 @@ func policyDecisionCounters(events []auditEvent) []telemetryOutcomeCounter {
 			counts[event.Outcome]++
 		}
 	}
-	keys := sortedKeys(counts)
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
 	out := make([]telemetryOutcomeCounter, 0, len(keys))
 	for _, key := range keys {
 		out = append(out, telemetryOutcomeCounter{Outcome: key, Count: counts[key]})
@@ -380,9 +443,16 @@ func secretsBrokerTelemetryAttributePolicy() telemetryAttributePolicy {
 		RedactedValue: "[REDACTED]",
 		AllowedAttributes: []string{
 			"broker.audit.status",
+			"broker.api.duration_bucket",
+			"broker.api.method",
+			"broker.api.mutating",
+			"broker.api.route",
+			"broker.api.route_group",
+			"broker.api.status_class",
 			"broker.lockout.active_count",
 			"broker.operation",
 			"broker.operation.count",
+			"broker.operation.duration_ms",
 			"broker.operation.outcome",
 			"broker.policy.outcome",
 			"broker.provider.id",
@@ -402,6 +472,7 @@ func secretsBrokerTelemetryAttributePolicy() telemetryAttributePolicy {
 			"cookies and authorization headers",
 			"signing key material and recovery material",
 			"raw request or response bodies",
+			"raw URL paths and query strings",
 			"environment values",
 			"provider response bodies",
 			"raw refs and raw config values",
@@ -652,6 +723,59 @@ func buildTelemetrySignals(counters telemetryCounters) []telemetrySignalPreview 
 	return signals
 }
 
+func requestDurationHistograms(requests []telemetryRequestSummary) []telemetryDurationHistogram {
+	counts := map[string]map[string]int{}
+	for _, request := range requests {
+		key := request.RouteTemplate + "\x00" + request.Outcome
+		if counts[key] == nil {
+			counts[key] = map[string]int{}
+		}
+		counts[key][telemetryDurationBucket(request.DurationMs)]++
+	}
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([]telemetryDurationHistogram, 0, len(keys))
+	for _, key := range keys {
+		operation, outcome := splitCounterKey(key)
+		out = append(out, telemetryDurationHistogram{Operation: operation, Outcome: outcome, Buckets: counts[key]})
+	}
+	return out
+}
+
+func buildRequestDurationSignals(requests []telemetryRequestSummary) []telemetrySignalPreview {
+	counts := map[string]int{}
+	exemplars := map[string]telemetryRequestSummary{}
+	for _, request := range requests {
+		bucket := telemetryDurationBucket(request.DurationMs)
+		key := request.RouteTemplate + "\x00" + request.RouteGroup + "\x00" + request.Method + "\x00" + request.StatusClass + "\x00" + request.Outcome + "\x00" + bucket + "\x00" + fmt.Sprint(request.Mutating)
+		counts[key]++
+		exemplars[key] = request
+	}
+	keys := sortedKeys(counts)
+	out := make([]telemetrySignalPreview, 0, len(keys))
+	for _, key := range keys {
+		parts := strings.Split(key, "\x00")
+		if len(parts) != 7 {
+			continue
+		}
+		request := exemplars[key]
+		out = append(out, telemetrySignal("metric", "secretsbroker.api.request.duration_bucket", map[string]any{
+			"broker.api.route":           parts[0],
+			"broker.api.route_group":     parts[1],
+			"broker.api.method":          parts[2],
+			"broker.api.status_class":    parts[3],
+			"broker.operation.outcome":   parts[4],
+			"broker.api.duration_bucket": parts[5],
+			"broker.api.mutating":        request.Mutating,
+			"broker.operation.count":     counts[key],
+		}))
+	}
+	return out
+}
+
 func telemetrySignal(kind string, name string, attrs map[string]any) telemetrySignalPreview {
 	traceID := telemetryHash("trace:"+name, 32)
 	spanID := telemetryHash("span:"+name, 16)
@@ -714,6 +838,169 @@ func applyTelemetryResponseHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(telemetryCorrelationIDHeader, identity.CorrelationID)
 	w.Header().Set(telemetryTraceIDHeader, identity.TraceID)
 	w.Header().Set(telemetryTraceparentHeader, identity.Traceparent)
+}
+
+type telemetryStatusRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (r *telemetryStatusRecorder) WriteHeader(statusCode int) {
+	r.statusCode = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+func recordTelemetryHTTPRequest(recorder *telemetryRequestRecorder, r *http.Request, statusCode int, duration time.Duration) {
+	if recorder == nil || r == nil {
+		return
+	}
+	method := strings.ToUpper(strings.TrimSpace(r.Method))
+	if method == "" {
+		method = http.MethodGet
+	}
+	routeTemplate := telemetryRouteTemplate(r.URL.Path)
+	recorder.record(telemetryRequestSummary{
+		RouteTemplate: routeTemplate,
+		RouteGroup:    telemetryRouteGroup(routeTemplate),
+		Method:        method,
+		StatusClass:   telemetryStatusClass(statusCode),
+		Outcome:       telemetryRequestOutcome(statusCode),
+		DurationMs:    max(0, int(duration.Milliseconds())),
+		Mutating:      telemetryMutatingMethod(method),
+	})
+}
+
+func telemetryRouteTemplate(path string) string {
+	switch strings.TrimSpace(path) {
+	case "/health":
+		return "/health"
+	case "/ready":
+		return "/ready"
+	case "/status":
+		return "/status"
+	case "/state":
+		return "/state"
+	case "/capabilities":
+		return "/capabilities"
+	case "/v1/secrets":
+		return "/v1/secrets"
+	case "/v1/writeback":
+		return "/v1/writeback"
+	case "/v1/resolve":
+		return "/v1/resolve"
+	case "/v1/sources/status":
+		return "/v1/sources/status"
+	case "/v1/providers/capabilities":
+		return "/v1/providers/capabilities"
+	case "/v1/providers/config/status":
+		return "/v1/providers/config/status"
+	case "/v1/providers/config/validate":
+		return "/v1/providers/config/validate"
+	case "/v1/providers/config/apply":
+		return "/v1/providers/config/apply"
+	case "/v1/providers/migration/dry-run":
+		return "/v1/providers/migration/dry-run"
+	case "/v1/providers/migration/apply":
+		return "/v1/providers/migration/apply"
+	case "/v1/telemetry":
+		return "/v1/telemetry"
+	case "/v1/telemetry/export":
+		return "/v1/telemetry/export"
+	case "/v1/events":
+		return "/v1/events"
+	case "/v1/recovery/policy":
+		return "/v1/recovery/policy"
+	case "/v1/management/lockouts/clear":
+		return "/v1/management/lockouts/clear"
+	case "/v1/management/secrets":
+		return "/v1/management/secrets"
+	case "/v1/management/secrets/value-search":
+		return "/v1/management/secrets/value-search"
+	case "/v1/management/secrets/reveal":
+		return "/v1/management/secrets/reveal"
+	case "/v1/management/secrets/edit/dry-run":
+		return "/v1/management/secrets/edit/dry-run"
+	case "/v1/management/secrets/edit/apply":
+		return "/v1/management/secrets/edit/apply"
+	case "/v1/management/secrets/reset/dry-run":
+		return "/v1/management/secrets/reset/dry-run"
+	case "/v1/management/secrets/reset/apply":
+		return "/v1/management/secrets/reset/apply"
+	case "/v1/management/secrets/rotation/dry-run":
+		return "/v1/management/secrets/rotation/dry-run"
+	case "/v1/management/secrets/campaigns/create":
+		return "/v1/management/secrets/campaigns/create"
+	case "/v1/management/secrets/campaigns/revalidate":
+		return "/v1/management/secrets/campaigns/revalidate"
+	case "/v1/management/secrets/campaigns/apply":
+		return "/v1/management/secrets/campaigns/apply"
+	case "/v1/management/secrets/campaigns/status":
+		return "/v1/management/secrets/campaigns/status"
+	case "/v1/management/secrets/sync/dry-run":
+		return "/v1/management/secrets/sync/dry-run"
+	case "/v1/management/secrets/policy/preview":
+		return "/v1/management/secrets/policy/preview"
+	case "/v1/management/secrets/policy/apply":
+		return "/v1/management/secrets/policy/apply"
+	default:
+		return "/unmatched"
+	}
+}
+
+func telemetryRouteGroup(routeTemplate string) string {
+	trimmed := strings.Trim(routeTemplate, "/")
+	if trimmed == "" {
+		return "root"
+	}
+	parts := strings.Split(trimmed, "/")
+	if parts[0] == "v1" && len(parts) > 1 {
+		return parts[1]
+	}
+	return parts[0]
+}
+
+func telemetryStatusClass(statusCode int) string {
+	if statusCode < 100 {
+		return "unknown"
+	}
+	return fmt.Sprintf("%dxx", statusCode/100)
+}
+
+func telemetryRequestOutcome(statusCode int) string {
+	switch {
+	case statusCode >= 200 && statusCode < 300:
+		return "ready"
+	case statusCode >= 300 && statusCode < 400:
+		return "redirect"
+	case statusCode >= 400 && statusCode < 500:
+		return "client_error"
+	case statusCode >= 500:
+		return "server_error"
+	default:
+		return "unknown"
+	}
+}
+
+func telemetryMutatingMethod(method string) bool {
+	switch strings.ToUpper(method) {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
+}
+
+func telemetryDurationBucket(durationMs int) string {
+	switch {
+	case durationMs < 50:
+		return "lt_50ms"
+	case durationMs < 250:
+		return "50_249ms"
+	case durationMs < 1000:
+		return "250_999ms"
+	default:
+		return "1s_plus"
+	}
 }
 
 func telemetryHash(value string, length int) string {

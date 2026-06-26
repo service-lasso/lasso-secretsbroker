@@ -113,6 +113,71 @@ func TestTelemetryEndpointAndAdminCLIAreMetadataOnly(t *testing.T) {
 	}
 }
 
+func TestTelemetryRecordsHTTPRequestLatencyBucketsWithoutRawRouteMaterial(t *testing.T) {
+	backend := testBackend(t)
+	server := httptest.NewServer(newHandler(runtimeState{}, backend, localAPISecurity{token: "local-token"}))
+	defer server.Close()
+
+	sentinelPath := "SERVICE_LASSO_FAKE_OTEL_PATH_SECRET_DO_NOT_USE"
+	healthResp, err := http.Get(server.URL + "/health?token=" + sentinelPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	healthResp.Body.Close()
+	if healthResp.StatusCode != http.StatusOK {
+		t.Fatalf("health status = %d", healthResp.StatusCode)
+	}
+	missingResp, err := http.Get(server.URL + "/v1/unknown/" + sentinelPath + "?credential=" + sentinelPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	missingResp.Body.Close()
+	if missingResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing route status = %d", missingResp.StatusCode)
+	}
+
+	resp, err := http.Get(server.URL + "/v1/telemetry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("telemetry status = %d", resp.StatusCode)
+	}
+	var body telemetryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecretMaterial(t, encoded, sentinelPath)
+	if len(body.DurationHistograms) == 0 {
+		t.Fatalf("missing duration histograms: %#v", body)
+	}
+	if !hasDurationHistogram(body.DurationHistograms, "/health", "ready") {
+		t.Fatalf("missing health duration histogram: %#v", body.DurationHistograms)
+	}
+	if !hasDurationHistogram(body.DurationHistograms, "/unmatched", "client_error") {
+		t.Fatalf("missing sanitized unmatched duration histogram: %#v", body.DurationHistograms)
+	}
+	if !hasSignal(body.Signals, "secretsbroker.api.request.duration_bucket") {
+		t.Fatalf("missing API request duration signal: %#v", body.Signals)
+	}
+	allowed := map[string]bool{}
+	for _, key := range body.Redaction.AllowedAttributes {
+		allowed[key] = true
+	}
+	for _, signal := range body.Signals {
+		for key := range signal.Attributes {
+			if !allowed[key] {
+				t.Fatalf("signal used non-allowlisted attribute %q in %#v", key, signal)
+			}
+		}
+	}
+}
+
 func TestTelemetryOTelPreviewIsDryRunAndRedacted(t *testing.T) {
 	t.Setenv("SECRETSBROKER_OTEL_ENABLED", "1")
 	t.Setenv("SECRETSBROKER_OTEL_EXPORT_MODE", "dry-run")
@@ -313,6 +378,15 @@ func hasOperationCount(counters []telemetryOperationCounter, operation, outcome 
 func hasSignal(signals []telemetrySignalPreview, name string) bool {
 	for _, signal := range signals {
 		if signal.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDurationHistogram(histograms []telemetryDurationHistogram, operation, outcome string) bool {
+	for _, histogram := range histograms {
+		if histogram.Operation == operation && histogram.Outcome == outcome && len(histogram.Buckets) > 0 {
 			return true
 		}
 	}

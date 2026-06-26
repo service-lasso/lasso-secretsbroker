@@ -458,8 +458,13 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		registerLockoutManagementHandlers(mux, backend, security)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
 		applyTelemetryResponseHeaders(w, r)
-		mux.ServeHTTP(w, r)
+		recorder := &telemetryStatusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+		mux.ServeHTTP(recorder, r)
+		if backend != nil {
+			recordTelemetryHTTPRequest(backend.telemetry, r, recorder.statusCode, time.Since(started))
+		}
 	})
 }
 
