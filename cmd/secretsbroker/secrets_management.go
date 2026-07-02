@@ -36,6 +36,40 @@ type managedSecretsResponse struct {
 	Results     []managedSecretRecord `json:"results"`
 }
 
+type generatedValuePolicyMetadata struct {
+	Kind           string `json:"kind"`
+	LengthClass    string `json:"lengthClass"`
+	EntropyClass   string `json:"entropyClass"`
+	RotationPolicy string `json:"rotationPolicy"`
+}
+
+type provisioningStatusRecord struct {
+	Ref                  string                       `json:"ref"`
+	Namespace            string                       `json:"namespace"`
+	OwnerServiceID       string                       `json:"ownerServiceId"`
+	SourceID             string                       `json:"sourceId"`
+	ProviderID           string                       `json:"providerId"`
+	ProviderKind         string                       `json:"providerKind"`
+	DesiredOperation     string                       `json:"desiredOperation"`
+	ProvisionedState     string                       `json:"provisionedState"`
+	LastOperationID      string                       `json:"lastOperationId,omitempty"`
+	LastOutcome          string                       `json:"lastOutcome"`
+	NextAction           string                       `json:"nextAction,omitempty"`
+	AuditStatus          string                       `json:"auditStatus"`
+	PolicyResult         string                       `json:"policyResult"`
+	GeneratedValuePolicy generatedValuePolicyMetadata `json:"generatedValuePolicy"`
+	UpdatedAt            *time.Time                   `json:"updatedAt,omitempty"`
+}
+
+type provisioningStatusResponse struct {
+	ServiceID  string                     `json:"serviceId"`
+	APIVersion string                     `json:"apiVersion"`
+	Query      string                     `json:"query,omitempty"`
+	Ref        string                     `json:"ref,omitempty"`
+	Outcome    string                     `json:"outcome"`
+	Results    []provisioningStatusRecord `json:"results"`
+}
+
 type managedSecretActionRequest struct {
 	RequestID string `json:"requestId"`
 	ServiceID string `json:"serviceId"`
@@ -106,6 +140,50 @@ func (b *localBackend) listManagedSecrets(query string, valueSearch bool) (manag
 	return managedSecretsResponse{ServiceID: serviceID, APIVersion: apiVersion, Query: query, ValueSearch: valueSearch, Outcome: "ready", Results: records}, nil
 }
 
+func (b *localBackend) listProvisioningStatus(query, refFilter string) (provisioningStatusResponse, error) {
+	query = strings.TrimSpace(query)
+	refFilter = strings.TrimSpace(refFilter)
+	res := provisioningStatusResponse{ServiceID: serviceID, APIVersion: apiVersion, Query: query, Ref: refFilter, Outcome: "ready", Results: []provisioningStatusRecord{}}
+	if refFilter != "" && !validSecretRef(refFilter) {
+		res.Outcome = "invalid_ref"
+		return res, errInvalidRef
+	}
+	if b.locked() {
+		res.Outcome = "locked"
+		return res, errLocked
+	}
+	store, err := b.loadStore()
+	if err != nil {
+		res.Outcome = "degraded"
+		return res, errBackendDegraded
+	}
+	seen := map[string]bool{}
+	for ref, entry := range store.Secrets {
+		record := provisioningRecordFromLocalEntry(ref, entry)
+		seen[ref] = true
+		if provisioningRecordMatches(record, query, refFilter) {
+			res.Results = append(res.Results, record)
+		}
+	}
+	for _, source := range b.sources.enabledSources() {
+		for ref := range source.Refs {
+			if seen[ref] {
+				continue
+			}
+			record := provisioningRecordFromSource(ref, source)
+			seen[ref] = true
+			if provisioningRecordMatches(record, query, refFilter) {
+				res.Results = append(res.Results, record)
+			}
+		}
+	}
+	if refFilter != "" && !seen[refFilter] {
+		res.Results = append(res.Results, missingProvisioningRecord(refFilter))
+	}
+	sort.Slice(res.Results, func(i, j int) bool { return res.Results[i].Ref < res.Results[j].Ref })
+	return res, nil
+}
+
 func managedRecordFromLocalEntry(ref string, entry secretEntry) managedSecretRecord {
 	updated := entry.Metadata.UpdatedAt
 	return managedSecretRecord{
@@ -123,6 +201,64 @@ func managedRecordFromLocalEntry(ref string, entry secretEntry) managedSecretRec
 		ValueSearch:    "supported",
 		UpdatedAt:      &updated,
 		Metadata:       entry.Metadata,
+	}
+}
+
+func provisioningRecordFromLocalEntry(ref string, entry secretEntry) provisioningStatusRecord {
+	updated := entry.Metadata.UpdatedAt
+	sourceID := firstNonEmpty(entry.Metadata.SourceID, localStoreSource)
+	return provisioningStatusRecord{
+		Ref:                  ref,
+		Namespace:            namespaceFromRef(ref),
+		OwnerServiceID:       ownerFromRef(ref),
+		SourceID:             sourceID,
+		ProviderID:           sourceID,
+		ProviderKind:         "local-encrypted-store",
+		DesiredOperation:     "none",
+		ProvisionedState:     "ready",
+		LastOperationID:      entry.Metadata.Version,
+		LastOutcome:          "ready",
+		AuditStatus:          "audit_available",
+		PolicyResult:         "allowed",
+		GeneratedValuePolicy: defaultGeneratedValuePolicy(ref),
+		UpdatedAt:            &updated,
+	}
+}
+
+func provisioningRecordFromSource(ref string, source sourceConfig) provisioningStatusRecord {
+	lifecycle := sourceRegistryLifecycle(source)
+	return provisioningStatusRecord{
+		Ref:                  ref,
+		Namespace:            namespaceFromRef(ref),
+		OwnerServiceID:       ownerFromRef(ref),
+		SourceID:             source.SourceID,
+		ProviderID:           source.SourceID,
+		ProviderKind:         source.Kind,
+		DesiredOperation:     "create",
+		ProvisionedState:     provisioningStateForOutcome(lifecycle.Outcome),
+		LastOutcome:          lifecycle.Outcome,
+		NextAction:           firstNonEmpty(lifecycle.NextAction, nextActionForProvisioningOutcome(lifecycle.Outcome)),
+		AuditStatus:          "audit_available",
+		PolicyResult:         policyResultForProvisioningOutcome(lifecycle.Outcome),
+		GeneratedValuePolicy: defaultGeneratedValuePolicy(ref),
+	}
+}
+
+func missingProvisioningRecord(ref string) provisioningStatusRecord {
+	return provisioningStatusRecord{
+		Ref:                  ref,
+		Namespace:            namespaceFromRef(ref),
+		OwnerServiceID:       ownerFromRef(ref),
+		SourceID:             localStoreSource,
+		ProviderID:           localStoreSource,
+		ProviderKind:         "local-encrypted-store",
+		DesiredOperation:     "create",
+		ProvisionedState:     "not_planned",
+		LastOutcome:          "missing_ref",
+		NextAction:           "declare_writeback_or_configure_source_ref",
+		AuditStatus:          "audit_available",
+		PolicyResult:         "unknown",
+		GeneratedValuePolicy: defaultGeneratedValuePolicy(ref),
 	}
 }
 
@@ -201,6 +337,85 @@ func managedRecordMatches(record managedSecretRecord, query string) bool {
 	}
 	haystack := strings.ToLower(strings.Join([]string{record.Ref, record.Name, record.SourceID, record.ProviderKind, record.OwnerServiceID, record.WorkspaceID, record.State, record.Outcome, record.Policy}, " "))
 	return strings.Contains(haystack, query)
+}
+
+func provisioningRecordMatches(record provisioningStatusRecord, query, refFilter string) bool {
+	if refFilter != "" && record.Ref != refFilter {
+		return false
+	}
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return true
+	}
+	haystack := strings.ToLower(strings.Join([]string{record.Ref, record.Namespace, record.OwnerServiceID, record.SourceID, record.ProviderID, record.ProviderKind, record.DesiredOperation, record.ProvisionedState, record.LastOutcome, record.PolicyResult}, " "))
+	return strings.Contains(haystack, query)
+}
+
+func namespaceFromRef(ref string) string {
+	ref = strings.Trim(ref, "/")
+	parts := strings.Split(ref, "/")
+	if len(parts) <= 1 {
+		return ref
+	}
+	return strings.Join(parts[:len(parts)-1], "/")
+}
+
+func defaultGeneratedValuePolicy(ref string) generatedValuePolicyMetadata {
+	return generatedValuePolicyMetadata{
+		Kind:           "opaque",
+		LengthClass:    "policy_default",
+		EntropyClass:   "policy_default",
+		RotationPolicy: "service_policy",
+	}
+}
+
+func provisioningStateForOutcome(outcome string) string {
+	switch outcome {
+	case "ready":
+		return "pending"
+	case "missing_ref", "disabled":
+		return "not_planned"
+	case "policy_denied", "source_auth_required", "locked", "invalid_ref":
+		return "blocked"
+	case "source_unavailable", "degraded":
+		return "failed"
+	case "stale":
+		return "stale"
+	default:
+		return "blocked"
+	}
+}
+
+func policyResultForProvisioningOutcome(outcome string) string {
+	switch outcome {
+	case "ready", "missing_ref", "source_auth_required", "locked", "source_unavailable", "degraded", "disabled":
+		return "unknown"
+	case "policy_denied":
+		return "denied"
+	default:
+		return "unknown"
+	}
+}
+
+func nextActionForProvisioningOutcome(outcome string) string {
+	switch outcome {
+	case "ready":
+		return "writeback_generated_value_or_mark_ready"
+	case "missing_ref":
+		return "check_ref"
+	case "policy_denied":
+		return "review_policy"
+	case "source_auth_required":
+		return "reconnect_source"
+	case "locked":
+		return "unlock_broker"
+	case "disabled":
+		return "enable_source"
+	case "source_unavailable", "degraded":
+		return "retry_or_inspect_source"
+	default:
+		return "inspect_status"
+	}
 }
 
 func configuredSourceRefCount(cfg sourceConfigFile) int {
@@ -547,6 +762,21 @@ func nextActionForManagedOutcome(outcome string) string {
 }
 
 func registerSecretsManagementHandlers(mux *http.ServeMux, backend *localBackend, security localAPISecurity) {
+	mux.HandleFunc("/v1/provisioning/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Use GET /v1/provisioning/status.", "invalid_ref", "")
+			return
+		}
+		if !security.require(w, r) {
+			return
+		}
+		res, err := backend.listProvisioningStatus(r.URL.Query().Get("search"), r.URL.Query().Get("ref"))
+		if err != nil {
+			writeManagementError(w, err, res.Outcome, "Provisioning status failed closed.")
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+	})
 	mux.HandleFunc("/v1/management/secrets", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Use GET /v1/management/secrets.", "invalid_ref", "")

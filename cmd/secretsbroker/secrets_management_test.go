@@ -66,6 +66,79 @@ func TestManagedValueSearchReturnsRefsOnlyAndOmitsUnsupportedSources(t *testing.
 	assertNoSecretMaterial(t, mustManagedJSON(t, res), managedSecretValue, "unmatched-fixture-value")
 }
 
+func TestProvisioningStatusIsMetadataOnlyAndDistinguishesOutcomes(t *testing.T) {
+	backend := managedTestBackend(t)
+	readyRef := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	writeManagedTestSecret(t, backend, readyRef, managedSecretValue)
+	backend.sources = sourceConfigFile{Sources: []sourceConfig{{
+		SourceID: "vault-dev", Kind: "vault", DisplayName: "Vault dev", Enabled: true, Address: "https://vault.invalid", Token: "provider-token-fixture", Refs: map[string]sourceRefConfig{
+			"services/search/runtime/EXTERNAL_ONLY_REF": {Path: "secret/data/search", Field: "value"},
+		},
+	}, {
+		SourceID: "vault-auth-required", Kind: "vault", DisplayName: "Vault auth required", Enabled: true, Address: "https://vault.invalid", Refs: map[string]sourceRefConfig{
+			"services/payments/runtime/AUTH_REQUIRED_REF": {Path: "secret/data/payments", Field: "value"},
+		},
+	}}}
+
+	res, err := backend.listProvisioningStatus("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Outcome != "ready" || len(res.Results) != 3 {
+		t.Fatalf("provisioning response = %#v", res)
+	}
+	byRef := map[string]provisioningStatusRecord{}
+	for _, result := range res.Results {
+		byRef[result.Ref] = result
+	}
+	if got := byRef[readyRef]; got.ProvisionedState != "ready" || got.LastOutcome != "ready" || got.DesiredOperation != "none" || got.GeneratedValuePolicy.Kind != "opaque" {
+		t.Fatalf("ready provisioning record = %#v", got)
+	}
+	if got := byRef["services/search/runtime/EXTERNAL_ONLY_REF"]; got.ProvisionedState != "pending" || got.LastOutcome != "ready" || got.NextAction != "writeback_generated_value_or_mark_ready" {
+		t.Fatalf("source ready provisioning record = %#v", got)
+	}
+	if got := byRef["services/payments/runtime/AUTH_REQUIRED_REF"]; got.ProvisionedState != "blocked" || got.LastOutcome != "source_auth_required" || got.NextAction != "reconnect_source" {
+		t.Fatalf("auth-required provisioning record = %#v", got)
+	}
+	assertNoSecretMaterial(t, mustManagedJSON(t, res), managedSecretValue, "provider-token-fixture")
+
+	missing, err := backend.listProvisioningStatus("", "services/missing/runtime/NEW_SECRET")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(missing.Results) != 1 || missing.Results[0].ProvisionedState != "not_planned" || missing.Results[0].LastOutcome != "missing_ref" {
+		t.Fatalf("missing provisioning record = %#v", missing)
+	}
+	assertNoSecretMaterial(t, mustManagedJSON(t, missing), managedSecretValue, "provider-token-fixture")
+}
+
+func TestProvisioningStatusHTTPContractIsMetadataOnly(t *testing.T) {
+	backend := managedTestBackend(t)
+	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	writeManagedTestSecret(t, backend, ref, managedSecretValue)
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/v1/provisioning/status?ref="+ref, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer test-token")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := readClose(t, res.Body)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("provisioning status=%d body=%s", res.StatusCode, got)
+	}
+	if !bytes.Contains(got, []byte(`"provisionedState":"ready"`)) || !bytes.Contains(got, []byte(`"generatedValuePolicy"`)) {
+		t.Fatalf("provisioning body=%s", got)
+	}
+	assertNoSecretMaterial(t, got, managedSecretValue, "test-token")
+}
+
 func TestManagedRevealIsOnlyRawValueSuccessPath(t *testing.T) {
 	backend := managedTestBackend(t)
 	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"

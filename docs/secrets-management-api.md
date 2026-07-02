@@ -13,10 +13,56 @@ The contract is metadata-first. List/search/value-search responses return safe r
 - Edit/reset/policy operations expose dry-run/preview before apply.
 - Apply requests are secret-bearing where relevant and use the same local API auth and body-size guardrails as existing write/resolve endpoints.
 - Audit entries record operation/ref/outcome/request identity only; they do not include raw values.
+- Provisioning status is metadata-only. It reports generated value policy classes and per-ref status, never generated values, master keys, provider credentials, tokens, private keys, cookies, passwords, environment values, or recovery material.
 
 ## Endpoints
 
 All endpoints require the local API token when configured, via `Authorization: Bearer <token>` or `X-SecretsBroker-Token`.
+
+### `GET /v1/provisioning/status?ref=<secret-ref>&search=<metadata-query>`
+
+Returns metadata-only first-run generated/provisioned secret status for Service Lasso and Service Admin.
+
+The endpoint reports local encrypted-store refs, configured source refs, and an explicit `missing_ref` record when a valid `ref` query does not exist in either place. It is intended for first-run and operator dashboards that need to explain whether a generated/service secret is ready, pending, blocked, failed, stale, or not planned without reading secret values.
+
+Response:
+
+```json
+{
+  "serviceId": "@secretsbroker",
+  "apiVersion": "secretsbroker.local/v1",
+  "ref": "services/@serviceadmin/runtime/SESSION_SIGNING_KEY",
+  "outcome": "ready",
+  "results": [
+    {
+      "ref": "services/@serviceadmin/runtime/SESSION_SIGNING_KEY",
+      "namespace": "services/@serviceadmin/runtime",
+      "ownerServiceId": "@serviceadmin",
+      "sourceId": "local",
+      "providerId": "local",
+      "providerKind": "local-encrypted-store",
+      "desiredOperation": "none",
+      "provisionedState": "ready",
+      "lastOperationId": "2026-05-07T00:00:00Z",
+      "lastOutcome": "ready",
+      "auditStatus": "audit_available",
+      "policyResult": "allowed",
+      "generatedValuePolicy": {
+        "kind": "opaque",
+        "lengthClass": "policy_default",
+        "entropyClass": "policy_default",
+        "rotationPolicy": "service_policy"
+      }
+    }
+  ]
+}
+```
+
+Per-ref `provisionedState` values: `not_planned`, `pending`, `ready`, `blocked`, `failed`, and `stale`.
+
+Per-ref `lastOutcome` values include `ready`, `missing_ref`, `locked`, `policy_denied`, `source_auth_required`, `source_unavailable`, `degraded`, `disabled`, and `stale`.
+
+The endpoint is read-only. A `pending` record does not generate, write, rotate, or migrate a value; callers must use the existing signed write-back path or a future explicit generation operation to change broker state.
 
 ### `GET /v1/management/secrets?search=<metadata-query>`
 
@@ -275,4 +321,4 @@ Preview/apply policy changes. This first contract records the requested policy h
 
 ## Typed outcomes
 
-Common outcomes: `ready`, `dry_run_ready`, `applied`, `migrated`, `partial_failure`, `missing_ref`, `invalid_ref`, `locked`, `policy_denied`, `source_auth_required`, `source_unavailable`, `unsupported`, `degraded`, `audit_unavailable`, `stale_plan`, `skipped`, `failed`.
+Common outcomes: `ready`, `dry_run_ready`, `applied`, `migrated`, `partial_failure`, `missing_ref`, `invalid_ref`, `locked`, `policy_denied`, `source_auth_required`, `source_unavailable`, `unsupported`, `degraded`, `audit_unavailable`, `stale`, `stale_plan`, `skipped`, `failed`.

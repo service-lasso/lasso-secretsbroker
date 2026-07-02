@@ -47,6 +47,10 @@ var typedOutcomes = []string{
 	"cleared",
 	"not_found",
 	"disabled",
+	"stale",
+	"unsupported",
+	"audit_unavailable",
+	"failed",
 }
 
 type Status struct {
@@ -186,7 +190,7 @@ func defaultStatus(state string) Status {
 		Ready:       isReadyState(state),
 		LocalFirst:  true,
 		Backend:     "local",
-		Description: "Lean local-first Vault-like broker bootstrap skeleton. Secrets storage/resolution is intentionally not implemented yet.",
+		Description: "Local-first secrets broker with encrypted local storage, metadata-safe management, resolve, write-back, and provisioning status surfaces.",
 		CheckedAt:   time.Now().UTC(),
 	}
 }
@@ -229,6 +233,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/secrets",
 			"POST /v1/writeback",
 			"POST /v1/resolve",
+			"GET /v1/provisioning/status",
 			"GET /v1/sources/status",
 			"GET /v1/providers/capabilities",
 			"GET /v1/providers/config/status",
@@ -289,6 +294,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"launch-identity-transport-binding",
 			"write-back-policy",
 			"generated-secret-capture",
+			"generated-secret-provisioning-status",
 			"encrypted-backup-restore",
 			"master-key-initialize-unlock-import-rewrap",
 			"os-wrapper-status",
