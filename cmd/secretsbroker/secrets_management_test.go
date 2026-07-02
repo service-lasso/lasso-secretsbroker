@@ -139,6 +139,86 @@ func TestProvisioningStatusHTTPContractIsMetadataOnly(t *testing.T) {
 	assertNoSecretMaterial(t, got, managedSecretValue, "test-token")
 }
 
+func TestProvisioningOperationPlanCallerProvidedWritebackIsMetadataOnly(t *testing.T) {
+	backend := managedTestBackend(t)
+	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	writeManagedTestSecret(t, backend, ref, managedSecretValue)
+
+	plan, err := backend.planProvisioningOperation(provisioningOperationRequest{
+		RequestID:      "req-provision-plan",
+		ServiceID:      "@serviceadmin",
+		Ref:            ref,
+		Operation:      "rotate",
+		GenerationMode: "caller_provided",
+		Reason:         "first-run generated secret planning",
+		GeneratedValuePolicy: generatedValuePolicyMetadata{
+			Kind:           "session-signing-key",
+			LengthClass:    "32_bytes",
+			EntropyClass:   "cryptographic",
+			RotationPolicy: "first_run_then_operator_rotation",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Outcome != "ready" || !plan.RequiresConfirmation || plan.WritebackEndpoint != "/v1/writeback" || plan.Applied {
+		t.Fatalf("caller-provided plan = %#v", plan)
+	}
+	if plan.GenerationMode != "caller_provided" || plan.GeneratedValuePolicy.Kind != "session-signing-key" || plan.ProvisionedState != "ready" {
+		t.Fatalf("caller-provided plan metadata = %#v", plan)
+	}
+	assertNoSecretMaterial(t, mustManagedJSON(t, plan), managedSecretValue, "first-run-plaintext-value")
+}
+
+func TestProvisioningOperationPlanBrokerGenerationFailsClosed(t *testing.T) {
+	backend := managedTestBackend(t)
+	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	writeManagedTestSecret(t, backend, ref, managedSecretValue)
+
+	plan, err := backend.planProvisioningOperation(provisioningOperationRequest{
+		RequestID:             "req-broker-generate-plan",
+		ServiceID:             "@serviceadmin",
+		Ref:                   ref,
+		Operation:             "rotate",
+		RequireBrokerGenerate: true,
+	})
+	if !errors.Is(err, errUnsupportedProvider) {
+		t.Fatalf("err = %v, want unsupported", err)
+	}
+	if plan.Outcome != "unsupported" || plan.UnsupportedCapability != "broker_generated_value" || plan.Applied || plan.WritebackEndpoint != "" {
+		t.Fatalf("broker-generated plan = %#v", plan)
+	}
+	assertNoSecretMaterial(t, mustManagedJSON(t, plan), managedSecretValue)
+}
+
+func TestProvisioningOperationPlanHTTPContractIsMetadataOnly(t *testing.T) {
+	backend := managedTestBackend(t)
+	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	writeManagedTestSecret(t, backend, ref, managedSecretValue)
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	body := []byte(`{"requestId":"req-http-plan","serviceId":"@serviceadmin","ref":"` + ref + `","operation":"create","generationMode":"caller_provided","reason":"first-run provisioning plan","generatedValuePolicy":{"kind":"opaque","lengthClass":"32_bytes","entropyClass":"cryptographic","rotationPolicy":"first_run"}}`)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/provisioning/operations/plan", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer test-token")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := readClose(t, res.Body)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("plan status=%d body=%s", res.StatusCode, got)
+	}
+	if !bytes.Contains(got, []byte(`"writebackEndpoint":"/v1/writeback"`)) || !bytes.Contains(got, []byte(`"generationMode":"caller_provided"`)) {
+		t.Fatalf("plan body=%s", got)
+	}
+	assertNoSecretMaterial(t, got, managedSecretValue, "first-run-plaintext-value", "test-token")
+}
+
 func TestManagedRevealIsOnlyRawValueSuccessPath(t *testing.T) {
 	backend := managedTestBackend(t)
 	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"

@@ -14,6 +14,7 @@ The contract is metadata-first. List/search/value-search responses return safe r
 - Apply requests are secret-bearing where relevant and use the same local API auth and body-size guardrails as existing write/resolve endpoints.
 - Audit entries record operation/ref/outcome/request identity only; they do not include raw values.
 - Provisioning status is metadata-only. It reports generated value policy classes and per-ref status, never generated values, master keys, provider credentials, tokens, private keys, cookies, passwords, environment values, or recovery material.
+- Provisioning operation planning is metadata-only. Caller-provided generation currently plans the existing signed write-back path; broker-generated values fail closed as `unsupported` until a broker generation policy is implemented.
 
 ## Endpoints
 
@@ -63,6 +64,62 @@ Per-ref `provisionedState` values: `not_planned`, `pending`, `ready`, `blocked`,
 Per-ref `lastOutcome` values include `ready`, `missing_ref`, `locked`, `policy_denied`, `source_auth_required`, `source_unavailable`, `degraded`, `disabled`, and `stale`.
 
 The endpoint is read-only. A `pending` record does not generate, write, rotate, or migrate a value; callers must use the existing signed write-back path or a future explicit generation operation to change broker state.
+
+### `POST /v1/provisioning/operations/plan`
+
+Plans a first-run generated secret operation without writing, generating, revealing, or rotating a value. This endpoint lets Service Lasso and Service Admin choose the safe next action while keeping the existing signed `/v1/writeback` endpoint as the only current apply path for caller-provided values.
+
+Request:
+
+```json
+{
+  "requestId": "req-provision-plan-1",
+  "serviceId": "@serviceadmin",
+  "ref": "services/@serviceadmin/runtime/SESSION_SIGNING_KEY",
+  "operation": "create",
+  "generationMode": "caller_provided",
+  "reason": "first-run setup planning",
+  "generatedValuePolicy": {
+    "kind": "session-signing-key",
+    "lengthClass": "32_bytes",
+    "entropyClass": "cryptographic",
+    "rotationPolicy": "first_run_then_operator_rotation"
+  }
+}
+```
+
+Success response for caller-provided generation:
+
+```json
+{
+  "serviceId": "@secretsbroker",
+  "apiVersion": "secretsbroker.local/v1",
+  "requestId": "req-provision-plan-1",
+  "ownerServiceId": "@serviceadmin",
+  "namespace": "services/@serviceadmin/runtime",
+  "ref": "services/@serviceadmin/runtime/SESSION_SIGNING_KEY",
+  "operation": "create",
+  "mode": "plan",
+  "generationMode": "caller_provided",
+  "outcome": "ready",
+  "applied": false,
+  "requiresConfirmation": true,
+  "writebackEndpoint": "/v1/writeback",
+  "nextAction": "submit_signed_writeback_with_value_and_audit_reason",
+  "auditStatus": "audit_ready",
+  "policyResult": "allowed",
+  "provisionedState": "not_planned",
+  "lastOutcome": "missing_ref",
+  "generatedValuePolicy": {
+    "kind": "session-signing-key",
+    "lengthClass": "32_bytes",
+    "entropyClass": "cryptographic",
+    "rotationPolicy": "first_run_then_operator_rotation"
+  }
+}
+```
+
+Broker-generated requests use `"generationMode": "broker_generated"` or `"requireBrokerGenerate": true`. Until broker-owned value generation policy is implemented, the response is HTTP 501 with `outcome: "unsupported"`, `unsupportedCapability: "broker_generated_value"`, no `writebackEndpoint`, and `nextAction: "use_caller_provided_signed_writeback_until_broker_generation_policy_is_enabled"`.
 
 ### `GET /v1/management/secrets?search=<metadata-query>`
 

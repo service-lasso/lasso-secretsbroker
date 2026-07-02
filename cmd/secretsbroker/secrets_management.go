@@ -70,6 +70,43 @@ type provisioningStatusResponse struct {
 	Results    []provisioningStatusRecord `json:"results"`
 }
 
+type provisioningOperationRequest struct {
+	RequestID             string                       `json:"requestId"`
+	ServiceID             string                       `json:"serviceId"`
+	Ref                   string                       `json:"ref"`
+	Operation             string                       `json:"operation"`
+	GenerationMode        string                       `json:"generationMode"`
+	Reason                string                       `json:"reason"`
+	GeneratedValuePolicy  generatedValuePolicyMetadata `json:"generatedValuePolicy"`
+	RequiresWriteback     bool                         `json:"requiresWriteback"`
+	RequireBrokerGenerate bool                         `json:"requireBrokerGenerate"`
+}
+
+type provisioningOperationResponse struct {
+	ServiceID             string                       `json:"serviceId"`
+	APIVersion            string                       `json:"apiVersion"`
+	RequestID             string                       `json:"requestId,omitempty"`
+	OwnerServiceID        string                       `json:"ownerServiceId"`
+	Namespace             string                       `json:"namespace"`
+	Ref                   string                       `json:"ref"`
+	Operation             string                       `json:"operation"`
+	Mode                  string                       `json:"mode"`
+	GenerationMode        string                       `json:"generationMode"`
+	Outcome               string                       `json:"outcome"`
+	Applied               bool                         `json:"applied"`
+	RequiresConfirmation  bool                         `json:"requiresConfirmation"`
+	WritebackEndpoint     string                       `json:"writebackEndpoint,omitempty"`
+	NextAction            string                       `json:"nextAction,omitempty"`
+	AuditStatus           string                       `json:"auditStatus"`
+	PolicyResult          string                       `json:"policyResult"`
+	ProvisionedState      string                       `json:"provisionedState"`
+	LastOutcome           string                       `json:"lastOutcome"`
+	GeneratedValuePolicy  generatedValuePolicyMetadata `json:"generatedValuePolicy"`
+	UnsupportedCapability string                       `json:"unsupportedCapability,omitempty"`
+	AffectedRefs          []string                     `json:"affectedRefs"`
+	AffectedServices      []string                     `json:"affectedServices"`
+}
+
 type managedSecretActionRequest struct {
 	RequestID string `json:"requestId"`
 	ServiceID string `json:"serviceId"`
@@ -181,6 +218,69 @@ func (b *localBackend) listProvisioningStatus(query, refFilter string) (provisio
 		res.Results = append(res.Results, missingProvisioningRecord(refFilter))
 	}
 	sort.Slice(res.Results, func(i, j int) bool { return res.Results[i].Ref < res.Results[j].Ref })
+	return res, nil
+}
+
+func (b *localBackend) planProvisioningOperation(req provisioningOperationRequest) (provisioningOperationResponse, error) {
+	ref := strings.TrimSpace(req.Ref)
+	operation := normalizeWritebackOperation(req.Operation)
+	generationMode := normalizeProvisioningGenerationMode(req.GenerationMode)
+	if req.RequireBrokerGenerate {
+		generationMode = "broker_generated"
+	}
+	res := provisioningOperationResponse{
+		ServiceID:            serviceID,
+		APIVersion:           apiVersion,
+		RequestID:            req.RequestID,
+		OwnerServiceID:       ownerFromRef(ref),
+		Namespace:            namespaceFromRef(ref),
+		Ref:                  ref,
+		Operation:            operation,
+		Mode:                 "plan",
+		GenerationMode:       generationMode,
+		Outcome:              "pending",
+		AuditStatus:          "audit_pending",
+		PolicyResult:         "unknown",
+		GeneratedValuePolicy: firstGeneratedValuePolicy(req.GeneratedValuePolicy, defaultGeneratedValuePolicy(ref)),
+		AffectedRefs:         safeList([]string{ref}),
+		AffectedServices:     safeList([]string{firstNonEmpty(req.ServiceID, ownerFromRef(ref))}),
+	}
+	if !validSecretRef(ref) || !validWritebackOperation(operation) || !validProvisioningGenerationMode(generationMode) {
+		res.Outcome = "invalid_ref"
+		res.NextAction = "provide_valid_ref_operation_and_generation_mode"
+		_ = b.audit("provisioning_plan", ref, res.Outcome, req.ServiceID, req.RequestID)
+		return res, errInvalidRef
+	}
+	status, err := b.listProvisioningStatus("", ref)
+	if err != nil {
+		res.Outcome = outcomeForError(err)
+		res.NextAction = nextActionForProvisioningOutcome(res.Outcome)
+		_ = b.audit("provisioning_plan", ref, res.Outcome, req.ServiceID, req.RequestID)
+		return res, err
+	}
+	if len(status.Results) == 1 {
+		res.ProvisionedState = status.Results[0].ProvisionedState
+		res.LastOutcome = status.Results[0].LastOutcome
+		res.PolicyResult = status.Results[0].PolicyResult
+	}
+	if generationMode == "broker_generated" {
+		res.Outcome = "unsupported"
+		res.PolicyResult = "unsupported"
+		res.AuditStatus = "audit_ready"
+		res.UnsupportedCapability = "broker_generated_value"
+		res.NextAction = "use_caller_provided_signed_writeback_until_broker_generation_policy_is_enabled"
+		_ = b.audit("provisioning_plan", ref, res.Outcome, req.ServiceID, req.RequestID)
+		return res, errUnsupportedProvider
+	}
+	res.Outcome = "ready"
+	res.RequiresConfirmation = true
+	res.WritebackEndpoint = "/v1/writeback"
+	res.NextAction = "submit_signed_writeback_with_value_and_audit_reason"
+	res.AuditStatus = "audit_ready"
+	if res.PolicyResult == "unknown" {
+		res.PolicyResult = "allowed"
+	}
+	_ = b.audit("provisioning_plan", ref, res.Outcome, req.ServiceID, req.RequestID)
 	return res, nil
 }
 
@@ -366,6 +466,39 @@ func defaultGeneratedValuePolicy(ref string) generatedValuePolicyMetadata {
 		LengthClass:    "policy_default",
 		EntropyClass:   "policy_default",
 		RotationPolicy: "service_policy",
+	}
+}
+
+func firstGeneratedValuePolicy(candidate, fallback generatedValuePolicyMetadata) generatedValuePolicyMetadata {
+	if strings.TrimSpace(candidate.Kind) != "" {
+		fallback.Kind = strings.TrimSpace(candidate.Kind)
+	}
+	if strings.TrimSpace(candidate.LengthClass) != "" {
+		fallback.LengthClass = strings.TrimSpace(candidate.LengthClass)
+	}
+	if strings.TrimSpace(candidate.EntropyClass) != "" {
+		fallback.EntropyClass = strings.TrimSpace(candidate.EntropyClass)
+	}
+	if strings.TrimSpace(candidate.RotationPolicy) != "" {
+		fallback.RotationPolicy = strings.TrimSpace(candidate.RotationPolicy)
+	}
+	return fallback
+}
+
+func normalizeProvisioningGenerationMode(mode string) string {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		return "caller_provided"
+	}
+	return mode
+}
+
+func validProvisioningGenerationMode(mode string) bool {
+	switch mode {
+	case "caller_provided", "broker_generated":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -776,6 +909,33 @@ func registerSecretsManagementHandlers(mux *http.ServeMux, backend *localBackend
 			return
 		}
 		writeJSON(w, http.StatusOK, res)
+	})
+	mux.HandleFunc("/v1/provisioning/operations/plan", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Use POST /v1/provisioning/operations/plan.", "invalid_ref", "")
+			return
+		}
+		if !security.require(w, r) {
+			return
+		}
+		var req provisioningOperationRequest
+		if err := decodeSecretBearingJSON(w, r, &req); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		res, err := backend.planProvisioningOperation(req)
+		switch {
+		case err == nil:
+			writeJSON(w, http.StatusOK, res)
+		case errors.Is(err, errInvalidRef):
+			writeJSON(w, http.StatusBadRequest, res)
+		case errors.Is(err, errLocked):
+			writeJSON(w, http.StatusServiceUnavailable, res)
+		case errors.Is(err, errUnsupportedProvider):
+			writeJSON(w, http.StatusNotImplemented, res)
+		default:
+			writeJSON(w, http.StatusServiceUnavailable, res)
+		}
 	})
 	mux.HandleFunc("/v1/management/secrets", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
