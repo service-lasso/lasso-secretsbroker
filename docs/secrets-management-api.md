@@ -14,7 +14,7 @@ The contract is metadata-first. List/search/value-search responses return safe r
 - Apply requests are secret-bearing where relevant and use the same local API auth and body-size guardrails as existing write/resolve endpoints.
 - Audit entries record operation/ref/outcome/request identity only; they do not include raw values.
 - Provisioning status is metadata-only. It reports generated value policy classes and per-ref status, never generated values, master keys, provider credentials, tokens, private keys, cookies, passwords, environment values, or recovery material.
-- Provisioning operation planning is metadata-only. Caller-provided generation currently plans the existing signed write-back path; broker-generated values fail closed as `unsupported` until a broker generation policy is implemented.
+- Provisioning operation planning is metadata-only. Caller-provided generation currently plans the existing signed write-back path. Broker-generated apply is available only through the explicit apply endpoint, and still requires confirmation, audit reason, local API auth, signed launch identity, namespace/ref policy, and operation policy.
 
 ## Endpoints
 
@@ -119,7 +119,97 @@ Success response for caller-provided generation:
 }
 ```
 
-Broker-generated requests use `"generationMode": "broker_generated"` or `"requireBrokerGenerate": true`. Until broker-owned value generation policy is implemented, the response is HTTP 501 with `outcome: "unsupported"`, `unsupportedCapability: "broker_generated_value"`, no `writebackEndpoint`, and `nextAction: "use_caller_provided_signed_writeback_until_broker_generation_policy_is_enabled"`.
+Broker-generated planning requests use `"generationMode": "broker_generated"` or `"requireBrokerGenerate": true`. The plan response stays metadata-only and points callers to the apply endpoint when broker-owned generation is desired.
+
+### `POST /v1/provisioning/operations/apply`
+
+Applies a broker-generated first-run secret value without returning the generated value. This endpoint is intended for local encrypted-store first-run bootstrap where Service Lasso wants the broker to generate and store secret material rather than passing a caller-generated value to `/v1/writeback`.
+
+The endpoint requires:
+
+- local API token
+- `generationMode: "broker_generated"` or `requireBrokerGenerate: true`
+- `confirm: true`
+- non-empty audit `reason`
+- signed `identityLease` scoped to the same service, ref, namespace, and operation
+- `policy.allowedNamespaces` containing the target namespace
+- `policy.allowedOperations` containing the requested operation
+- supported operation: `create`, `update`, or `rotate`
+- supported generated value policy length class: `policy_default`, `16_bytes`, `32_bytes`, or `64_bytes`
+- supported entropy class: `policy_default` or `cryptographic`
+
+Request:
+
+```json
+{
+  "requestId": "req-provision-apply-1",
+  "serviceId": "@serviceadmin",
+  "ref": "services/@serviceadmin/runtime/SESSION_SIGNING_KEY",
+  "operation": "create",
+  "generationMode": "broker_generated",
+  "reason": "first-run setup",
+  "confirm": true,
+  "identity": {
+    "serviceId": "@serviceadmin",
+    "expiresAt": "2026-05-07T00:05:00Z"
+  },
+  "identityLease": {
+    "issuer": "@service-lasso",
+    "serviceId": "@serviceadmin",
+    "allowedRefs": ["services/@serviceadmin/runtime/SESSION_SIGNING_KEY"],
+    "allowedNamespaces": ["services/@serviceadmin/runtime"],
+    "allowedOperations": ["create"],
+    "issuedAt": "2026-05-07T00:00:00Z",
+    "expiresAt": "2026-05-07T00:05:00Z",
+    "jti": "lease-id",
+    "signature": "<lease signature>"
+  },
+  "policy": {
+    "allowedNamespaces": ["services/@serviceadmin/runtime"],
+    "allowedOperations": ["create"]
+  },
+  "generatedValuePolicy": {
+    "kind": "session-signing-key",
+    "lengthClass": "32_bytes",
+    "entropyClass": "cryptographic",
+    "rotationPolicy": "first_run_then_operator_rotation"
+  }
+}
+```
+
+Success response:
+
+```json
+{
+  "serviceId": "@secretsbroker",
+  "apiVersion": "secretsbroker.local/v1",
+  "requestId": "req-provision-apply-1",
+  "ownerServiceId": "@serviceadmin",
+  "namespace": "services/@serviceadmin/runtime",
+  "ref": "services/@serviceadmin/runtime/SESSION_SIGNING_KEY",
+  "operation": "create",
+  "mode": "apply",
+  "generationMode": "broker_generated",
+  "outcome": "applied",
+  "applied": true,
+  "requiresConfirmation": false,
+  "nextAction": "refresh_service_or_continue_startup",
+  "auditStatus": "audit_recorded",
+  "policyResult": "allowed",
+  "provisionedState": "ready",
+  "lastOutcome": "ready",
+  "generatedValuePolicy": {
+    "kind": "session-signing-key",
+    "lengthClass": "32_bytes",
+    "entropyClass": "cryptographic",
+    "rotationPolicy": "first_run_then_operator_rotation"
+  },
+  "affectedRefs": ["services/@serviceadmin/runtime/SESSION_SIGNING_KEY"],
+  "affectedServices": ["@serviceadmin"]
+}
+```
+
+The generated value is written to the local encrypted store through the same write-back capture path used by `/v1/writeback`. Responses, audit records, events, telemetry, diagnostics, and docs fixtures must not include the generated value.
 
 ### `GET /v1/management/secrets?search=<metadata-query>`
 
