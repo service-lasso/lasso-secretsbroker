@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"sort"
@@ -77,6 +79,11 @@ type provisioningOperationRequest struct {
 	Operation             string                       `json:"operation"`
 	GenerationMode        string                       `json:"generationMode"`
 	Reason                string                       `json:"reason"`
+	Confirm               bool                         `json:"confirm"`
+	Identity              writebackIdentity            `json:"identity"`
+	IdentityLease         *launchIdentityLease         `json:"identityLease,omitempty"`
+	Policy                writebackPolicy              `json:"policy"`
+	Secrets               *serviceSecretsPolicy        `json:"secrets,omitempty"`
 	GeneratedValuePolicy  generatedValuePolicyMetadata `json:"generatedValuePolicy"`
 	RequiresWriteback     bool                         `json:"requiresWriteback"`
 	RequireBrokerGenerate bool                         `json:"requireBrokerGenerate"`
@@ -264,13 +271,13 @@ func (b *localBackend) planProvisioningOperation(req provisioningOperationReques
 		res.PolicyResult = status.Results[0].PolicyResult
 	}
 	if generationMode == "broker_generated" {
-		res.Outcome = "unsupported"
-		res.PolicyResult = "unsupported"
+		res.Outcome = "ready"
+		res.RequiresConfirmation = true
+		res.PolicyResult = "allowed"
 		res.AuditStatus = "audit_ready"
-		res.UnsupportedCapability = "broker_generated_value"
-		res.NextAction = "use_caller_provided_signed_writeback_until_broker_generation_policy_is_enabled"
+		res.NextAction = "call_broker_generated_apply_with_signed_identity_policy_and_audit_reason"
 		_ = b.audit("provisioning_plan", ref, res.Outcome, req.ServiceID, req.RequestID)
-		return res, errUnsupportedProvider
+		return res, nil
 	}
 	res.Outcome = "ready"
 	res.RequiresConfirmation = true
@@ -281,6 +288,97 @@ func (b *localBackend) planProvisioningOperation(req provisioningOperationReques
 		res.PolicyResult = "allowed"
 	}
 	_ = b.audit("provisioning_plan", ref, res.Outcome, req.ServiceID, req.RequestID)
+	return res, nil
+}
+
+func (b *localBackend) applyProvisioningOperation(req provisioningOperationRequest) (provisioningOperationResponse, error) {
+	ref := strings.TrimSpace(req.Ref)
+	operation := normalizeWritebackOperation(req.Operation)
+	generationMode := normalizeProvisioningGenerationMode(req.GenerationMode)
+	if req.RequireBrokerGenerate {
+		generationMode = "broker_generated"
+	}
+	res := provisioningOperationResponse{
+		ServiceID:            serviceID,
+		APIVersion:           apiVersion,
+		RequestID:            req.RequestID,
+		OwnerServiceID:       ownerFromRef(ref),
+		Namespace:            namespaceFromRef(ref),
+		Ref:                  ref,
+		Operation:            operation,
+		Mode:                 "apply",
+		GenerationMode:       generationMode,
+		Outcome:              "pending",
+		AuditStatus:          "audit_pending",
+		PolicyResult:         "unknown",
+		GeneratedValuePolicy: firstGeneratedValuePolicy(req.GeneratedValuePolicy, defaultGeneratedValuePolicy(ref)),
+		AffectedRefs:         safeList([]string{ref}),
+		AffectedServices:     safeList([]string{firstNonEmpty(firstNonEmpty(req.ServiceID, req.Identity.ServiceID), ownerFromRef(ref))}),
+	}
+	if !validSecretRef(ref) || !validWritebackOperation(operation) || !validProvisioningGenerationMode(generationMode) || !validBrokerGeneratedProvisioningOperation(operation) {
+		res.Outcome = "invalid_ref"
+		res.NextAction = "provide_valid_ref_operation_and_generation_mode"
+		_ = b.audit("provisioning_apply", ref, res.Outcome, firstNonEmpty(req.Identity.ServiceID, req.ServiceID), req.RequestID)
+		return res, errInvalidRef
+	}
+	if generationMode != "broker_generated" {
+		res.Outcome = "unsupported"
+		res.PolicyResult = "unsupported"
+		res.AuditStatus = "audit_ready"
+		res.UnsupportedCapability = "caller_provided_apply"
+		res.NextAction = "use_signed_writeback_endpoint_for_caller_provided_values"
+		_ = b.audit("provisioning_apply", ref, res.Outcome, firstNonEmpty(req.Identity.ServiceID, req.ServiceID), req.RequestID)
+		return res, errUnsupportedProvider
+	}
+	if !req.Confirm || strings.TrimSpace(req.Reason) == "" {
+		res.Outcome = "policy_denied"
+		res.PolicyResult = "denied"
+		res.AuditStatus = "audit_required"
+		res.NextAction = "confirm_with_audit_reason"
+		_ = b.audit("provisioning_apply", ref, res.Outcome, firstNonEmpty(req.Identity.ServiceID, req.ServiceID), req.RequestID)
+		return res, errPolicyDenied
+	}
+	value, err := generateBrokerProvisioningValue(res.GeneratedValuePolicy)
+	if err != nil {
+		res.Outcome = "policy_denied"
+		res.PolicyResult = "denied"
+		res.AuditStatus = "audit_ready"
+		res.NextAction = "provide_supported_generated_value_policy"
+		_ = b.audit("provisioning_apply", ref, res.Outcome, firstNonEmpty(req.Identity.ServiceID, req.ServiceID), req.RequestID)
+		return res, errPolicyDenied
+	}
+	capture, err := b.captureGeneratedSecret(generatedSecretCaptureRequest{
+		RequestID:       req.RequestID,
+		Identity:        req.Identity,
+		IdentityLease:   req.IdentityLease,
+		Policy:          req.Policy,
+		Secrets:         req.Secrets,
+		Operation:       operation,
+		Namespace:       namespaceFromRef(ref),
+		Ref:             refName(ref),
+		Value:           value,
+		Metadata:        map[string]string{"sourceId": "broker-generated:" + firstNonEmpty(firstNonEmpty(req.Identity.ServiceID, req.ServiceID), ownerFromRef(ref))},
+		RefreshRequired: operation == "rotate" || operation == "update",
+		InvalidateRefs:  []string{ref},
+	})
+	res.LastOutcome = capture.Outcome
+	res.ProvisionedState = provisioningStateForOutcome(capture.Outcome)
+	if err != nil {
+		res.Outcome = capture.Outcome
+		res.PolicyResult = policyResultForProvisioningOutcome(capture.Outcome)
+		res.AuditStatus = "audit_recorded"
+		res.NextAction = nextActionForProvisioningOutcome(capture.Outcome)
+		_ = b.audit("provisioning_apply", ref, res.Outcome, firstNonEmpty(req.Identity.ServiceID, req.ServiceID), req.RequestID)
+		return res, err
+	}
+	res.Outcome = "applied"
+	res.Applied = true
+	res.PolicyResult = "allowed"
+	res.AuditStatus = "audit_recorded"
+	res.ProvisionedState = "ready"
+	res.LastOutcome = capture.Outcome
+	res.NextAction = "refresh_service_or_continue_startup"
+	_ = b.audit("provisioning_apply", ref, res.Outcome, firstNonEmpty(req.Identity.ServiceID, req.ServiceID), req.RequestID)
 	return res, nil
 }
 
@@ -500,6 +598,39 @@ func validProvisioningGenerationMode(mode string) bool {
 	default:
 		return false
 	}
+}
+
+func validBrokerGeneratedProvisioningOperation(operation string) bool {
+	switch operation {
+	case "create", "update", "rotate":
+		return true
+	default:
+		return false
+	}
+}
+
+func generateBrokerProvisioningValue(policy generatedValuePolicyMetadata) (string, error) {
+	length := 32
+	switch strings.TrimSpace(policy.LengthClass) {
+	case "", "policy_default", "32_bytes":
+		length = 32
+	case "16_bytes":
+		length = 16
+	case "64_bytes":
+		length = 64
+	default:
+		return "", errPolicyDenied
+	}
+	switch strings.TrimSpace(policy.EntropyClass) {
+	case "", "policy_default", "cryptographic":
+	default:
+		return "", errPolicyDenied
+	}
+	buf := make([]byte, length)
+	if _, err := rand.Read(buf); err != nil {
+		return "", errBackendDegraded
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 func provisioningStateForOutcome(outcome string) string {
@@ -933,6 +1064,45 @@ func registerSecretsManagementHandlers(mux *http.ServeMux, backend *localBackend
 			writeJSON(w, http.StatusServiceUnavailable, res)
 		case errors.Is(err, errUnsupportedProvider):
 			writeJSON(w, http.StatusNotImplemented, res)
+		default:
+			writeJSON(w, http.StatusServiceUnavailable, res)
+		}
+	})
+	mux.HandleFunc("/v1/provisioning/operations/apply", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Use POST /v1/provisioning/operations/apply.", "invalid_ref", "")
+			return
+		}
+		if !security.require(w, r) {
+			return
+		}
+		var req provisioningOperationRequest
+		if err := decodeSecretBearingJSON(w, r, &req); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		ref := strings.TrimSpace(req.Ref)
+		operation := normalizeWritebackOperation(req.Operation)
+		if req.RequireBrokerGenerate || normalizeProvisioningGenerationMode(req.GenerationMode) == "broker_generated" {
+			peer := transportPeerIdentityFromContext(r.Context())
+			leaseReq := generatedSecretCaptureRequest{Identity: req.Identity, IdentityLease: req.IdentityLease, Operation: operation, Namespace: namespaceFromRef(ref), Ref: refName(ref)}
+			if err := backend.authorizeWritebackLaunchLease(&leaseReq, firstNonEmpty(backend.launchIdentitySigningKey, security.token), peer); err != nil {
+				writeLaunchIdentityAPIError(w, err)
+				return
+			}
+		}
+		res, err := backend.applyProvisioningOperation(req)
+		switch {
+		case err == nil:
+			writeJSON(w, http.StatusOK, res)
+		case errors.Is(err, errInvalidRef):
+			writeJSON(w, http.StatusBadRequest, res)
+		case errors.Is(err, errPolicyDenied):
+			writeJSON(w, http.StatusForbidden, res)
+		case errors.Is(err, errUnsupportedProvider):
+			writeJSON(w, http.StatusNotImplemented, res)
+		case errors.Is(err, errLocked):
+			writeJSON(w, http.StatusServiceUnavailable, res)
 		default:
 			writeJSON(w, http.StatusServiceUnavailable, res)
 		}

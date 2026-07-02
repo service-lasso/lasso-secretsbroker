@@ -892,6 +892,8 @@ func telemetryRouteTemplate(path string) string {
 		return "/v1/provisioning/status"
 	case "/v1/provisioning/operations/plan":
 		return "/v1/provisioning/operations/plan"
+	case "/v1/provisioning/operations/apply":
+		return "/v1/provisioning/operations/apply"
 	case "/v1/sources/status":
 		return "/v1/sources/status"
 	case "/v1/providers/capabilities":

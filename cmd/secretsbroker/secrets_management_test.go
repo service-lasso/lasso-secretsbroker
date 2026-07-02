@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -170,7 +171,7 @@ func TestProvisioningOperationPlanCallerProvidedWritebackIsMetadataOnly(t *testi
 	assertNoSecretMaterial(t, mustManagedJSON(t, plan), managedSecretValue, "first-run-plaintext-value")
 }
 
-func TestProvisioningOperationPlanBrokerGenerationFailsClosed(t *testing.T) {
+func TestProvisioningOperationPlanBrokerGenerationRoutesToSignedApply(t *testing.T) {
 	backend := managedTestBackend(t)
 	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
 	writeManagedTestSecret(t, backend, ref, managedSecretValue)
@@ -182,10 +183,10 @@ func TestProvisioningOperationPlanBrokerGenerationFailsClosed(t *testing.T) {
 		Operation:             "rotate",
 		RequireBrokerGenerate: true,
 	})
-	if !errors.Is(err, errUnsupportedProvider) {
-		t.Fatalf("err = %v, want unsupported", err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if plan.Outcome != "unsupported" || plan.UnsupportedCapability != "broker_generated_value" || plan.Applied || plan.WritebackEndpoint != "" {
+	if plan.Outcome != "ready" || !plan.RequiresConfirmation || plan.NextAction != "call_broker_generated_apply_with_signed_identity_policy_and_audit_reason" || plan.Applied || plan.WritebackEndpoint != "" {
 		t.Fatalf("broker-generated plan = %#v", plan)
 	}
 	assertNoSecretMaterial(t, mustManagedJSON(t, plan), managedSecretValue)
@@ -217,6 +218,79 @@ func TestProvisioningOperationPlanHTTPContractIsMetadataOnly(t *testing.T) {
 		t.Fatalf("plan body=%s", got)
 	}
 	assertNoSecretMaterial(t, got, managedSecretValue, "first-run-plaintext-value", "test-token")
+}
+
+func TestProvisioningOperationApplyBrokerGeneratedWritesMetadataOnly(t *testing.T) {
+	backend := managedTestBackend(t)
+	ref := "services/@serviceadmin/runtime/BROKER_GENERATED_KEY"
+	req := provisioningOperationRequest{
+		RequestID:      "req-broker-apply",
+		ServiceID:      "@serviceadmin",
+		Ref:            ref,
+		Operation:      "create",
+		GenerationMode: "broker_generated",
+		Reason:         "first-run broker-owned provisioning",
+		Confirm:        true,
+		Identity:       writebackIdentity{ServiceID: "@serviceadmin", ExpiresAt: "2026-05-07T00:05:00Z"},
+		Policy:         writebackPolicy{AllowedNamespaces: []string{"services/@serviceadmin/runtime"}, AllowedOperations: []string{"create"}},
+		GeneratedValuePolicy: generatedValuePolicyMetadata{
+			Kind:           "session-signing-key",
+			LengthClass:    "16_bytes",
+			EntropyClass:   "cryptographic",
+			RotationPolicy: "first_run_then_operator_rotation",
+		},
+	}
+	applied, err := backend.applyProvisioningOperation(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !applied.Applied || applied.Outcome != "applied" || applied.GenerationMode != "broker_generated" || applied.WritebackEndpoint != "" {
+		t.Fatalf("broker-generated apply = %#v", applied)
+	}
+	resolved := backend.resolve(resolveRequest{RequestID: "req-broker-apply-resolve", ServiceID: "@serviceadmin", Purpose: "test", Refs: []string{ref}})
+	if len(resolved.Results) != 1 || resolved.Results[0].Outcome != "ready" || resolved.Results[0].Value == "" {
+		t.Fatalf("resolved broker-generated secret = %#v", resolved)
+	}
+	payload := mustManagedJSON(t, applied)
+	assertNoSecretMaterial(t, payload, resolved.Results[0].Value)
+	auditBytes, err := os.ReadFile(backend.auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecretMaterial(t, auditBytes, resolved.Results[0].Value)
+}
+
+func TestProvisioningOperationApplyHTTPRequiresLaunchLeaseAndReturnsMetadataOnly(t *testing.T) {
+	backend := managedTestBackend(t)
+	ref := "services/@serviceadmin/runtime/BROKER_HTTP_KEY"
+	lease := testLaunchIdentityLease(t, backend, "@serviceadmin", []string{ref}, []string{"services/@serviceadmin/runtime"}, []string{"create"}, "jti-provisioning-broker-apply-http")
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	body := []byte(`{"requestId":"req-http-broker-apply","serviceId":"@serviceadmin","ref":"` + ref + `","operation":"create","generationMode":"broker_generated","reason":"first-run broker generation","confirm":true,"identity":{"serviceId":"@serviceadmin","expiresAt":"2026-05-07T00:05:00Z"},"identityLease":` + mustLeaseJSON(t, lease) + `,"policy":{"allowedNamespaces":["services/@serviceadmin/runtime"],"allowedOperations":["create"]},"generatedValuePolicy":{"kind":"opaque","lengthClass":"16_bytes","entropyClass":"cryptographic","rotationPolicy":"first_run"}}`)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/provisioning/operations/apply", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-token")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := readClose(t, res.Body)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("apply status=%d body=%s", res.StatusCode, got)
+	}
+	if !bytes.Contains(got, []byte(`"outcome":"applied"`)) || !bytes.Contains(got, []byte(`"applied":true`)) || !bytes.Contains(got, []byte(`"generationMode":"broker_generated"`)) {
+		t.Fatalf("apply body=%s", got)
+	}
+	resolved := backend.resolve(resolveRequest{RequestID: "req-http-broker-apply-resolve", ServiceID: "@serviceadmin", Purpose: "test", Refs: []string{ref}})
+	if len(resolved.Results) != 1 || resolved.Results[0].Outcome != "ready" || resolved.Results[0].Value == "" {
+		t.Fatalf("resolved broker-generated HTTP secret = %#v", resolved)
+	}
+	assertNoSecretMaterial(t, got, resolved.Results[0].Value, "test-token")
 }
 
 func TestManagedRevealIsOnlyRawValueSuccessPath(t *testing.T) {
