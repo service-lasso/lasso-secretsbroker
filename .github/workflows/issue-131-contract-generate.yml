@@ -1,6 +1,9 @@
 name: issue-131-contract-generate
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - feature/131-contract-schemas
