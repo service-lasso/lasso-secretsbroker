@@ -1,13 +1,15 @@
 # Node and Go Secrets Broker Parity Contract
 
-Status: baseline conformance contract
-Issue: #26
+Status: versioned conformance contract
+Issues: #26, #131
 
 ## Purpose
 
 `@secretsbroker` may have Go and Node implementations, but Service Lasso clients must see one stable contract. This document defines the shared behavior every implementation must satisfy, plus the fixture format used for conformance checks.
 
 The contract is intentionally implementation-neutral: fixture files are JSON and can be consumed by Go tests, Node tests, or external harnesses.
+
+The complete machine-readable HTTP contract is `contract/v1/openapi.json`. See `docs/api-contract.md` for generation, versioning and consumer rules.
 
 ## Compatibility rules
 
@@ -204,6 +206,7 @@ Top-level shape:
       "requiresAuth": true,
       "request": {},
       "expectedStatus": 200,
+      "responseSchema": "resolveResponse",
       "expectedResponse": {},
       "redactionForbidden": ["secret-value", "local-api-token"]
     }
@@ -216,6 +219,7 @@ Case rules:
 - `name`, `kind`, `method`, `path`, `expectedStatus`, and `expectedResponse` are required.
 - `kind` currently supports `http`, `cli`, or `audit`.
 - `requiresAuth` is required for HTTP cases.
+- `responseSchema`, when present, names the OpenAPI component and Go response DTO used to validate the fixture.
 - `redactionForbidden` lists strings that MUST NOT appear in response/error/audit output for that case.
 - Implementations may ignore unknown top-level/case fields for forward compatibility.
 
@@ -230,4 +234,4 @@ Every implementation SHOULD provide a test runner that can:
 5. Compare required fields in `expectedResponse` and `expectedStatus`.
 6. Check that all `redactionForbidden` strings are absent from emitted responses, errors, logs, and audit events.
 
-The Go implementation includes a fixture schema/redaction test in `cmd/secretsbroker/parity_fixture_test.go`. Future Node implementations can reuse the same fixture files and mirror the same assertions in their test runner.
+The Go implementation includes fixture schema/redaction tests in `cmd/secretsbroker/parity_fixture_test.go` and generated-contract drift checks in `cmd/secretsbroker/contract_artifacts_test.go`. Other implementations and Service Admin can reuse the same OpenAPI document and fixture files rather than recreating response shapes.

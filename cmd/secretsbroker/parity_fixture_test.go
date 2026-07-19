@@ -23,12 +23,14 @@ type parityFixture struct {
 
 type parityFixtureCase struct {
 	Name               string          `json:"name"`
+	Scenario           string          `json:"scenario,omitempty"`
 	Kind               string          `json:"kind"`
 	Method             string          `json:"method"`
 	Path               string          `json:"path"`
 	RequiresAuth       *bool           `json:"requiresAuth"`
 	Request            json.RawMessage `json:"request"`
 	ExpectedStatus     int             `json:"expectedStatus"`
+	ResponseSchema     string          `json:"responseSchema,omitempty"`
 	ExpectedResponse   json.RawMessage `json:"expectedResponse"`
 	RedactionForbidden []string        `json:"redactionForbidden"`
 }
@@ -221,6 +223,11 @@ func validateParityFixtureCase(t *testing.T, tc parityFixtureCase) {
 	}
 	if tc.ExpectedStatus == 0 {
 		t.Fatalf("expectedStatus is required")
+	}
+	if tc.Kind == "http" && strings.TrimSpace(tc.ResponseSchema) != "" {
+		if _, ok := contractSchemaTypes()[tc.ResponseSchema]; !ok {
+			t.Fatalf("unknown responseSchema %q", tc.ResponseSchema)
+		}
 	}
 	if len(tc.ExpectedResponse) == 0 || !json.Valid(tc.ExpectedResponse) {
 		t.Fatalf("expectedResponse must be valid JSON")
