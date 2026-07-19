@@ -11,6 +11,7 @@
       "path": "/status",
       "requiresAuth": false,
       "expectedStatus": 200,
+      "responseSchema": "Status",
       "expectedResponse": {
         "serviceId": "@secretsbroker",
         "apiVersion": "secretsbroker.local/v1",
@@ -32,6 +33,7 @@
       "path": "/capabilities",
       "requiresAuth": false,
       "expectedStatus": 200,
+      "responseSchema": "CapabilitiesResponse",
       "expectedResponse": {
         "serviceId": "@secretsbroker",
         "apiVersion": "secretsbroker.local/v1",
@@ -76,6 +78,7 @@
         ]
       },
       "expectedStatus": 200,
+      "responseSchema": "resolveResponse",
       "expectedResponse": {
         "serviceId": "@secretsbroker",
         "apiVersion": "secretsbroker.local/v1",
@@ -139,6 +142,7 @@
         "value": "generated-secret-value"
       },
       "expectedStatus": 403,
+      "responseSchema": "ErrorEnvelope",
       "expectedResponse": {
         "error": {
           "code": "policy_denied",
@@ -161,6 +165,7 @@
       "path": "/v1/sources/status",
       "requiresAuth": false,
       "expectedStatus": 200,
+      "responseSchema": "sourceStatusResponse",
       "expectedResponse": {
         "serviceId": "@secretsbroker",
         "apiVersion": "secretsbroker.local/v1",

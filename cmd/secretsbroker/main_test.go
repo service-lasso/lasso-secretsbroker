@@ -36,6 +36,9 @@ func TestCapabilitiesExposeBootstrapContract(t *testing.T) {
 	if caps.APIVersion != apiVersion {
 		t.Fatalf("api version = %q", caps.APIVersion)
 	}
+	if caps.ContractVersion != contractVersion {
+		t.Fatalf("contract version = %q", caps.ContractVersion)
+	}
 	assertContains(t, caps.Endpoints, "GET /capabilities")
 	assertContains(t, caps.Endpoints, "GET /ready")
 	assertContains(t, caps.Transports, "loopback-http")

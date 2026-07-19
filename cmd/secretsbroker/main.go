@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	version    = "0.1.0"
-	apiVersion = "secretsbroker.local/v1"
-	serviceID  = "@secretsbroker"
+	version         = "0.1.0"
+	apiVersion      = "secretsbroker.local/v1"
+	contractVersion = "1.0.0"
+	serviceID       = "@secretsbroker"
 )
 
 var lifecycleStates = []string{
@@ -85,14 +86,15 @@ type StateResponse struct {
 }
 
 type CapabilitiesResponse struct {
-	ServiceID      string   `json:"serviceId"`
-	APIVersion     string   `json:"apiVersion"`
-	Version        string   `json:"version"`
-	Transports     []string `json:"transports"`
-	Endpoints      []string `json:"endpoints"`
-	Features       []string `json:"features"`
-	FutureFeatures []string `json:"futureFeatures"`
-	Outcomes       []string `json:"outcomes"`
+	ServiceID       string   `json:"serviceId"`
+	APIVersion      string   `json:"apiVersion"`
+	ContractVersion string   `json:"contractVersion"`
+	Version         string   `json:"version"`
+	Transports      []string `json:"transports"`
+	Endpoints       []string `json:"endpoints"`
+	Features        []string `json:"features"`
+	FutureFeatures  []string `json:"futureFeatures"`
+	Outcomes        []string `json:"outcomes"`
 }
 
 type ErrorEnvelope struct {
@@ -220,9 +222,10 @@ func stateResponse(state string, affectedRefs []string, affectedServices []strin
 
 func defaultCapabilities() CapabilitiesResponse {
 	return CapabilitiesResponse{
-		ServiceID:  serviceID,
-		APIVersion: apiVersion,
-		Version:    version,
+		ServiceID:       serviceID,
+		APIVersion:      apiVersion,
+		ContractVersion: contractVersion,
+		Version:         version,
 		Transports: []string{"loopback-http", "unix-socket", "windows-named-pipe"},
 		Endpoints: []string{
 			"GET /health",

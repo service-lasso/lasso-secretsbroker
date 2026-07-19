@@ -1,0 +1,38 @@
+name: issue-131-contract-generate
+
+on:
+  push:
+    branches:
+      - feature/131-contract-schemas
+
+permissions:
+  contents: read
+
+jobs:
+  generate-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Generate contract artefacts
+        env:
+          UPDATE_CONTRACT: "1"
+        run: go test ./cmd/secretsbroker -run TestContractArtefactsAreCurrent -count=1
+
+      - name: Run Broker tests
+        run: go test ./...
+
+      - name: Upload generated contract artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-131-contract-artefacts
+          path: |
+            contract/v1/openapi.json
+            conformance/fixtures/contract-states.json
+          if-no-files-found: error
