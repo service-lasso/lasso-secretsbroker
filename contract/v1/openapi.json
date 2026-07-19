@@ -1,0 +1,5575 @@
+{
+  "components": {
+    "schemas": {
+      "APIError": {
+        "additionalProperties": true,
+        "properties": {
+          "affectedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "affectedServices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "code": {
+            "type": "string"
+          },
+          "lockoutActive": {
+            "type": "boolean"
+          },
+          "lockoutScope": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "retryAfterSeconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "affectedRefs",
+          "affectedServices",
+          "code",
+          "message",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "CapabilitiesResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "contractVersion": {
+            "type": "string"
+          },
+          "endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "futureFeatures": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "outcomes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "transports": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "contractVersion",
+          "endpoints",
+          "features",
+          "futureFeatures",
+          "outcomes",
+          "serviceId",
+          "transports",
+          "version"
+        ],
+        "type": "object"
+      },
+      "ErrorEnvelope": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/APIError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "HealthResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "serviceId",
+          "state"
+        ],
+        "type": "object"
+      },
+      "SecretMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "createdAt",
+          "sourceId",
+          "updatedAt",
+          "version"
+        ],
+        "type": "object"
+      },
+      "SourceLifecycle": {
+        "additionalProperties": true,
+        "properties": {
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "retryAfterMs": {
+            "type": "integer"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "retryable",
+          "state"
+        ],
+        "type": "object"
+      },
+      "SourceStatus": {
+        "additionalProperties": true,
+        "properties": {
+          "affectedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "affectedServices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "critical": {
+            "type": "boolean"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "$ref": "#/components/schemas/SourceLifecycle"
+          },
+          "namespaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "retryAfterMs": {
+            "type": "integer"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "affectedRefs",
+          "affectedServices",
+          "capabilities",
+          "critical",
+          "displayName",
+          "enabled",
+          "kind",
+          "lifecycle",
+          "namespaces",
+          "outcome",
+          "priority",
+          "retryable",
+          "sourceId",
+          "state"
+        ],
+        "type": "object"
+      },
+      "StateResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "affectedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "affectedServices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "apiVersion": {
+            "type": "string"
+          },
+          "keyState": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "affectedRefs",
+          "affectedServices",
+          "apiVersion",
+          "keyState",
+          "nextAction",
+          "outcome",
+          "ready",
+          "serviceId",
+          "state"
+        ],
+        "type": "object"
+      },
+      "Status": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "backend": {
+            "type": "string"
+          },
+          "checkedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "localFirst": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "backend",
+          "checkedAt",
+          "description",
+          "localFirst",
+          "name",
+          "ready",
+          "serviceId",
+          "state",
+          "version"
+        ],
+        "type": "object"
+      },
+      "bulkCampaignItem": {
+        "additionalProperties": true,
+        "properties": {
+          "applied": {
+            "type": "boolean"
+          },
+          "auditRequirement": {
+            "type": "string"
+          },
+          "capabilityResult": {
+            "type": "string"
+          },
+          "expectedAction": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "operationItemId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "ownerServiceId": {
+            "type": "string"
+          },
+          "policyResult": {
+            "type": "string"
+          },
+          "providerAction": {
+            "type": "string"
+          },
+          "providerKind": {
+            "type": "string"
+          },
+          "recovery": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "retrySafe": {
+            "type": "boolean"
+          },
+          "risk": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "targetPolicy": {
+            "type": "string"
+          },
+          "targetProviderId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "applied",
+          "auditRequirement",
+          "capabilityResult",
+          "expectedAction",
+          "idempotencyKey",
+          "operation",
+          "operationItemId",
+          "outcome",
+          "ownerServiceId",
+          "policyResult",
+          "providerKind",
+          "ref",
+          "retrySafe",
+          "risk",
+          "sourceId"
+        ],
+        "type": "object"
+      },
+      "bulkCampaignRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "campaignId": {
+            "type": "string"
+          },
+          "confirm": {
+            "type": "boolean"
+          },
+          "highRiskConfirm": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "planToken": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "targetPolicy": {
+            "type": "string"
+          },
+          "targetProviderId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "campaignId",
+          "confirm",
+          "operation",
+          "operationId",
+          "planToken",
+          "reason",
+          "refs",
+          "requestId",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "bulkCampaignResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "affectedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "affectedServices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "campaignId": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "planToken": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requiresAuditReason": {
+            "type": "boolean"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "requiresRevalidation": {
+            "type": "boolean"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/bulkCampaignItem"
+            },
+            "type": "array"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "staleAfterSeconds": {
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/bulkCampaignSummary"
+          },
+          "unsupportedFamilies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "affectedRefs",
+          "affectedServices",
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "campaignId",
+          "mode",
+          "operation",
+          "operationId",
+          "outcome",
+          "planToken",
+          "requiresAuditReason",
+          "requiresConfirmation",
+          "requiresRevalidation",
+          "results",
+          "serviceId",
+          "staleAfterSeconds",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "bulkCampaignSummary": {
+        "additionalProperties": true,
+        "properties": {
+          "applicableCount": {
+            "type": "integer"
+          },
+          "appliedCount": {
+            "type": "integer"
+          },
+          "authRequiredCount": {
+            "type": "integer"
+          },
+          "deniedCount": {
+            "type": "integer"
+          },
+          "failedCount": {
+            "type": "integer"
+          },
+          "highRiskCount": {
+            "type": "integer"
+          },
+          "selectedCount": {
+            "type": "integer"
+          },
+          "skippedCount": {
+            "type": "integer"
+          },
+          "staleCount": {
+            "type": "integer"
+          },
+          "unsupportedCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "applicableCount",
+          "appliedCount",
+          "authRequiredCount",
+          "deniedCount",
+          "failedCount",
+          "highRiskCount",
+          "selectedCount",
+          "skippedCount",
+          "staleCount",
+          "unsupportedCount"
+        ],
+        "type": "object"
+      },
+      "eventSafety": {
+        "additionalProperties": true,
+        "properties": {
+          "metadataOnly": {
+            "type": "boolean"
+          },
+          "rawRefIncluded": {
+            "type": "boolean"
+          },
+          "valueMaterialIncluded": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "metadataOnly",
+          "rawRefIncluded",
+          "valueMaterialIncluded"
+        ],
+        "type": "object"
+      },
+      "eventsResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/operationalEvent"
+            },
+            "type": "array"
+          },
+          "generatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "safety": {
+            "$ref": "#/components/schemas/eventSafety"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "events",
+          "generatedAt",
+          "limit",
+          "outcome",
+          "safety",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "generatedSecretCaptureRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/writebackIdentity"
+          },
+          "identityLease": {
+            "$ref": "#/components/schemas/launchIdentityLease"
+          },
+          "invalidateRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/writebackPolicy"
+          },
+          "reconnectRequired": {
+            "type": "boolean"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "refreshRequired": {
+            "type": "boolean"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "secrets": {
+            "$ref": "#/components/schemas/serviceSecretsPolicy"
+          },
+          "sourceAuthRequired": {
+            "type": "boolean"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity",
+          "invalidateRefs",
+          "metadata",
+          "namespace",
+          "operation",
+          "policy",
+          "reconnectRequired",
+          "ref",
+          "refreshRequired",
+          "requestId",
+          "sourceAuthRequired",
+          "value"
+        ],
+        "type": "object"
+      },
+      "generatedSecretCaptureResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "invalidatedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "lockoutActive": {
+            "type": "boolean"
+          },
+          "lockoutScope": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/SecretMetadata"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "ownerServiceId": {
+            "type": "string"
+          },
+          "reconnectRequired": {
+            "type": "boolean"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "refreshRequired": {
+            "type": "boolean"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "retryAfterSeconds": {
+            "type": "integer"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "invalidatedRefs",
+          "namespace",
+          "operation",
+          "outcome",
+          "ownerServiceId",
+          "reconnectRequired",
+          "ref",
+          "refreshRequired",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "generatedValuePolicyMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "entropyClass": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "lengthClass": {
+            "type": "string"
+          },
+          "rotationPolicy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entropyClass",
+          "kind",
+          "lengthClass",
+          "rotationPolicy"
+        ],
+        "type": "object"
+      },
+      "launchIdentityLease": {
+        "additionalProperties": true,
+        "properties": {
+          "allowedNamespaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedOperations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "issuedAt": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "jti": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "transportBinding": {
+            "$ref": "#/components/schemas/launchTransportBinding"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expiresAt",
+          "issuedAt",
+          "issuer",
+          "jti",
+          "serviceId",
+          "signature"
+        ],
+        "type": "object"
+      },
+      "launchTransportBinding": {
+        "additionalProperties": true,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "subject"
+        ],
+        "type": "object"
+      },
+      "lockoutClearRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "requestId",
+          "scope",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "lockoutClearResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "cleared": {
+            "type": "boolean"
+          },
+          "lockoutScope": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "auditStatus",
+          "cleared",
+          "lockoutScope",
+          "operation",
+          "outcome",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "managedSecretActionRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "policy": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "policy",
+          "reason",
+          "ref",
+          "requestId",
+          "serviceId",
+          "value"
+        ],
+        "type": "object"
+      },
+      "managedSecretActionResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "affectedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "affectedServices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "lockoutActive": {
+            "type": "boolean"
+          },
+          "lockoutScope": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/SecretMetadata"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "record": {
+            "$ref": "#/components/schemas/managedSecretRecord"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "retryAfterSeconds": {
+            "type": "integer"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "ttlSeconds": {
+            "type": "integer"
+          },
+          "unsupportedCapability": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "affectedRefs",
+          "affectedServices",
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "mode",
+          "operation",
+          "outcome",
+          "ref",
+          "requiresConfirmation",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "managedSecretRecord": {
+        "additionalProperties": true,
+        "properties": {
+          "auditStatus": {
+            "type": "string"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/SecretMetadata"
+          },
+          "name": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "ownerServiceId": {
+            "type": "string"
+          },
+          "policy": {
+            "type": "string"
+          },
+          "providerKind": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "valueSearch": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "auditStatus",
+          "capabilities",
+          "name",
+          "outcome",
+          "ownerServiceId",
+          "policy",
+          "providerKind",
+          "ref",
+          "sourceId",
+          "state",
+          "valueSearch",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "managedSecretsResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/managedSecretRecord"
+            },
+            "type": "array"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "valueSearch": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "outcome",
+          "results",
+          "serviceId",
+          "valueSearch"
+        ],
+        "type": "object"
+      },
+      "migrationItemStatus": {
+        "additionalProperties": true,
+        "properties": {
+          "auditRequirement": {
+            "type": "string"
+          },
+          "expectedAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "ownerServiceId": {
+            "type": "string"
+          },
+          "policyResult": {
+            "type": "string"
+          },
+          "recovery": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "risk": {
+            "type": "string"
+          },
+          "sourceProviderId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "targetProviderId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "auditRequirement",
+          "expectedAction",
+          "outcome",
+          "ownerServiceId",
+          "policyResult",
+          "recovery",
+          "ref",
+          "risk",
+          "sourceProviderId",
+          "state",
+          "targetProviderId"
+        ],
+        "type": "object"
+      },
+      "migrationPlanRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "sourceProviderId": {
+            "type": "string"
+          },
+          "targetProviderId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "operationId",
+          "reason",
+          "refs",
+          "requestId",
+          "serviceId",
+          "sourceProviderId",
+          "targetProviderId"
+        ],
+        "type": "object"
+      },
+      "migrationPlanResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/migrationItemStatus"
+            },
+            "type": "array"
+          },
+          "rollback": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "sourceProviderId": {
+            "type": "string"
+          },
+          "targetProviderId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "operation",
+          "outcome",
+          "requiresConfirmation",
+          "results",
+          "rollback",
+          "serviceId",
+          "sourceProviderId",
+          "targetProviderId"
+        ],
+        "type": "object"
+      },
+      "operationalEvent": {
+        "additionalProperties": true,
+        "properties": {
+          "family": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "keyId": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "policyId": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "refHash": {
+            "type": "string"
+          },
+          "refPrefix": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "id",
+          "operation",
+          "outcome",
+          "severity",
+          "ts"
+        ],
+        "type": "object"
+      },
+      "providerCapabilitiesResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/providerCapability"
+            },
+            "type": "array"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "capabilities",
+          "outcome",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "providerCapability": {
+        "additionalProperties": true,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "providerKind": {
+            "type": "string"
+          },
+          "supported": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capabilities",
+          "displayName",
+          "limitations",
+          "providerKind",
+          "supported"
+        ],
+        "type": "object"
+      },
+      "providerConfigActionResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/providerConfigStatus"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "unsupportedCapability": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "operation",
+          "outcome",
+          "provider",
+          "requiresConfirmation",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "providerConfigRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "confirm": {
+            "type": "boolean"
+          },
+          "credentialRef": {
+            "type": "string"
+          },
+          "credentialValue": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "namespaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "providerKind": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "rollbackStrategy": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "validationMode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "confirm",
+          "credentialRef",
+          "credentialValue",
+          "displayName",
+          "namespaces",
+          "operationId",
+          "providerId",
+          "providerKind",
+          "reason",
+          "requestId",
+          "rollbackStrategy",
+          "serviceId",
+          "validationMode"
+        ],
+        "type": "object"
+      },
+      "providerConfigStatus": {
+        "additionalProperties": true,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "credentialHandle": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "namespaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "providerKind": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "auditStatus",
+          "capabilities",
+          "displayName",
+          "namespaces",
+          "outcome",
+          "providerId",
+          "providerKind",
+          "state"
+        ],
+        "type": "object"
+      },
+      "providerConfigStatusResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "currentProvider": {
+            "$ref": "#/components/schemas/providerConfigStatus"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/providerConfigStatus"
+            },
+            "type": "array"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "currentProvider",
+          "outcome",
+          "providers",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "provisioningOperationRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "generatedValuePolicy": {
+            "$ref": "#/components/schemas/generatedValuePolicyMetadata"
+          },
+          "generationMode": {
+            "type": "string"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/writebackIdentity"
+          },
+          "identityLease": {
+            "$ref": "#/components/schemas/launchIdentityLease"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/writebackPolicy"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requireBrokerGenerate": {
+            "type": "boolean"
+          },
+          "requiresWriteback": {
+            "type": "boolean"
+          },
+          "secrets": {
+            "$ref": "#/components/schemas/serviceSecretsPolicy"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "generatedValuePolicy",
+          "generationMode",
+          "identity",
+          "operation",
+          "policy",
+          "reason",
+          "ref",
+          "requestId",
+          "requireBrokerGenerate",
+          "requiresWriteback",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "provisioningOperationResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "affectedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "affectedServices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "generatedValuePolicy": {
+            "$ref": "#/components/schemas/generatedValuePolicyMetadata"
+          },
+          "generationMode": {
+            "type": "string"
+          },
+          "lastOutcome": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "ownerServiceId": {
+            "type": "string"
+          },
+          "policyResult": {
+            "type": "string"
+          },
+          "provisionedState": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "unsupportedCapability": {
+            "type": "string"
+          },
+          "writebackEndpoint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "affectedRefs",
+          "affectedServices",
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "generatedValuePolicy",
+          "generationMode",
+          "lastOutcome",
+          "mode",
+          "namespace",
+          "operation",
+          "outcome",
+          "ownerServiceId",
+          "policyResult",
+          "provisionedState",
+          "ref",
+          "requiresConfirmation",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "provisioningStatusRecord": {
+        "additionalProperties": true,
+        "properties": {
+          "auditStatus": {
+            "type": "string"
+          },
+          "desiredOperation": {
+            "type": "string"
+          },
+          "generatedValuePolicy": {
+            "$ref": "#/components/schemas/generatedValuePolicyMetadata"
+          },
+          "lastOperationId": {
+            "type": "string"
+          },
+          "lastOutcome": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "ownerServiceId": {
+            "type": "string"
+          },
+          "policyResult": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "providerKind": {
+            "type": "string"
+          },
+          "provisionedState": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "auditStatus",
+          "desiredOperation",
+          "generatedValuePolicy",
+          "lastOutcome",
+          "namespace",
+          "ownerServiceId",
+          "policyResult",
+          "providerId",
+          "providerKind",
+          "provisionedState",
+          "ref",
+          "sourceId"
+        ],
+        "type": "object"
+      },
+      "provisioningStatusResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/provisioningStatusRecord"
+            },
+            "type": "array"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "outcome",
+          "results",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "recoveryPolicyMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "keyId": {
+            "type": "string"
+          },
+          "keyVersion": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "policyId": {
+            "type": "string"
+          },
+          "recipientFingerprints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "revokedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rotatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "shareCount": {
+            "type": "integer"
+          },
+          "shareFingerprints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "createdAt",
+          "keyId",
+          "keyVersion",
+          "nextAction",
+          "policyId",
+          "shareCount",
+          "shareFingerprints",
+          "status",
+          "threshold"
+        ],
+        "type": "object"
+      },
+      "recoveryPolicyRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "keyId": {
+            "type": "string"
+          },
+          "keyVersion": {
+            "type": "string"
+          },
+          "policyId": {
+            "type": "string"
+          },
+          "recipientFingerprints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rotatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "shareCount": {
+            "type": "integer"
+          },
+          "shareFingerprints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "keyId",
+          "keyVersion",
+          "policyId",
+          "shareCount",
+          "shareFingerprints",
+          "threshold"
+        ],
+        "type": "object"
+      },
+      "recoveryPolicyStatusResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/recoveryPolicyMetadata"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "nextAction",
+          "outcome",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "resolveRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "identityLease": {
+            "$ref": "#/components/schemas/launchIdentityLease"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "secrets": {
+            "$ref": "#/components/schemas/serviceSecretsPolicy"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose",
+          "refs",
+          "requestId",
+          "serviceId",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "resolveResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/resolveResult"
+            },
+            "type": "array"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "results",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "resolveResult": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/SecretMetadata"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "policyResult": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "ref"
+        ],
+        "type": "object"
+      },
+      "rotationDryRunRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operationId",
+          "reason",
+          "refs",
+          "requestId",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "rotationDryRunResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "affectedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "affectedServices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/rotationPlanItem"
+            },
+            "type": "array"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "staleAfterSeconds": {
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/rotationPlanSummary"
+          }
+        },
+        "required": [
+          "affectedRefs",
+          "affectedServices",
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "mode",
+          "operation",
+          "operationId",
+          "outcome",
+          "requiresConfirmation",
+          "results",
+          "serviceId",
+          "staleAfterSeconds",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "rotationPlanItem": {
+        "additionalProperties": true,
+        "properties": {
+          "auditRequirement": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "capabilityResult": {
+            "type": "string"
+          },
+          "expectedAction": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "ownerServiceId": {
+            "type": "string"
+          },
+          "policyResult": {
+            "type": "string"
+          },
+          "providerKind": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "risk": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "auditRequirement",
+          "capability",
+          "capabilityResult",
+          "expectedAction",
+          "idempotencyKey",
+          "operationId",
+          "outcome",
+          "ownerServiceId",
+          "policyResult",
+          "providerKind",
+          "ref",
+          "risk",
+          "sourceId"
+        ],
+        "type": "object"
+      },
+      "rotationPlanSummary": {
+        "additionalProperties": true,
+        "properties": {
+          "blockedCount": {
+            "type": "integer"
+          },
+          "deniedCount": {
+            "type": "integer"
+          },
+          "highRiskCount": {
+            "type": "integer"
+          },
+          "readyCount": {
+            "type": "integer"
+          },
+          "selectedCount": {
+            "type": "integer"
+          },
+          "unsupportedCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "blockedCount",
+          "deniedCount",
+          "highRiskCount",
+          "readyCount",
+          "selectedCount",
+          "unsupportedCount"
+        ],
+        "type": "object"
+      },
+      "serviceSecretsPolicy": {
+        "additionalProperties": true,
+        "properties": {
+          "manage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resolve": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "writeback": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "sourceConfigSecurity": {
+        "additionalProperties": true,
+        "properties": {
+          "broadReadable": {
+            "type": "boolean"
+          },
+          "broadWritable": {
+            "type": "boolean"
+          },
+          "checked": {
+            "type": "boolean"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "pathHash": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "checked",
+          "configured",
+          "outcome",
+          "state"
+        ],
+        "type": "object"
+      },
+      "sourceStatusResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "sourceConfig": {
+            "$ref": "#/components/schemas/sourceConfigSecurity"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceStatus"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "serviceId",
+          "sourceConfig",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "syncDestinationConfig": {
+        "additionalProperties": true,
+        "properties": {
+          "auditStatus": {
+            "type": "string"
+          },
+          "authModel": {
+            "type": "string"
+          },
+          "collisionPolicy": {
+            "type": "string"
+          },
+          "credentialRef": {
+            "type": "string"
+          },
+          "deletePolicy": {
+            "type": "string"
+          },
+          "destinationId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "granularity": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "nameTemplate": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/syncDestinationScope"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "destinationId",
+          "enabled",
+          "kind",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "syncDestinationScope": {
+        "additionalProperties": true,
+        "properties": {
+          "enterpriseUrl": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "secretsLocation": {
+            "type": "string"
+          },
+          "selectedRepositories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "visibility": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "syncDryRunItem": {
+        "additionalProperties": true,
+        "properties": {
+          "auditRequirement": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "capabilityResult": {
+            "type": "string"
+          },
+          "deleteBehavior": {
+            "type": "string"
+          },
+          "destinationName": {
+            "type": "string"
+          },
+          "destinationOutcome": {
+            "type": "string"
+          },
+          "destinationScope": {
+            "type": "string"
+          },
+          "driftState": {
+            "type": "string"
+          },
+          "expectedAction": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "ownerServiceId": {
+            "type": "string"
+          },
+          "policyResult": {
+            "type": "string"
+          },
+          "providerKind": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "refHash": {
+            "type": "string"
+          },
+          "risk": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "auditRequirement",
+          "capability",
+          "capabilityResult",
+          "deleteBehavior",
+          "destinationName",
+          "driftState",
+          "expectedAction",
+          "idempotencyKey",
+          "nextAction",
+          "outcome",
+          "ownerServiceId",
+          "policyResult",
+          "providerKind",
+          "ref",
+          "refHash",
+          "risk",
+          "sourceId"
+        ],
+        "type": "object"
+      },
+      "syncDryRunRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "collisionState": {
+            "type": "string"
+          },
+          "credentialValue": {
+            "type": "string"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/syncDestinationConfig"
+          },
+          "destinationId": {
+            "type": "string"
+          },
+          "driftState": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "secrets": {
+            "$ref": "#/components/schemas/serviceSecretsPolicy"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "destinationId",
+          "operationId",
+          "reason",
+          "refs",
+          "requestId",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "syncDryRunResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "affectedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "affectedServices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/syncDestinationConfig"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/syncDryRunItem"
+            },
+            "type": "array"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "staleAfterSeconds": {
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/syncDryRunSummary"
+          }
+        },
+        "required": [
+          "affectedRefs",
+          "affectedServices",
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "destination",
+          "mode",
+          "nextAction",
+          "operation",
+          "operationId",
+          "outcome",
+          "requiresConfirmation",
+          "results",
+          "serviceId",
+          "staleAfterSeconds",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "syncDryRunSummary": {
+        "additionalProperties": true,
+        "properties": {
+          "auditUnavailableCount": {
+            "type": "integer"
+          },
+          "authRequiredCount": {
+            "type": "integer"
+          },
+          "blockedCount": {
+            "type": "integer"
+          },
+          "deniedCount": {
+            "type": "integer"
+          },
+          "driftUnknownCount": {
+            "type": "integer"
+          },
+          "highRiskCount": {
+            "type": "integer"
+          },
+          "readyCount": {
+            "type": "integer"
+          },
+          "selectedCount": {
+            "type": "integer"
+          },
+          "unmanagedCollisionCount": {
+            "type": "integer"
+          },
+          "unsupportedCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "auditUnavailableCount",
+          "authRequiredCount",
+          "blockedCount",
+          "deniedCount",
+          "driftUnknownCount",
+          "highRiskCount",
+          "readyCount",
+          "selectedCount",
+          "unmanagedCollisionCount",
+          "unsupportedCount"
+        ],
+        "type": "object"
+      },
+      "telemetryAttributePolicy": {
+        "additionalProperties": true,
+        "properties": {
+          "allowedAttributes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "forbiddenFieldClasses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "omittedFieldExamples": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "patternClasses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "redactedValue": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowedAttributes",
+          "forbiddenFieldClasses",
+          "mode",
+          "omittedFieldExamples",
+          "patternClasses",
+          "redactedValue"
+        ],
+        "type": "object"
+      },
+      "telemetryAuditCounter": {
+        "additionalProperties": true,
+        "properties": {
+          "auditStatus": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "outcome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "auditStatus",
+          "count",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "telemetryCounters": {
+        "additionalProperties": true,
+        "properties": {
+          "activeLockouts": {
+            "type": "integer"
+          },
+          "auditRecords": {
+            "items": {
+              "$ref": "#/components/schemas/telemetryAuditCounter"
+            },
+            "type": "array"
+          },
+          "localApiAuthFailures": {
+            "type": "integer"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/telemetryOperationCounter"
+            },
+            "type": "array"
+          },
+          "policyDecisions": {
+            "items": {
+              "$ref": "#/components/schemas/telemetryOutcomeCounter"
+            },
+            "type": "array"
+          },
+          "providerStates": {
+            "items": {
+              "$ref": "#/components/schemas/telemetryStateCounter"
+            },
+            "type": "array"
+          },
+          "sourceStates": {
+            "items": {
+              "$ref": "#/components/schemas/telemetryStateCounter"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "activeLockouts",
+          "auditRecords",
+          "localApiAuthFailures",
+          "operations",
+          "policyDecisions",
+          "providerStates",
+          "sourceStates"
+        ],
+        "type": "object"
+      },
+      "telemetryDurationHistogram": {
+        "additionalProperties": true,
+        "properties": {
+          "buckets": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "buckets",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "telemetryExportActionResult": {
+        "additionalProperties": true,
+        "properties": {
+          "bodyValueReturned": {
+            "type": "boolean"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "endpointConfigured": {
+            "type": "boolean"
+          },
+          "endpointValueReturned": {
+            "type": "boolean"
+          },
+          "exporterStatusCode": {
+            "type": "integer"
+          },
+          "headersConfigured": {
+            "type": "boolean"
+          },
+          "headersValueReturned": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "signalCount": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bodyValueReturned",
+          "contentType",
+          "endpointConfigured",
+          "endpointValueReturned",
+          "exporterStatusCode",
+          "headersConfigured",
+          "headersValueReturned",
+          "mode",
+          "protocol",
+          "reason",
+          "signalCount",
+          "status"
+        ],
+        "type": "object"
+      },
+      "telemetryExportPreview": {
+        "additionalProperties": true,
+        "properties": {
+          "allowedAttributeCount": {
+            "type": "integer"
+          },
+          "bodyValueReturned": {
+            "type": "boolean"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "droppedFieldClasses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "endpointConfigured": {
+            "type": "boolean"
+          },
+          "endpointValueReturned": {
+            "type": "boolean"
+          },
+          "headersValueReturned": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "safeEnvelopeFields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "signalCount": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowedAttributeCount",
+          "bodyValueReturned",
+          "contentType",
+          "droppedFieldClasses",
+          "endpointConfigured",
+          "endpointValueReturned",
+          "headersValueReturned",
+          "mode",
+          "protocol",
+          "reason",
+          "safeEnvelopeFields",
+          "signalCount",
+          "status"
+        ],
+        "type": "object"
+      },
+      "telemetryExporterPreview": {
+        "additionalProperties": true,
+        "properties": {
+          "bodyValueReturned": {
+            "type": "boolean"
+          },
+          "endpointConfigured": {
+            "type": "boolean"
+          },
+          "endpointValueReturned": {
+            "type": "boolean"
+          },
+          "headersConfigured": {
+            "type": "boolean"
+          },
+          "headersValueReturned": {
+            "type": "boolean"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bodyValueReturned",
+          "endpointConfigured",
+          "endpointValueReturned",
+          "headersConfigured",
+          "headersValueReturned",
+          "protocol",
+          "reason",
+          "status"
+        ],
+        "type": "object"
+      },
+      "telemetryOperationCounter": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "operation",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "telemetryOutcomeCounter": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "outcome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "telemetryResourcePreview": {
+        "additionalProperties": true,
+        "properties": {
+          "serviceInstanceId": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "serviceNamespace": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "serviceInstanceId",
+          "serviceName",
+          "serviceNamespace"
+        ],
+        "type": "object"
+      },
+      "telemetryResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "contractVersion": {
+            "type": "string"
+          },
+          "counters": {
+            "$ref": "#/components/schemas/telemetryCounters"
+          },
+          "durationHistograms": {
+            "items": {
+              "$ref": "#/components/schemas/telemetryDurationHistogram"
+            },
+            "type": "array"
+          },
+          "exportPreview": {
+            "$ref": "#/components/schemas/telemetryExportPreview"
+          },
+          "exporter": {
+            "$ref": "#/components/schemas/telemetryExporterPreview"
+          },
+          "generatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "redaction": {
+            "$ref": "#/components/schemas/telemetryAttributePolicy"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/telemetryResourcePreview"
+          },
+          "safety": {
+            "$ref": "#/components/schemas/telemetrySafety"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/telemetrySignalPreview"
+            },
+            "type": "array"
+          },
+          "traceContext": {
+            "$ref": "#/components/schemas/telemetryTraceContextPreview"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "contractVersion",
+          "counters",
+          "durationHistograms",
+          "exportPreview",
+          "exporter",
+          "generatedAt",
+          "outcome",
+          "redaction",
+          "resource",
+          "safety",
+          "serviceId",
+          "signals",
+          "traceContext"
+        ],
+        "type": "object"
+      },
+      "telemetrySafety": {
+        "additionalProperties": true,
+        "properties": {
+          "lowCardinalityLabels": {
+            "type": "boolean"
+          },
+          "valueMaterialIncluded": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "lowCardinalityLabels",
+          "valueMaterialIncluded"
+        ],
+        "type": "object"
+      },
+      "telemetrySignalPreview": {
+        "additionalProperties": true,
+        "properties": {
+          "attributes": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "spanId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "traceparent": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attributes",
+          "correlationId",
+          "kind",
+          "name",
+          "spanId",
+          "traceId",
+          "traceparent"
+        ],
+        "type": "object"
+      },
+      "telemetryStateCounter": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "id",
+          "outcome",
+          "state"
+        ],
+        "type": "object"
+      },
+      "telemetryTraceContextHeaders": {
+        "additionalProperties": true,
+        "properties": {
+          "correlationId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "traceparent": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "correlationId",
+          "traceId",
+          "traceparent"
+        ],
+        "type": "object"
+      },
+      "telemetryTraceContextPreview": {
+        "additionalProperties": true,
+        "properties": {
+          "incomingHeadersAccepted": {
+            "type": "boolean"
+          },
+          "incomingHeadersReturned": {
+            "type": "boolean"
+          },
+          "propagation": {
+            "type": "string"
+          },
+          "rawHeadersReturned": {
+            "type": "boolean"
+          },
+          "responseHeaders": {
+            "$ref": "#/components/schemas/telemetryTraceContextHeaders"
+          },
+          "routeTemplateOnly": {
+            "type": "boolean"
+          },
+          "safety": {
+            "$ref": "#/components/schemas/telemetryTraceContextSafety"
+          },
+          "traceparentSampled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "incomingHeadersAccepted",
+          "incomingHeadersReturned",
+          "propagation",
+          "rawHeadersReturned",
+          "responseHeaders",
+          "routeTemplateOnly",
+          "safety",
+          "traceparentSampled"
+        ],
+        "type": "object"
+      },
+      "telemetryTraceContextSafety": {
+        "additionalProperties": true,
+        "properties": {
+          "queryStringsReturned": {
+            "type": "boolean"
+          },
+          "requestBodiesReturned": {
+            "type": "boolean"
+          },
+          "responseBodiesReturned": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "queryStringsReturned",
+          "requestBodiesReturned",
+          "responseBodiesReturned"
+        ],
+        "type": "object"
+      },
+      "writeSecretRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "metadata",
+          "ref",
+          "value"
+        ],
+        "type": "object"
+      },
+      "writeSecretResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/SecretMetadata"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "metadata",
+          "outcome",
+          "ref",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "writebackIdentity": {
+        "additionalProperties": true,
+        "properties": {
+          "expiresAt": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expiresAt",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "writebackPolicy": {
+        "additionalProperties": true,
+        "properties": {
+          "allowedNamespaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedOperations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "allowedNamespaces",
+          "allowedOperations"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "localBearerToken": {
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "localHeaderToken": {
+        "in": "header",
+        "name": "X-SecretsBroker-Token",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Canonical metadata-safe contract generated from the Go request and response DTOs. Unknown response fields are compatible additions.",
+    "title": "Service Lasso Secrets Broker local API",
+    "version": "1.0.0"
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "openapi": "3.1.0",
+  "paths": {
+    "/capabilities": {
+      "get": {
+        "operationId": "getcapabilities",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilitiesResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CapabilitiesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [],
+        "summary": "Broker routes, features and outcomes"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "gethealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HealthResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [],
+        "summary": "Broker liveness"
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "getready",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/StateResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [],
+        "summary": "Broker readiness"
+      }
+    },
+    "/state": {
+      "get": {
+        "operationId": "getstate",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/StateResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [],
+        "summary": "Typed broker lifecycle state"
+      }
+    },
+    "/status": {
+      "get": {
+        "operationId": "getstatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Status"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [],
+        "summary": "Safe broker status"
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "operationId": "getv1_events",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "serviceId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "providerId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sourceId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "operation",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "severity",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "family",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "refPrefix",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "refHash",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum 200",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/eventsResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/eventsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [],
+        "summary": "List bounded operational events"
+      }
+    },
+    "/v1/management/lockouts/clear": {
+      "post": {
+        "operationId": "postv1_management_lockouts_clear",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/lockoutClearRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/lockoutClearResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/lockoutClearResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Clear a scoped local API lockout"
+      }
+    },
+    "/v1/management/secrets": {
+      "get": {
+        "operationId": "getv1_management_secrets",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/managedSecretsResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/managedSecretsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "List managed secret metadata"
+      }
+    },
+    "/v1/management/secrets/campaigns/apply": {
+      "post": {
+        "operationId": "postv1_management_secrets_campaigns_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/bulkCampaignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/bulkCampaignResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/bulkCampaignResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Apply a bulk secret campaign"
+      }
+    },
+    "/v1/management/secrets/campaigns/create": {
+      "post": {
+        "operationId": "postv1_management_secrets_campaigns_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/bulkCampaignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/bulkCampaignResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/bulkCampaignResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Create a bulk secret campaign"
+      }
+    },
+    "/v1/management/secrets/campaigns/revalidate": {
+      "post": {
+        "operationId": "postv1_management_secrets_campaigns_revalidate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/bulkCampaignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/bulkCampaignResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/bulkCampaignResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Revalidate a bulk secret campaign"
+      }
+    },
+    "/v1/management/secrets/campaigns/status": {
+      "post": {
+        "operationId": "postv1_management_secrets_campaigns_status",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/bulkCampaignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/bulkCampaignResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/bulkCampaignResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Read bulk secret campaign status"
+      }
+    },
+    "/v1/management/secrets/edit/apply": {
+      "post": {
+        "operationId": "postv1_management_secrets_edit_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/managedSecretActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/managedSecretActionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/managedSecretActionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Apply a managed secret edit"
+      }
+    },
+    "/v1/management/secrets/edit/dry-run": {
+      "post": {
+        "operationId": "postv1_management_secrets_edit_dry_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/managedSecretActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/managedSecretActionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/managedSecretActionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Preview a managed secret edit"
+      }
+    },
+    "/v1/management/secrets/policy/apply": {
+      "post": {
+        "operationId": "postv1_management_secrets_policy_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/managedSecretActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/managedSecretActionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/managedSecretActionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Apply a managed secret policy change"
+      }
+    },
+    "/v1/management/secrets/policy/preview": {
+      "post": {
+        "operationId": "postv1_management_secrets_policy_preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/managedSecretActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/managedSecretActionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/managedSecretActionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Preview a managed secret policy change"
+      }
+    },
+    "/v1/management/secrets/reset/apply": {
+      "post": {
+        "operationId": "postv1_management_secrets_reset_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/managedSecretActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/managedSecretActionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/managedSecretActionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Apply a managed secret reset"
+      }
+    },
+    "/v1/management/secrets/reset/dry-run": {
+      "post": {
+        "operationId": "postv1_management_secrets_reset_dry_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/managedSecretActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/managedSecretActionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/managedSecretActionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Preview a managed secret reset"
+      }
+    },
+    "/v1/management/secrets/reveal": {
+      "post": {
+        "operationId": "postv1_management_secrets_reveal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/managedSecretActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/managedSecretActionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/managedSecretActionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Reveal one managed secret under policy"
+      }
+    },
+    "/v1/management/secrets/rotation/dry-run": {
+      "post": {
+        "operationId": "postv1_management_secrets_rotation_dry_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/rotationDryRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rotationDryRunResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/rotationDryRunResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Preview credential rotation"
+      }
+    },
+    "/v1/management/secrets/sync/dry-run": {
+      "post": {
+        "operationId": "postv1_management_secrets_sync_dry_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/syncDryRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/syncDryRunResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/syncDryRunResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Preview secret synchronisation"
+      }
+    },
+    "/v1/management/secrets/value-search": {
+      "get": {
+        "operationId": "getv1_management_secrets_value_search",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/managedSecretsResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/managedSecretsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Search secret values without returning them"
+      }
+    },
+    "/v1/providers/capabilities": {
+      "get": {
+        "operationId": "getv1_providers_capabilities",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/providerCapabilitiesResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/providerCapabilitiesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [],
+        "summary": "List provider capabilities"
+      }
+    },
+    "/v1/providers/config/apply": {
+      "post": {
+        "operationId": "postv1_providers_config_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/providerConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/providerConfigActionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/providerConfigActionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Apply provider configuration"
+      }
+    },
+    "/v1/providers/config/status": {
+      "get": {
+        "operationId": "getv1_providers_config_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/providerConfigStatusResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/providerConfigStatusResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "List safe provider configuration status"
+      }
+    },
+    "/v1/providers/config/validate": {
+      "post": {
+        "operationId": "postv1_providers_config_validate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/providerConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/providerConfigActionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/providerConfigActionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Validate provider configuration"
+      }
+    },
+    "/v1/providers/migration/apply": {
+      "post": {
+        "operationId": "postv1_providers_migration_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/migrationPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/migrationPlanResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/migrationPlanResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Apply provider migration"
+      }
+    },
+    "/v1/providers/migration/dry-run": {
+      "post": {
+        "operationId": "postv1_providers_migration_dry_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/migrationPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/migrationPlanResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/migrationPlanResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Plan provider migration"
+      }
+    },
+    "/v1/provisioning/operations/apply": {
+      "post": {
+        "operationId": "postv1_provisioning_operations_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/provisioningOperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/provisioningOperationResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/provisioningOperationResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Apply a provisioning operation"
+      }
+    },
+    "/v1/provisioning/operations/plan": {
+      "post": {
+        "operationId": "postv1_provisioning_operations_plan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/provisioningOperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/provisioningOperationResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/provisioningOperationResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Plan a provisioning operation"
+      }
+    },
+    "/v1/provisioning/status": {
+      "get": {
+        "operationId": "getv1_provisioning_status",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ref",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/provisioningStatusResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/provisioningStatusResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "List generated-secret provisioning status"
+      }
+    },
+    "/v1/recovery/policy": {
+      "get": {
+        "operationId": "getv1_recovery_policy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/recoveryPolicyStatusResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/recoveryPolicyStatusResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [],
+        "summary": "Read recovery policy metadata"
+      },
+      "post": {
+        "operationId": "postv1_recovery_policy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/recoveryPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/recoveryPolicyStatusResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/recoveryPolicyStatusResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Create or update recovery policy metadata"
+      }
+    },
+    "/v1/resolve": {
+      "post": {
+        "operationId": "postv1_resolve",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/resolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/resolveResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/resolveResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Resolve a batch of secret references"
+      }
+    },
+    "/v1/secrets": {
+      "post": {
+        "operationId": "postv1_secrets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/writeSecretRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/writeSecretResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/writeSecretResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Write a local secret"
+      }
+    },
+    "/v1/sources/status": {
+      "get": {
+        "operationId": "getv1_sources_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/sourceStatusResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/sourceStatusResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [],
+        "summary": "List source lifecycle and capability status"
+      }
+    },
+    "/v1/telemetry": {
+      "get": {
+        "operationId": "getv1_telemetry",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/telemetryResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/telemetryResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [],
+        "summary": "Read redacted telemetry"
+      }
+    },
+    "/v1/telemetry/export": {
+      "post": {
+        "operationId": "postv1_telemetry_export",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/telemetryExportActionResult"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/telemetryExportActionResult"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [],
+        "summary": "Export redacted telemetry"
+      }
+    },
+    "/v1/writeback": {
+      "post": {
+        "operationId": "postv1_writeback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/generatedSecretCaptureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/generatedSecretCaptureResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/generatedSecretCaptureResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Capture a generated secret"
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Development loopback transport",
+      "url": "http://127.0.0.1:17890"
+    }
+  ],
+  "x-api-version": "secretsbroker.local/v1",
+  "x-compatibility": {
+    "breakingChanges": "new major contract version",
+    "unknownResponseFields": "ignore"
+  },
+  "x-contract-version": "1.0.0",
+  "x-service-id": "@secretsbroker"
+}

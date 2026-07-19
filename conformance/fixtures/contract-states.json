@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 1,
+  "contract": "secretsbroker.parity.v1",
+  "serviceId": "@secretsbroker",
+  "apiVersion": "secretsbroker.local/v1",
+  "cases": [
+    {
+      "name": "state-ready",
+      "scenario": "ready",
+      "kind": "http",
+      "method": "GET",
+      "path": "/state",
+      "requiresAuth": false,
+      "request": null,
+      "expectedStatus": 200,
+      "responseSchema": "StateResponse",
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "state": "ready",
+        "ready": true,
+        "outcome": "ready",
+        "keyState": "available",
+        "nextAction": "",
+        "affectedRefs": [],
+        "affectedServices": []
+      },
+      "redactionForbidden": [
+        "raw-secret-value",
+        "local-api-token",
+        "portable-master-key",
+        "provider-credential"
+      ]
+    },
+    {
+      "name": "state-setup-needed",
+      "scenario": "setup-needed",
+      "kind": "http",
+      "method": "GET",
+      "path": "/state",
+      "requiresAuth": false,
+      "request": null,
+      "expectedStatus": 200,
+      "responseSchema": "StateResponse",
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "state": "setup_needed",
+        "ready": false,
+        "outcome": "setup_needed",
+        "keyState": "not_initialized",
+        "nextAction": "run_setup",
+        "affectedRefs": [],
+        "affectedServices": []
+      },
+      "redactionForbidden": [
+        "raw-secret-value",
+        "local-api-token",
+        "portable-master-key",
+        "provider-credential"
+      ]
+    },
+    {
+      "name": "state-locked",
+      "scenario": "locked",
+      "kind": "http",
+      "method": "GET",
+      "path": "/state",
+      "requiresAuth": false,
+      "request": null,
+      "expectedStatus": 200,
+      "responseSchema": "StateResponse",
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "state": "locked",
+        "ready": false,
+        "outcome": "locked",
+        "keyState": "locked",
+        "nextAction": "unlock_broker",
+        "affectedRefs": [],
+        "affectedServices": []
+      },
+      "redactionForbidden": [
+        "raw-secret-value",
+        "local-api-token",
+        "portable-master-key",
+        "provider-credential"
+      ]
+    },
+    {
+      "name": "state-degraded",
+      "scenario": "degraded",
+      "kind": "http",
+      "method": "GET",
+      "path": "/state",
+      "requiresAuth": false,
+      "request": null,
+      "expectedStatus": 200,
+      "responseSchema": "StateResponse",
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "state": "degraded",
+        "ready": false,
+        "outcome": "degraded",
+        "keyState": "available",
+        "nextAction": "inspect_sources",
+        "affectedRefs": [],
+        "affectedServices": []
+      },
+      "redactionForbidden": [
+        "raw-secret-value",
+        "local-api-token",
+        "portable-master-key",
+        "provider-credential"
+      ]
+    },
+    {
+      "name": "source-local-ready",
+      "scenario": "local-store",
+      "kind": "http",
+      "method": "GET",
+      "path": "/v1/sources/status",
+      "requiresAuth": false,
+      "request": null,
+      "expectedStatus": 200,
+      "responseSchema": "sourceStatusResponse",
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "sourceConfig": {
+          "configured": true,
+          "checked": true,
+          "state": "valid",
+          "outcome": "ready"
+        },
+        "sources": [
+          {
+            "sourceId": "local",
+            "kind": "local-encrypted-store",
+            "displayName": "Local encrypted store",
+            "enabled": true,
+            "critical": true,
+            "priority": 0,
+            "capabilities": [
+              "read",
+              "reveal",
+              "write/update",
+              "rotate/reset",
+              "audit",
+              "migration",
+              "health"
+            ],
+            "namespaces": [
+              "*"
+            ],
+            "state": "connected",
+            "outcome": "ready",
+            "retryable": false,
+            "lifecycle": {
+              "state": "connected",
+              "outcome": "ready",
+              "retryable": false
+            },
+            "affectedRefs": [],
+            "affectedServices": []
+          }
+        ]
+      },
+      "redactionForbidden": [
+        "raw-secret-value",
+        "local-api-token",
+        "portable-master-key",
+        "provider-credential"
+      ]
+    },
+    {
+      "name": "source-openbao-auth-required",
+      "scenario": "auth-required",
+      "kind": "http",
+      "method": "GET",
+      "path": "/v1/sources/status",
+      "requiresAuth": false,
+      "request": null,
+      "expectedStatus": 200,
+      "responseSchema": "sourceStatusResponse",
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "sourceConfig": {
+          "configured": true,
+          "checked": true,
+          "state": "valid",
+          "outcome": "ready"
+        },
+        "sources": [
+          {
+            "sourceId": "openbao-primary",
+            "kind": "openbao",
+            "displayName": "Primary OpenBao",
+            "enabled": true,
+            "critical": true,
+            "priority": 0,
+            "capabilities": [
+              "read",
+              "reveal",
+              "write/update",
+              "rotate/reset",
+              "policy",
+              "audit",
+              "migration",
+              "health"
+            ],
+            "namespaces": [
+              "*"
+            ],
+            "state": "auth_required",
+            "outcome": "source_auth_required",
+            "nextAction": "reconnect_source",
+            "retryable": false,
+            "lifecycle": {
+              "state": "auth_required",
+              "outcome": "source_auth_required",
+              "nextAction": "reconnect_source",
+              "retryable": false
+            },
+            "affectedRefs": [],
+            "affectedServices": []
+          }
+        ]
+      },
+      "redactionForbidden": [
+        "raw-secret-value",
+        "local-api-token",
+        "portable-master-key",
+        "provider-credential"
+      ]
+    },
+    {
+      "name": "source-aws-auth-required",
+      "scenario": "auth-required",
+      "kind": "http",
+      "method": "GET",
+      "path": "/v1/sources/status",
+      "requiresAuth": false,
+      "request": null,
+      "expectedStatus": 200,
+      "responseSchema": "sourceStatusResponse",
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "sourceConfig": {
+          "configured": true,
+          "checked": true,
+          "state": "valid",
+          "outcome": "ready"
+        },
+        "sources": [
+          {
+            "sourceId": "aws-production",
+            "kind": "aws-secrets-manager",
+            "displayName": "AWS Secrets Manager",
+            "enabled": true,
+            "critical": true,
+            "priority": 0,
+            "capabilities": [
+              "read",
+              "reveal",
+              "write/update",
+              "rotate/reset",
+              "policy",
+              "value-search",
+              "audit",
+              "migration",
+              "health"
+            ],
+            "namespaces": [
+              "*"
+            ],
+            "state": "auth_required",
+            "outcome": "source_auth_required",
+            "nextAction": "reconnect_source",
+            "retryable": false,
+            "lifecycle": {
+              "state": "auth_required",
+              "outcome": "source_auth_required",
+              "nextAction": "reconnect_source",
+              "retryable": false
+            },
+            "affectedRefs": [],
+            "affectedServices": []
+          }
+        ]
+      },
+      "redactionForbidden": [
+        "raw-secret-value",
+        "local-api-token",
+        "portable-master-key",
+        "provider-credential"
+      ]
+    },
+    {
+      "name": "operation-policy-denied",
+      "scenario": "policy-denied",
+      "kind": "http",
+      "method": "POST",
+      "path": "/v1/writeback",
+      "requiresAuth": true,
+      "request": null,
+      "expectedStatus": 403,
+      "responseSchema": "ErrorEnvelope",
+      "expectedResponse": {
+        "error": {
+          "code": "policy_denied",
+          "message": "The requested operation was denied by policy.",
+          "outcome": "policy_denied",
+          "requestId": "req-contract-denied",
+          "nextAction": "review_policy",
+          "affectedRefs": [],
+          "affectedServices": []
+        }
+      },
+      "redactionForbidden": [
+        "raw-secret-value",
+        "local-api-token",
+        "portable-master-key",
+        "provider-credential"
+      ]
+    },
+    {
+      "name": "provider-unsupported",
+      "scenario": "unsupported",
+      "kind": "http",
+      "method": "POST",
+      "path": "/v1/providers/config/validate",
+      "requiresAuth": true,
+      "request": null,
+      "expectedStatus": 501,
+      "responseSchema": "providerConfigActionResponse",
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "requestId": "req-contract-unsupported",
+        "operationId": "op-contract-unsupported",
+        "operation": "provider_config_validate",
+        "outcome": "unsupported",
+        "applied": false,
+        "requiresConfirmation": false,
+        "auditStatus": "audit_recorded",
+        "nextAction": "select_supported_provider",
+        "provider": {
+          "providerId": "future-provider",
+          "providerKind": "future-provider",
+          "displayName": "Future provider",
+          "state": "unsupported",
+          "outcome": "unsupported",
+          "namespaces": [],
+          "capabilities": [
+            "health"
+          ],
+          "auditStatus": "audit_available"
+        },
+        "unsupportedCapability": "provider_configuration"
+      },
+      "redactionForbidden": [
+        "raw-secret-value",
+        "local-api-token",
+        "portable-master-key",
+        "provider-credential"
+      ]
+    },
+    {
+      "name": "sync-audit-unavailable",
+      "scenario": "audit-unavailable",
+      "kind": "http",
+      "method": "POST",
+      "path": "/v1/management/secrets/sync/dry-run",
+      "requiresAuth": true,
+      "request": null,
+      "expectedStatus": 503,
+      "responseSchema": "syncDryRunResponse",
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "requestId": "req-contract-audit",
+        "operationId": "op-contract-audit",
+        "operation": "secrets_sync",
+        "mode": "dry-run",
+        "outcome": "audit_unavailable",
+        "applied": false,
+        "requiresConfirmation": true,
+        "auditStatus": "audit_unavailable",
+        "staleAfterSeconds": 300,
+        "nextAction": "restore_audit_before_sync",
+        "destination": {
+          "destinationId": "github-actions",
+          "kind": "github-actions",
+          "displayName": "GitHub Actions",
+          "enabled": true,
+          "scope": {
+            "owner": "service-lasso",
+            "repository": "example",
+            "secretsLocation": "repository"
+          },
+          "state": "ready",
+          "outcome": "ready",
+          "auditStatus": "audit_unavailable"
+        },
+        "results": [],
+        "summary": {
+          "selectedCount": 1,
+          "readyCount": 0,
+          "deniedCount": 0,
+          "unsupportedCount": 0,
+          "blockedCount": 0,
+          "highRiskCount": 0,
+          "driftUnknownCount": 0,
+          "authRequiredCount": 0,
+          "auditUnavailableCount": 1,
+          "unmanagedCollisionCount": 0
+        },
+        "affectedRefs": [
+          "services/example/runtime/API_TOKEN"
+        ],
+        "affectedServices": [
+          "example"
+        ]
+      },
+      "redactionForbidden": [
+        "raw-secret-value",
+        "local-api-token",
+        "portable-master-key",
+        "provider-credential"
+      ]
+    },
+    {
+      "name": "events-empty-safe",
+      "scenario": "events",
+      "kind": "http",
+      "method": "GET",
+      "path": "/v1/events",
+      "requiresAuth": false,
+      "request": null,
+      "expectedStatus": 200,
+      "responseSchema": "eventsResponse",
+      "expectedResponse": {
+        "serviceId": "@secretsbroker",
+        "apiVersion": "secretsbroker.local/v1",
+        "outcome": "ready",
+        "generatedAt": "2026-07-18T02:00:00Z",
+        "limit": 50,
+        "events": [],
+        "safety": {
+          "metadataOnly": true,
+          "rawRefIncluded": false,
+          "valueMaterialIncluded": false
+        }
+      },
+      "redactionForbidden": [
+        "raw-secret-value",
+        "local-api-token",
+        "portable-master-key",
+        "provider-credential"
+      ]
+    }
+  ]
+}
