@@ -30,6 +30,23 @@ A source registry entry describes a configured backend/source without revealing 
   "critical": true,
   "priority": 0,
   "capabilities": ["read", "reveal", "write/update", "rotate/reset", "audit", "migration", "health"],
+  "operations": [
+    {
+      "operationId": "postv1_management_secrets_edit_apply",
+      "method": "POST",
+      "path": "/v1/management/secrets/edit/apply",
+      "maturity": "validated",
+      "classification": "mutation",
+      "authenticationRequired": true,
+      "policyRequired": true,
+      "auditRequired": true,
+      "scope": "broker-local",
+      "providerKinds": ["local-encrypted-store"],
+      "limitationCode": "runtime_auth_policy_audit_revalidated",
+      "reasonCode": "source_operation_available",
+      "nextAction": "invoke_with_required_controls"
+    }
+  ],
   "namespaces": ["*"],
   "state": "connected",
   "outcome": "ready",
@@ -98,6 +115,11 @@ Audit records never include secret values.
 
 ## Capabilities
 
+The legacy capability list is a compatibility and adapter-design field. It must
+not be used by itself to enable an operation. Each source and provider
+connection also publishes an exact, lifecycle-aware `operations` matrix; see
+`operation-capability-manifest.md`.
+
 Canonical capability names:
 
 - `read`
@@ -152,10 +174,12 @@ The local store can act as default fallback with namespace `*`.
 
 ## Current implemented MVP
 
-The implemented registry includes the default local source plus configured `env`, `file`, `exec`, `vault`, and `openbao` sources:
+The implemented registry includes the default local source plus configured
+`env`, `file`, `exec`, `vault`, `openbao`, `aws-secrets-manager`,
+`onepassword-cli`, and `bitwarden-bws` sources:
 
 - `sourceId`: visible stable source identifier
-- `kind`: `local-encrypted-store`, `env`, `file`, `exec`, `vault`, or `openbao`
+- `kind`: one of the implemented source kinds above
 - `capabilities`: source-safe capabilities from the external adapter contract, plus `health` for status probes
 - `namespaces`: claimed namespaces or `*`
 - `state`/`outcome`/`nextAction`/`retryable`: normalized lifecycle view
@@ -171,11 +195,14 @@ Endpoint:
 GET /v1/sources/status
 ```
 
+The response includes contract version `1.1.0` and operation manifest version
+`1.0.0` alongside each connection-scoped operation matrix.
+
 Secret values are not returned. Source lifecycle audit events also redact values and record only operation, source id, ref, state, outcome, service id, and request id.
 
 ## Out of scope
 
-- AWS/1Password/Bitwarden/BWS adapters
 - persistent registry config UI
-- policy engine
+- remote provider mutation paths that the operation manifest marks planned or
+  unavailable
 - active background refresh scheduler beyond per-request lifecycle normalization

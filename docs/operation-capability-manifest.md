@@ -1,0 +1,95 @@
+# Operation capability manifest
+
+Status: canonical release capability contract  
+Issue: #133
+
+## Purpose
+
+Legacy `capabilities` and `endpoints` arrays remain available for compatible
+clients, but they are not sufficient to enable an action. A capability name can
+describe an adapter design or a planning path even when no provider mutation is
+implemented. `GET /capabilities` therefore publishes a versioned `operations`
+manifest, and source/provider status responses publish the same operation shape
+scoped to each connection.
+
+Contract version `1.1.0` adds manifest version `1.0.0` without removing the
+contract `1.x` fields. The OpenAPI schema for `OperationCapability` is the
+canonical schema.
+
+## Record shape
+
+Every operation record contains:
+
+- stable `operationId`, `method`, and `path`;
+- `maturity`: `unavailable`, `planned`, `read-only`, `dry-run`, `executable`,
+  or `validated`;
+- `classification`: `read` or `mutation`;
+- `authenticationRequired`, `policyRequired`, and `auditRequired`;
+- `scope`: `broker-local`, `provider-remote`, `source-boundary`, or `mixed`;
+- explicit `providerKinds`;
+- safe `limitationCode`, `reasonCode`, and `nextAction` values.
+
+`validated` is an executable implementation covered by contract/provider tests.
+`executable` performs its advertised effect but has narrower validation.
+`dry-run` computes a plan without applying the provider mutation. `planned`
+means that the route or model exists but the advertised mutation is not
+implemented. `read-only` never authorises a mutation.
+
+## Consumer enablement rule
+
+For a mutation, Service Admin must find the exact operation on the selected
+source or provider connection and require maturity `executable` or `validated`.
+It must not enable apply from a legacy capability string, a provider-family
+upper bound, an endpoint string, or a `planned`/`dry-run` record.
+
+For reads, the selected connection must report `read-only`, `executable`, or
+`validated` for the exact operation. Every invocation still re-evaluates its
+declared auth, policy, audit, confirmation, lockout, and identity controls.
+
+Connection lifecycle wins over family capability. `source_auth_required`,
+`policy_denied`, `audit_unavailable`, locked, disabled, invalid, and degraded
+states downgrade affected connection operations to `unavailable` with a safe
+recovery action.
+
+## Current provider operation matrix
+
+This table summarises the connection-ready baseline. The runtime arrays are the
+machine-readable authority.
+
+| Operation | Local encrypted store | Vault/OpenBao | AWS Secrets Manager | env/file/exec |
+| --- | --- | --- | --- | --- |
+| Resolve/reveal | validated | validated | validated | validated |
+| Metadata-only value search | validated | unavailable | validated | unavailable |
+| Edit dry-run | dry-run | dry-run | dry-run | unavailable |
+| Edit apply | validated | unavailable | unavailable | unavailable |
+| Reset/rotation dry-run | dry-run | planned | dry-run | unavailable |
+| Reset apply | validated | unavailable | unavailable | unavailable |
+| Policy preview | dry-run | dry-run | dry-run | unavailable |
+| Policy apply | planned | planned | planned | unavailable |
+| Migration dry-run | dry-run | dry-run | dry-run | dry-run |
+| Migration apply | planned | planned | planned | planned |
+| Secrets Sync dry-run | dry-run | dry-run | dry-run | dry-run |
+
+The current provider configuration apply handler validates and reports an apply
+result but does not persist a connection. Migration and bulk campaign apply
+handlers report metadata outcomes but do not copy or mutate provider values.
+Those operations are deliberately `planned`, regardless of legacy response
+wording.
+
+## Drift and conformance gates
+
+Normal Go tests fail when:
+
+- an OpenAPI/production contract route has no operation manifest entry;
+- a manifest entry has no OpenAPI/production contract route;
+- an advertised HTTP route has no matching manifest and schema entry;
+- a manifest route is not registered by the production handler;
+- an operation record has an invalid maturity/classification/scope or missing
+  decision code;
+- source/provider lifecycle or audit state leaves a blocked operation usable;
+- generated OpenAPI or canonical fixture output is stale.
+
+`conformance/fixtures/contract-states.json` includes the full
+`capabilities-operation-manifest` response plus ready and blocked connection
+matrices. Secret values, credentials, tokens, recovery material, and raw
+provider responses remain forbidden.

@@ -18,7 +18,7 @@ import (
 const (
 	version         = "0.1.0"
 	apiVersion      = "secretsbroker.local/v1"
-	contractVersion = "1.0.0"
+	contractVersion = "1.1.0"
 	serviceID       = "@secretsbroker"
 )
 
@@ -86,15 +86,17 @@ type StateResponse struct {
 }
 
 type CapabilitiesResponse struct {
-	ServiceID       string   `json:"serviceId"`
-	APIVersion      string   `json:"apiVersion"`
-	ContractVersion string   `json:"contractVersion"`
-	Version         string   `json:"version"`
-	Transports      []string `json:"transports"`
-	Endpoints       []string `json:"endpoints"`
-	Features        []string `json:"features"`
-	FutureFeatures  []string `json:"futureFeatures"`
-	Outcomes        []string `json:"outcomes"`
+	ServiceID       string                `json:"serviceId"`
+	APIVersion      string                `json:"apiVersion"`
+	ContractVersion string                `json:"contractVersion"`
+	ManifestVersion string                `json:"manifestVersion"`
+	Version         string                `json:"version"`
+	Transports      []string              `json:"transports"`
+	Endpoints       []string              `json:"endpoints"`
+	Operations      []OperationCapability `json:"operations"`
+	Features        []string              `json:"features"`
+	FutureFeatures  []string              `json:"futureFeatures"`
+	Outcomes        []string              `json:"outcomes"`
 }
 
 type ErrorEnvelope struct {
@@ -225,8 +227,9 @@ func defaultCapabilities() CapabilitiesResponse {
 		ServiceID:       serviceID,
 		APIVersion:      apiVersion,
 		ContractVersion: contractVersion,
+		ManifestVersion: operationManifestVersion,
 		Version:         version,
-		Transports: []string{"loopback-http", "unix-socket", "windows-named-pipe"},
+		Transports:      []string{"loopback-http", "unix-socket", "windows-named-pipe"},
 		Endpoints: []string{
 			"GET /health",
 			"GET /ready",
@@ -264,12 +267,14 @@ func defaultCapabilities() CapabilitiesResponse {
 			"CLI secretsbroker admin status|secrets|providers|migration|sync|recovery|audit|telemetry|events",
 			"CLI secretsbroker admin launch-lease issue",
 		},
+		Operations: defaultOperationManifest(),
 		Features: []string{
 			"liveness",
 			"readiness",
 			"status",
 			"state",
 			"capabilities",
+			"versioned-operation-capability-manifest",
 			"local-encrypted-store",
 			"batched-resolve",
 			"typed-errors",

@@ -1,7 +1,7 @@
 # Versioned API contract
 
 Status: canonical local API contract  
-Issue: #131
+Issues: #131, #133
 
 ## Purpose
 
@@ -20,10 +20,14 @@ The Go request and response DTOs are the implementation source of truth. `cmd/se
 The identities have different purposes:
 
 - broker API family: `secretsbroker.local/v1`
-- published contract version: `1.0.0`
+- published contract version: `1.1.0`
+- operation manifest version: `1.0.0`
 - fixture family: `secretsbroker.parity.v1`
 
-`GET /capabilities` exposes `contractVersion` so clients can record and enforce the contract they were tested against.
+`GET /capabilities` exposes `contractVersion`, `manifestVersion`, and the
+schema-backed `operations` release manifest so clients can enforce both the
+contract family and exact operation maturity. See
+`docs/operation-capability-manifest.md`.
 
 ## Compatibility rules
 
@@ -61,6 +65,10 @@ Normal `go test ./...` runs the same generator without write mode and fails when
 
 - an HTTP route advertised by `/capabilities` has no contract operation
 - a contract operation is not advertised by `/capabilities`
+- a contract/advertised route has no operation manifest record, or a manifest
+  route is not registered
+- a source/provider operation remains usable while its lifecycle or audit state
+  requires fail-closed behaviour
 - a canonical fixture declares an unknown Go response type
 - a fixture response contains a field not present in its declared Go type
 - fixture identity, format or redaction requirements are invalid
@@ -92,6 +100,8 @@ Service Admin and Service Lasso core should:
 3. Treat `sourceId`, `kind`, `displayName`, `state`, `outcome`, `capabilities`, `lifecycle` and `nextAction` exactly as published.
 4. Ignore unknown compatible response fields while failing closed on unknown mutation capabilities or lifecycle outcomes.
 5. Never copy fixture shapes into independently maintained hand-written models.
+6. Use the exact connection-scoped `operations` record to enable actions;
+   legacy capability and endpoint strings are diagnostic compatibility fields.
 
 Fixtures may be consumed directly from a pinned repository revision or copied by an automated, revision-recording sync step. Manual copies are not a conformance mechanism.
 

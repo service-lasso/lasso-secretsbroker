@@ -12,29 +12,33 @@ type SourceRegistry struct {
 }
 
 type SourceStatus struct {
-	SourceID         string          `json:"sourceId"`
-	Kind             string          `json:"kind"`
-	DisplayName      string          `json:"displayName"`
-	Enabled          bool            `json:"enabled"`
-	Critical         bool            `json:"critical"`
-	Priority         int             `json:"priority"`
-	Capabilities     []string        `json:"capabilities"`
-	Namespaces       []string        `json:"namespaces"`
-	State            string          `json:"state"`
-	Outcome          string          `json:"outcome"`
-	NextAction       string          `json:"nextAction,omitempty"`
-	Retryable        bool            `json:"retryable"`
-	RetryAfterMs     int             `json:"retryAfterMs,omitempty"`
-	Lifecycle        SourceLifecycle `json:"lifecycle"`
-	AffectedRefs     []string        `json:"affectedRefs"`
-	AffectedServices []string        `json:"affectedServices"`
+	SourceID         string                `json:"sourceId"`
+	Kind             string                `json:"kind"`
+	DisplayName      string                `json:"displayName"`
+	Enabled          bool                  `json:"enabled"`
+	Critical         bool                  `json:"critical"`
+	Priority         int                   `json:"priority"`
+	Capabilities     []string              `json:"capabilities"`
+	Operations       []OperationCapability `json:"operations"`
+	Namespaces       []string              `json:"namespaces"`
+	State            string                `json:"state"`
+	Outcome          string                `json:"outcome"`
+	NextAction       string                `json:"nextAction,omitempty"`
+	Retryable        bool                  `json:"retryable"`
+	RetryAfterMs     int                   `json:"retryAfterMs,omitempty"`
+	Lifecycle        SourceLifecycle       `json:"lifecycle"`
+	AuditStatus      string                `json:"auditStatus"`
+	AffectedRefs     []string              `json:"affectedRefs"`
+	AffectedServices []string              `json:"affectedServices"`
 }
 
 type sourceStatusResponse struct {
-	ServiceID    string               `json:"serviceId"`
-	APIVersion   string               `json:"apiVersion"`
-	SourceConfig sourceConfigSecurity `json:"sourceConfig"`
-	Sources      []SourceStatus       `json:"sources"`
+	ServiceID       string               `json:"serviceId"`
+	APIVersion      string               `json:"apiVersion"`
+	ContractVersion string               `json:"contractVersion"`
+	ManifestVersion string               `json:"manifestVersion"`
+	SourceConfig    sourceConfigSecurity `json:"sourceConfig"`
+	Sources         []SourceStatus       `json:"sources"`
 }
 
 func defaultSourceRegistry(backend *localBackend) SourceRegistry {
@@ -42,27 +46,29 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 	if backend != nil && !backend.locked() {
 		outcome = "ready"
 	}
+	auditStatus := auditStatusForBackend(backend)
 	localLifecycle := normalizeSourceLifecycle(outcome)
-	sources := []SourceStatus{
-		{
-			SourceID:         "local",
-			Kind:             "local-encrypted-store",
-			DisplayName:      "Local encrypted store",
-			Enabled:          true,
-			Critical:         true,
-			Priority:         0,
-			Capabilities:     capabilitiesForSourceKind("local-encrypted-store"),
-			Namespaces:       []string{"*"},
-			State:            localLifecycle.State,
-			Outcome:          localLifecycle.Outcome,
-			NextAction:       localLifecycle.NextAction,
-			Retryable:        localLifecycle.Retryable,
-			RetryAfterMs:     localLifecycle.RetryAfterMs,
-			Lifecycle:        localLifecycle,
-			AffectedRefs:     []string{},
-			AffectedServices: []string{},
-		},
+	localStatus := SourceStatus{
+		SourceID:         "local",
+		Kind:             "local-encrypted-store",
+		DisplayName:      "Local encrypted store",
+		Enabled:          true,
+		Critical:         true,
+		Priority:         0,
+		Capabilities:     capabilitiesForSourceKind("local-encrypted-store"),
+		Namespaces:       []string{"*"},
+		State:            localLifecycle.State,
+		Outcome:          localLifecycle.Outcome,
+		NextAction:       localLifecycle.NextAction,
+		Retryable:        localLifecycle.Retryable,
+		RetryAfterMs:     localLifecycle.RetryAfterMs,
+		Lifecycle:        localLifecycle,
+		AuditStatus:      auditStatus,
+		AffectedRefs:     []string{},
+		AffectedServices: []string{},
 	}
+	localStatus.Operations = providerOperationCapabilitiesForSource(localStatus.Kind, localStatus.Lifecycle, localStatus.AuditStatus)
+	sources := []SourceStatus{localStatus}
 	if backend != nil {
 		for _, source := range backend.sources.Sources {
 			lifecycle := sourceRegistryLifecycle(source)
@@ -81,9 +87,11 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 				Retryable:        lifecycle.Retryable,
 				RetryAfterMs:     lifecycle.RetryAfterMs,
 				Lifecycle:        lifecycle,
+				AuditStatus:      auditStatus,
 				AffectedRefs:     []string{},
 				AffectedServices: []string{},
 			}
+			status.Operations = providerOperationCapabilitiesForSource(status.Kind, status.Lifecycle, status.AuditStatus)
 			if len(status.Namespaces) == 0 {
 				status.Namespaces = []string{"*"}
 			}
@@ -95,6 +103,13 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 		configSecurity = normalizeSourceConfigSecurity(backend.sources.Security)
 	}
 	return SourceRegistry{SourceConfig: configSecurity, Sources: sources}
+}
+
+func auditStatusForBackend(backend *localBackend) string {
+	if backend == nil || strings.TrimSpace(backend.auditPath) == "" {
+		return "audit_unavailable"
+	}
+	return "audit_available"
 }
 
 func sourceRegistryLifecycle(source sourceConfig) SourceLifecycle {
@@ -217,6 +232,6 @@ func registerSourceRegistryHandlers(mux *http.ServeMux, backend *localBackend) {
 			return
 		}
 		registry := defaultSourceRegistry(backend)
-		writeJSON(w, http.StatusOK, sourceStatusResponse{ServiceID: serviceID, APIVersion: apiVersion, SourceConfig: registry.SourceConfig, Sources: registry.Sources})
+		writeJSON(w, http.StatusOK, sourceStatusResponse{ServiceID: serviceID, APIVersion: apiVersion, ContractVersion: contractVersion, ManifestVersion: operationManifestVersion, SourceConfig: registry.SourceConfig, Sources: registry.Sources})
 	})
 }

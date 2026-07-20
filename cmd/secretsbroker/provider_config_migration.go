@@ -8,37 +8,43 @@ import (
 )
 
 type providerCapability struct {
-	ProviderKind string   `json:"providerKind"`
-	DisplayName  string   `json:"displayName"`
-	Supported    bool     `json:"supported"`
-	Capabilities []string `json:"capabilities"`
-	Limitations  []string `json:"limitations"`
+	ProviderKind string                `json:"providerKind"`
+	DisplayName  string                `json:"displayName"`
+	Supported    bool                  `json:"supported"`
+	Capabilities []string              `json:"capabilities"`
+	Operations   []OperationCapability `json:"operations"`
+	Limitations  []string              `json:"limitations"`
 }
 
 type providerCapabilitiesResponse struct {
-	ServiceID    string               `json:"serviceId"`
-	APIVersion   string               `json:"apiVersion"`
-	Outcome      string               `json:"outcome"`
-	Capabilities []providerCapability `json:"capabilities"`
+	ServiceID       string               `json:"serviceId"`
+	APIVersion      string               `json:"apiVersion"`
+	ContractVersion string               `json:"contractVersion"`
+	ManifestVersion string               `json:"manifestVersion"`
+	Outcome         string               `json:"outcome"`
+	Capabilities    []providerCapability `json:"capabilities"`
 }
 
 type providerConfigStatus struct {
-	ProviderID       string   `json:"providerId"`
-	ProviderKind     string   `json:"providerKind"`
-	DisplayName      string   `json:"displayName"`
-	State            string   `json:"state"`
-	Outcome          string   `json:"outcome"`
-	CredentialHandle string   `json:"credentialHandle,omitempty"`
-	Address          string   `json:"address,omitempty"`
-	Namespaces       []string `json:"namespaces"`
-	Capabilities     []string `json:"capabilities"`
-	NextAction       string   `json:"nextAction,omitempty"`
-	AuditStatus      string   `json:"auditStatus"`
+	ProviderID       string                `json:"providerId"`
+	ProviderKind     string                `json:"providerKind"`
+	DisplayName      string                `json:"displayName"`
+	State            string                `json:"state"`
+	Outcome          string                `json:"outcome"`
+	CredentialHandle string                `json:"credentialHandle,omitempty"`
+	Address          string                `json:"address,omitempty"`
+	Namespaces       []string              `json:"namespaces"`
+	Capabilities     []string              `json:"capabilities"`
+	Operations       []OperationCapability `json:"operations"`
+	NextAction       string                `json:"nextAction,omitempty"`
+	AuditStatus      string                `json:"auditStatus"`
 }
 
 type providerConfigStatusResponse struct {
 	ServiceID       string                 `json:"serviceId"`
 	APIVersion      string                 `json:"apiVersion"`
+	ContractVersion string                 `json:"contractVersion"`
+	ManifestVersion string                 `json:"manifestVersion"`
 	Outcome         string                 `json:"outcome"`
 	CurrentProvider providerConfigStatus   `json:"currentProvider"`
 	Providers       []providerConfigStatus `json:"providers"`
@@ -119,16 +125,21 @@ type migrationPlanResponse struct {
 }
 
 func defaultProviderCapabilities() []providerCapability {
-	return []providerCapability{
+	capabilities := []providerCapability{
 		{ProviderKind: "local-encrypted-store", DisplayName: "Local encrypted store", Supported: true, Capabilities: capabilitiesForSourceKind("local-encrypted-store"), Limitations: []string{"local-first development backend"}},
 		{ProviderKind: "vault", DisplayName: "Vault", Supported: true, Capabilities: capabilitiesForSourceKind("vault"), Limitations: []string{"remote write, rotation, policy apply, and migration target apply require a configured provider operation path"}},
 		{ProviderKind: "openbao", DisplayName: "OpenBao", Supported: true, Capabilities: capabilitiesForSourceKind("openbao"), Limitations: []string{"remote write, rotation, policy apply, and migration target apply require a configured provider operation path"}},
 		{ProviderKind: "env", DisplayName: "Environment variables", Supported: true, Capabilities: []string{"read", "health", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
 		{ProviderKind: "file", DisplayName: "File source", Supported: true, Capabilities: []string{"read", "health", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
 		{ProviderKind: "exec", DisplayName: "Exec source", Supported: true, Capabilities: []string{"read", "reveal", "health", "audit", "migration_source"}, Limitations: []string{"read-only; cannot be migration target"}},
+		{ProviderKind: "onepassword-cli", DisplayName: "1Password CLI", Supported: true, Capabilities: capabilitiesForSourceKind("onepassword-cli"), Limitations: []string{"read-only; cannot be migration target"}},
 		{ProviderKind: "bitwarden-bws", DisplayName: "Bitwarden/BWS", Supported: true, Capabilities: capabilitiesForSourceKind("bitwarden-bws"), Limitations: []string{"migration target apply requires a configured remote write path"}},
 		{ProviderKind: "aws-secrets-manager", DisplayName: "AWS Secrets Manager", Supported: true, Capabilities: capabilitiesForSourceKind("aws-secrets-manager"), Limitations: []string{"remote write, rotation, and migration apply require a configured AWS operation path"}},
 	}
+	for index := range capabilities {
+		capabilities[index].Operations = providerOperationCapabilitiesForKind(capabilities[index].ProviderKind)
+	}
+	return capabilities
 }
 
 func providerCapabilitiesByKind(kind string) providerCapability {
@@ -137,11 +148,11 @@ func providerCapabilitiesByKind(kind string) providerCapability {
 			return capability
 		}
 	}
-	return providerCapability{ProviderKind: kind, DisplayName: kind, Supported: false, Capabilities: []string{"health"}, Limitations: []string{"unsupported provider kind"}}
+	return providerCapability{ProviderKind: kind, DisplayName: kind, Supported: false, Capabilities: []string{"health"}, Operations: providerOperationCapabilitiesForKind(kind), Limitations: []string{"unsupported provider kind"}}
 }
 
 func (b *localBackend) providerCapabilitiesResponse() providerCapabilitiesResponse {
-	return providerCapabilitiesResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "ready", Capabilities: defaultProviderCapabilities()}
+	return providerCapabilitiesResponse{ServiceID: serviceID, APIVersion: apiVersion, ContractVersion: contractVersion, ManifestVersion: operationManifestVersion, Outcome: "ready", Capabilities: defaultProviderCapabilities()}
 }
 
 func (b *localBackend) providerConfigStatusResponse() providerConfigStatusResponse {
@@ -150,7 +161,7 @@ func (b *localBackend) providerConfigStatusResponse() providerConfigStatusRespon
 	for _, source := range registry.Sources {
 		providers = append(providers, providerStatusFromSource(source, b))
 	}
-	return providerConfigStatusResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "ready", CurrentProvider: providers[0], Providers: providers}
+	return providerConfigStatusResponse{ServiceID: serviceID, APIVersion: apiVersion, ContractVersion: contractVersion, ManifestVersion: operationManifestVersion, Outcome: "ready", CurrentProvider: providers[0], Providers: providers}
 }
 
 func providerStatusFromSource(source SourceStatus, backend *localBackend) providerConfigStatus {
@@ -165,7 +176,8 @@ func providerStatusFromSource(source SourceStatus, backend *localBackend) provid
 			credential = "missing"
 		}
 	}
-	return providerConfigStatus{ProviderID: source.SourceID, ProviderKind: source.Kind, DisplayName: source.DisplayName, State: source.State, Outcome: source.Outcome, CredentialHandle: credential, Address: address, Namespaces: safeList(source.Namespaces), Capabilities: providerCapabilitiesByKind(source.Kind).Capabilities, NextAction: source.NextAction, AuditStatus: "audit_available"}
+	auditStatus := firstNonEmpty(source.AuditStatus, "audit_available")
+	return providerConfigStatus{ProviderID: source.SourceID, ProviderKind: source.Kind, DisplayName: source.DisplayName, State: source.State, Outcome: source.Outcome, CredentialHandle: credential, Address: address, Namespaces: safeList(source.Namespaces), Capabilities: providerCapabilitiesByKind(source.Kind).Capabilities, Operations: providerOperationCapabilitiesForSource(source.Kind, source.Lifecycle, auditStatus), NextAction: source.NextAction, AuditStatus: auditStatus}
 }
 
 func (b *localBackend) validateProviderConfig(req providerConfigRequest) (providerConfigActionResponse, error) {
@@ -215,27 +227,27 @@ func providerStatusFromConfigRequest(req providerConfigRequest, apply bool) (pro
 	if providerID == "" || kind == "" || !validSecretRef(providerID) {
 		status.State = "config_error"
 		status.Outcome = "invalid_ref"
-		return status, errInvalidRef
+		return providerStatusWithOperations(status), errInvalidRef
 	}
 	if strings.TrimSpace(req.CredentialValue) != "" {
 		status.State = "denied"
 		status.Outcome = "policy_denied"
-		return status, errPolicyDenied
+		return providerStatusWithOperations(status), errPolicyDenied
 	}
 	if !capability.Supported {
 		status.State = "unsupported"
 		status.Outcome = "unsupported"
-		return status, errUnsupportedProvider
+		return providerStatusWithOperations(status), errUnsupportedProvider
 	}
 	if (kind == "vault" || kind == "openbao" || kind == "bitwarden-bws" || kind == "aws-secrets-manager") && strings.TrimSpace(req.CredentialRef) == "" {
 		status.State = "auth_required"
 		status.Outcome = "source_auth_required"
-		return status, errSourceAuthRequired
+		return providerStatusWithOperations(status), errSourceAuthRequired
 	}
 	if (kind == "vault" || kind == "openbao" || kind == "bitwarden-bws" || kind == "aws-secrets-manager") && strings.TrimSpace(req.Address) == "" {
 		status.State = "config_error"
 		status.Outcome = "invalid_ref"
-		return status, errInvalidRef
+		return providerStatusWithOperations(status), errInvalidRef
 	}
 	status.State = "connected"
 	status.Outcome = "ready"
@@ -245,7 +257,16 @@ func providerStatusFromConfigRequest(req providerConfigRequest, apply bool) (pro
 	if len(status.Namespaces) == 0 {
 		status.Namespaces = []string{"*"}
 	}
-	return status, nil
+	return providerStatusWithOperations(status), nil
+}
+
+func providerStatusWithOperations(status providerConfigStatus) providerConfigStatus {
+	outcome := status.Outcome
+	if outcome == "applied" {
+		outcome = "ready"
+	}
+	status.Operations = providerOperationCapabilitiesForSource(status.ProviderKind, normalizeSourceLifecycle(outcome), status.AuditStatus)
+	return status
 }
 
 func credentialHandle(ref string) string {
@@ -377,7 +398,7 @@ func (b *localBackend) lookupProvider(providerID string) providerConfigStatus {
 		kind = "vault"
 	}
 	capability := providerCapabilitiesByKind(kind)
-	return providerConfigStatus{ProviderID: providerID, ProviderKind: kind, DisplayName: providerID, State: "unsupported", Outcome: "unsupported", Capabilities: capability.Capabilities, Namespaces: []string{}, AuditStatus: "audit_available"}
+	return providerStatusWithOperations(providerConfigStatus{ProviderID: providerID, ProviderKind: kind, DisplayName: providerID, State: "unsupported", Outcome: "unsupported", Capabilities: capability.Capabilities, Namespaces: []string{}, AuditStatus: "audit_available"})
 }
 
 func providerCanBeMigrationTarget(kind string) bool {
