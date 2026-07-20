@@ -124,6 +124,14 @@ func TestAdvertisedHTTPRoutesHaveSchemas(t *testing.T) {
 		want[key] = true
 	}
 	got := advertisedHTTPRoutes(defaultCapabilities().Endpoints)
+	manifest := map[string]bool{}
+	for _, operation := range defaultCapabilities().Operations {
+		key := operation.Method + " " + operation.Path
+		if manifest[key] {
+			t.Fatalf("duplicate manifest route %s", key)
+		}
+		manifest[key] = true
+	}
 	for key := range got {
 		if !want[key] {
 			t.Errorf("advertised HTTP route has no schema: %s", key)
@@ -132,6 +140,14 @@ func TestAdvertisedHTTPRoutesHaveSchemas(t *testing.T) {
 	for key := range want {
 		if !got[key] {
 			t.Errorf("schema route is not advertised by /capabilities: %s", key)
+		}
+		if !manifest[key] {
+			t.Errorf("schema route has no operation manifest entry: %s", key)
+		}
+	}
+	for key := range manifest {
+		if !want[key] {
+			t.Errorf("operation manifest route has no schema: %s", key)
 		}
 	}
 }
@@ -199,9 +215,14 @@ func renderOpenAPIContract(t *testing.T) []byte {
 	builder := newContractSchemaBuilder()
 	paths := map[string]any{}
 	for _, route := range contractRoutes() {
+		capability, ok := operationCapabilityForRoute(route.Method, route.Path)
+		if !ok {
+			t.Fatalf("missing operation capability for %s %s", route.Method, route.Path)
+		}
 		operation := map[string]any{
-			"operationId": contractOperationID(route),
-			"summary":     route.Summary,
+			"operationId":  contractOperationID(route),
+			"summary":      route.Summary,
+			"x-capability": capability,
 			"responses": map[string]any{
 				"200": contractJSONResponse("Successful response", builder.reference(route.Response)),
 				"default": contractJSONResponse("Typed failure response", map[string]any{
@@ -217,7 +238,7 @@ func renderOpenAPIContract(t *testing.T) []byte {
 		if route.Request != nil {
 			operation["requestBody"] = map[string]any{
 				"required": true,
-				"content": map[string]any{"application/json": map[string]any{"schema": builder.reference(route.Request)}},
+				"content":  map[string]any{"application/json": map[string]any{"schema": builder.reference(route.Request)}},
 			}
 		}
 		if len(route.Query) > 0 {
@@ -259,9 +280,10 @@ func renderOpenAPIContract(t *testing.T) []byte {
 			},
 			"schemas": builder.schemas,
 		},
-		"x-service-id":       serviceID,
-		"x-api-version":      apiVersion,
-		"x-contract-version": contractVersion,
+		"x-service-id":                 serviceID,
+		"x-api-version":                apiVersion,
+		"x-contract-version":           contractVersion,
+		"x-operation-manifest-version": operationManifestVersion,
 		"x-compatibility": map[string]any{
 			"unknownResponseFields": "ignore",
 			"breakingChanges":       "new major contract version",
@@ -271,8 +293,7 @@ func renderOpenAPIContract(t *testing.T) []byte {
 }
 
 func contractOperationID(route contractRoute) string {
-	replacer := strings.NewReplacer("/", "_", "-", "_", "{", "", "}", "")
-	return strings.ToLower(route.Method) + strings.Trim(replacer.Replace(route.Path), "_")
+	return operationManifestID(route.Method, route.Path)
 }
 
 func contractJSONResponse(description string, schema map[string]any) map[string]any {
@@ -339,7 +360,16 @@ func (b *contractSchemaBuilder) schemaFor(typ reflect.Type) map[string]any {
 		}
 		return schema
 	case reflect.String:
-		return map[string]any{"type": "string"}
+		schema := map[string]any{"type": "string"}
+		switch typ.Name() {
+		case "OperationMaturity":
+			schema["enum"] = []string{"unavailable", "planned", "read-only", "dry-run", "executable", "validated"}
+		case "OperationClassification":
+			schema["enum"] = []string{"read", "mutation"}
+		case "OperationScope":
+			schema["enum"] = []string{"broker-local", "provider-remote", "source-boundary", "mixed"}
+		}
+		return schema
 	case reflect.Bool:
 		return map[string]any{"type": "boolean"}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
@@ -408,22 +438,29 @@ func canonicalStateFixture(t *testing.T) parityFixture {
 	}
 	sourceResponse := func(source SourceStatus) sourceStatusResponse {
 		return sourceStatusResponse{
-			ServiceID: serviceID, APIVersion: apiVersion, SourceConfig: sourceConfigSecurity{Configured: true, Checked: true, State: "valid", Outcome: "ready"}, Sources: []SourceStatus{source},
+			ServiceID: serviceID, APIVersion: apiVersion, ContractVersion: contractVersion, ManifestVersion: operationManifestVersion, SourceConfig: sourceConfigSecurity{Configured: true, Checked: true, State: "valid", Outcome: "ready"}, Sources: []SourceStatus{source},
 		}
 	}
-	source := func(id, kind, name, outcome string) SourceStatus {
+	sourceWithAudit := func(id, kind, name, outcome, auditStatus string) SourceStatus {
 		lifecycle := normalizeSourceLifecycle(outcome)
-		return SourceStatus{
+		status := SourceStatus{
 			SourceID: id, Kind: kind, DisplayName: name, Enabled: true, Critical: true, Priority: 0,
 			Capabilities: capabilitiesForSourceKind(kind), Namespaces: []string{"*"}, State: lifecycle.State, Outcome: lifecycle.Outcome,
-			NextAction: lifecycle.NextAction, Retryable: lifecycle.Retryable, RetryAfterMs: lifecycle.RetryAfterMs, Lifecycle: lifecycle,
+			NextAction: lifecycle.NextAction, Retryable: lifecycle.Retryable, RetryAfterMs: lifecycle.RetryAfterMs, Lifecycle: lifecycle, AuditStatus: auditStatus,
 			AffectedRefs: []string{}, AffectedServices: []string{},
 		}
+		status.Operations = providerOperationCapabilitiesForSource(kind, lifecycle, status.AuditStatus)
+		return status
 	}
+	source := func(id, kind, name, outcome string) SourceStatus {
+		return sourceWithAudit(id, kind, name, outcome, "audit_available")
+	}
+	unsupportedProvider := providerConfigStatus{ProviderID: "future-provider", ProviderKind: "future-provider", DisplayName: "Future provider", State: "unsupported", Outcome: "unsupported", Namespaces: []string{}, Capabilities: []string{"health"}, AuditStatus: "audit_available"}
+	unsupportedProvider.Operations = providerOperationCapabilitiesForSource(unsupportedProvider.ProviderKind, normalizeSourceLifecycle(unsupportedProvider.Outcome), unsupportedProvider.AuditStatus)
 	unsupported := providerConfigActionResponse{
 		ServiceID: serviceID, APIVersion: apiVersion, RequestID: "req-contract-unsupported", OperationID: "op-contract-unsupported",
 		Operation: "provider_config_validate", Outcome: "unsupported", Applied: false, RequiresConfirmation: false, AuditStatus: "audit_recorded",
-		NextAction: "select_supported_provider", Provider: providerConfigStatus{ProviderID: "future-provider", ProviderKind: "future-provider", DisplayName: "Future provider", State: "unsupported", Outcome: "unsupported", Namespaces: []string{}, Capabilities: []string{"health"}, AuditStatus: "audit_available"},
+		NextAction: "select_supported_provider", Provider: unsupportedProvider,
 		UnsupportedCapability: "provider_configuration",
 	}
 	auditUnavailable := syncDryRunResponse{
@@ -440,6 +477,7 @@ func canonicalStateFixture(t *testing.T) parityFixture {
 		ServiceID:     serviceID,
 		APIVersion:    apiVersion,
 		Cases: []parityFixtureCase{
+			{Name: "capabilities-operation-manifest", Scenario: "operation-manifest", Kind: "http", Method: http.MethodGet, Path: "/capabilities", RequiresAuth: &noAuth, ExpectedStatus: http.StatusOK, ResponseSchema: "CapabilitiesResponse", ExpectedResponse: mustRawContractJSON(t, defaultCapabilities()), RedactionForbidden: forbidden},
 			stateCase("state-ready", "ready", "ready"),
 			stateCase("state-setup-needed", "setup-needed", "setup_needed"),
 			stateCase("state-locked", "locked", "locked"),
@@ -447,6 +485,8 @@ func canonicalStateFixture(t *testing.T) parityFixture {
 			{Name: "source-local-ready", Scenario: "local-store", Kind: "http", Method: http.MethodGet, Path: "/v1/sources/status", RequiresAuth: &noAuth, ExpectedStatus: http.StatusOK, ResponseSchema: "sourceStatusResponse", ExpectedResponse: mustRawContractJSON(t, sourceResponse(source("local", "local-encrypted-store", "Local encrypted store", "ready"))), RedactionForbidden: forbidden},
 			{Name: "source-openbao-auth-required", Scenario: "auth-required", Kind: "http", Method: http.MethodGet, Path: "/v1/sources/status", RequiresAuth: &noAuth, ExpectedStatus: http.StatusOK, ResponseSchema: "sourceStatusResponse", ExpectedResponse: mustRawContractJSON(t, sourceResponse(source("openbao-primary", "openbao", "Primary OpenBao", "source_auth_required"))), RedactionForbidden: forbidden},
 			{Name: "source-aws-auth-required", Scenario: "auth-required", Kind: "http", Method: http.MethodGet, Path: "/v1/sources/status", RequiresAuth: &noAuth, ExpectedStatus: http.StatusOK, ResponseSchema: "sourceStatusResponse", ExpectedResponse: mustRawContractJSON(t, sourceResponse(source("aws-production", "aws-secrets-manager", "AWS Secrets Manager", "source_auth_required"))), RedactionForbidden: forbidden},
+			{Name: "source-vault-policy-denied", Scenario: "policy-denied", Kind: "http", Method: http.MethodGet, Path: "/v1/sources/status", RequiresAuth: &noAuth, ExpectedStatus: http.StatusOK, ResponseSchema: "sourceStatusResponse", ExpectedResponse: mustRawContractJSON(t, sourceResponse(source("vault-policy-denied", "vault", "Vault policy denied", "policy_denied"))), RedactionForbidden: forbidden},
+			{Name: "source-vault-audit-unavailable", Scenario: "audit-unavailable", Kind: "http", Method: http.MethodGet, Path: "/v1/sources/status", RequiresAuth: &noAuth, ExpectedStatus: http.StatusOK, ResponseSchema: "sourceStatusResponse", ExpectedResponse: mustRawContractJSON(t, sourceResponse(sourceWithAudit("vault-audit-unavailable", "vault", "Vault audit unavailable", "ready", "audit_unavailable"))), RedactionForbidden: forbidden},
 			{Name: "operation-policy-denied", Scenario: "policy-denied", Kind: "http", Method: http.MethodPost, Path: "/v1/writeback", RequiresAuth: &auth, ExpectedStatus: http.StatusForbidden, ResponseSchema: "ErrorEnvelope", ExpectedResponse: mustRawContractJSON(t, policyDenied), RedactionForbidden: forbidden},
 			{Name: "provider-unsupported", Scenario: "unsupported", Kind: "http", Method: http.MethodPost, Path: "/v1/providers/config/validate", RequiresAuth: &auth, ExpectedStatus: http.StatusNotImplemented, ResponseSchema: "providerConfigActionResponse", ExpectedResponse: mustRawContractJSON(t, unsupported), RedactionForbidden: forbidden},
 			{Name: "sync-audit-unavailable", Scenario: "audit-unavailable", Kind: "http", Method: http.MethodPost, Path: "/v1/management/secrets/sync/dry-run", RequiresAuth: &auth, ExpectedStatus: http.StatusServiceUnavailable, ResponseSchema: "syncDryRunResponse", ExpectedResponse: mustRawContractJSON(t, auditUnavailable), RedactionForbidden: forbidden},

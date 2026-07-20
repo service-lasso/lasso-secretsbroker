@@ -4,6 +4,10 @@ This contract powers the Service Admin `Secrets Broker > Configuration` surface.
 
 It is safe-by-default: provider configuration/status/validation/migration responses return handles, capabilities, refs, statuses, and audit outcomes only. They never return provider credentials, raw secret values, ciphertext, or migration payload material.
 
+Legacy capability names are provider-family upper bounds. Action enablement must
+use the connection-scoped `operations` matrix documented in
+`operation-capability-manifest.md`.
+
 ## Safety boundaries
 
 - Provider credentials are accepted only as refs/handles such as `credentialRef`; plaintext credential payloads are rejected and are not echoed.
@@ -26,6 +30,8 @@ Returns supported provider kinds and safe capability metadata.
 {
   "serviceId": "@secretsbroker",
   "apiVersion": "secretsbroker.local/v1",
+  "contractVersion": "1.1.0",
+  "manifestVersion": "1.0.0",
   "outcome": "ready",
   "capabilities": [
     {
@@ -33,6 +39,23 @@ Returns supported provider kinds and safe capability metadata.
       "displayName": "Local encrypted store",
       "supported": true,
       "capabilities": ["read", "reveal", "write", "rotate", "policy", "value_search", "audit", "migration_source", "migration_target"],
+      "operations": [
+        {
+          "operationId": "postv1_management_secrets_edit_apply",
+          "method": "POST",
+          "path": "/v1/management/secrets/edit/apply",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": ["local-encrypted-store"],
+          "limitationCode": "runtime_auth_policy_audit_revalidated",
+          "reasonCode": "provider_family_upper_bound",
+          "nextAction": "inspect_source_or_provider_status"
+        }
+      ],
       "limitations": ["local-first development backend"]
     }
   ]
@@ -61,9 +84,12 @@ Request:
 }
 ```
 
-### `POST /v1/providers/config/apply`
+### `POST /v1/providers/config/apply` (planned)
 
-Applies provider configuration only after validation, explicit confirmation, `operationId`, and audit reason.
+The current handler validates confirmation, operation id and audit reason and
+reports an apply-shaped result, but it does not persist provider configuration.
+Its manifest maturity is `planned`; clients must not enable it as an executable
+configuration action.
 
 ### `POST /v1/providers/migration/dry-run`
 
@@ -80,9 +106,11 @@ Builds a metadata-only migration plan.
 }
 ```
 
-### `POST /v1/providers/migration/apply`
+### `POST /v1/providers/migration/apply` (planned)
 
-Applies a migration only after confirmation, operation id, and audit reason. The first contract reports the apply outcome and per-ref statuses; provider-specific remote writes can expand behind this shape.
+The current handler reports per-ref metadata outcomes after confirmation,
+operation id and audit reason. It does not copy local values or perform remote
+provider writes. Its manifest maturity is `planned`.
 
 ## Typed outcomes
 

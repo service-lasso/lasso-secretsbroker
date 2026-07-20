@@ -52,9 +52,14 @@ OpenBao uses the same API shape for this MVP:
 Vault/OpenBao capability/status output follows the shared adapter contract in `docs/external-adapter-contract.md`:
 
 - `read` and `reveal` are implemented through bounded HTTP reads.
-- `write/update`, `rotate/reset`, `policy`, `audit`, and `migration` are advertised for provider planning and Service Admin capability checks.
+- Legacy `write/update`, `rotate/reset`, `policy`, `audit`, and `migration`
+  strings describe the adapter contract and planning surface only.
 - Remote write, rotation, policy apply, and migration target apply still require a configured provider operation path before apply is allowed.
 - `value-search` is intentionally not advertised for Vault/OpenBao.
+
+Service Admin must use the connection-scoped operation manifest. Vault/OpenBao
+read/reveal are validated, edit/migration/policy previews are dry-run or planned,
+and all current remote apply operations are unavailable or planned.
 
 ## Auth and backend state mapping
 

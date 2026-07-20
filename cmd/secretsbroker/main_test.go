@@ -39,6 +39,9 @@ func TestCapabilitiesExposeBootstrapContract(t *testing.T) {
 	if caps.ContractVersion != contractVersion {
 		t.Fatalf("contract version = %q", caps.ContractVersion)
 	}
+	if caps.ManifestVersion != operationManifestVersion || len(caps.Operations) == 0 {
+		t.Fatalf("operation manifest = %q operations=%d", caps.ManifestVersion, len(caps.Operations))
+	}
 	assertContains(t, caps.Endpoints, "GET /capabilities")
 	assertContains(t, caps.Endpoints, "GET /ready")
 	assertContains(t, caps.Transports, "loopback-http")
@@ -46,6 +49,7 @@ func TestCapabilitiesExposeBootstrapContract(t *testing.T) {
 	assertContains(t, caps.Transports, "windows-named-pipe")
 	assertContains(t, caps.Features, "readiness")
 	assertContains(t, caps.Features, "batched-resolve")
+	assertContains(t, caps.Features, "versioned-operation-capability-manifest")
 	assertContains(t, caps.Features, "os-ipc-transport-policy")
 	assertContains(t, caps.Features, "unix-socket-peer-credential-checks")
 	assertContains(t, caps.Features, "windows-named-pipe-identity-checks")

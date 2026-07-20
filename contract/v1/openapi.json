@@ -77,6 +77,15 @@
             },
             "type": "array"
           },
+          "manifestVersion": {
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/OperationCapability"
+            },
+            "type": "array"
+          },
           "outcomes": {
             "items": {
               "type": "string"
@@ -102,6 +111,8 @@
           "endpoints",
           "features",
           "futureFeatures",
+          "manifestVersion",
+          "operations",
           "outcomes",
           "serviceId",
           "transports",
@@ -138,6 +149,87 @@
           "ok",
           "serviceId",
           "state"
+        ],
+        "type": "object"
+      },
+      "OperationCapability": {
+        "additionalProperties": true,
+        "properties": {
+          "auditRequired": {
+            "type": "boolean"
+          },
+          "authenticationRequired": {
+            "type": "boolean"
+          },
+          "classification": {
+            "enum": [
+              "read",
+              "mutation"
+            ],
+            "type": "string"
+          },
+          "limitationCode": {
+            "type": "string"
+          },
+          "maturity": {
+            "enum": [
+              "unavailable",
+              "planned",
+              "read-only",
+              "dry-run",
+              "executable",
+              "validated"
+            ],
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "policyRequired": {
+            "type": "boolean"
+          },
+          "providerKinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "broker-local",
+              "provider-remote",
+              "source-boundary",
+              "mixed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "auditRequired",
+          "authenticationRequired",
+          "classification",
+          "limitationCode",
+          "maturity",
+          "method",
+          "nextAction",
+          "operationId",
+          "path",
+          "policyRequired",
+          "providerKinds",
+          "reasonCode",
+          "scope"
         ],
         "type": "object"
       },
@@ -208,6 +300,9 @@
             },
             "type": "array"
           },
+          "auditStatus": {
+            "type": "string"
+          },
           "capabilities": {
             "items": {
               "type": "string"
@@ -238,6 +333,12 @@
           "nextAction": {
             "type": "string"
           },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/OperationCapability"
+            },
+            "type": "array"
+          },
           "outcome": {
             "type": "string"
           },
@@ -260,6 +361,7 @@
         "required": [
           "affectedRefs",
           "affectedServices",
+          "auditStatus",
           "capabilities",
           "critical",
           "displayName",
@@ -267,6 +369,7 @@
           "kind",
           "lifecycle",
           "namespaces",
+          "operations",
           "outcome",
           "priority",
           "retryable",
@@ -1473,6 +1576,12 @@
             },
             "type": "array"
           },
+          "contractVersion": {
+            "type": "string"
+          },
+          "manifestVersion": {
+            "type": "string"
+          },
           "outcome": {
             "type": "string"
           },
@@ -1483,6 +1592,8 @@
         "required": [
           "apiVersion",
           "capabilities",
+          "contractVersion",
+          "manifestVersion",
           "outcome",
           "serviceId"
         ],
@@ -1506,6 +1617,12 @@
             },
             "type": "array"
           },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/OperationCapability"
+            },
+            "type": "array"
+          },
           "providerKind": {
             "type": "string"
           },
@@ -1517,6 +1634,7 @@
           "capabilities",
           "displayName",
           "limitations",
+          "operations",
           "providerKind",
           "supported"
         ],
@@ -1671,6 +1789,12 @@
           "nextAction": {
             "type": "string"
           },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/OperationCapability"
+            },
+            "type": "array"
+          },
           "outcome": {
             "type": "string"
           },
@@ -1689,6 +1813,7 @@
           "capabilities",
           "displayName",
           "namespaces",
+          "operations",
           "outcome",
           "providerId",
           "providerKind",
@@ -1702,8 +1827,14 @@
           "apiVersion": {
             "type": "string"
           },
+          "contractVersion": {
+            "type": "string"
+          },
           "currentProvider": {
             "$ref": "#/components/schemas/providerConfigStatus"
+          },
+          "manifestVersion": {
+            "type": "string"
           },
           "outcome": {
             "type": "string"
@@ -1720,7 +1851,9 @@
         },
         "required": [
           "apiVersion",
+          "contractVersion",
           "currentProvider",
+          "manifestVersion",
           "outcome",
           "providers",
           "serviceId"
@@ -2511,6 +2644,12 @@
           "apiVersion": {
             "type": "string"
           },
+          "contractVersion": {
+            "type": "string"
+          },
+          "manifestVersion": {
+            "type": "string"
+          },
           "serviceId": {
             "type": "string"
           },
@@ -2526,6 +2665,8 @@
         },
         "required": [
           "apiVersion",
+          "contractVersion",
+          "manifestVersion",
           "serviceId",
           "sourceConfig",
           "sources"
@@ -3568,7 +3709,7 @@
   "info": {
     "description": "Canonical metadata-safe contract generated from the Go request and response DTOs. Unknown response fields are compatible additions.",
     "title": "Service Lasso Secrets Broker local API",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
@@ -3606,7 +3747,22 @@
           }
         },
         "security": [],
-        "summary": "Broker routes, features and outcomes"
+        "summary": "Broker routes, features and outcomes",
+        "x-capability": {
+          "operationId": "getcapabilities",
+          "method": "GET",
+          "path": "/capabilities",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": false,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "broker-local",
+          "providerKinds": [],
+          "limitationCode": "release_metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/health": {
@@ -3642,7 +3798,22 @@
           }
         },
         "security": [],
-        "summary": "Broker liveness"
+        "summary": "Broker liveness",
+        "x-capability": {
+          "operationId": "gethealth",
+          "method": "GET",
+          "path": "/health",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": false,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "broker-local",
+          "providerKinds": [],
+          "limitationCode": "liveness_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/ready": {
@@ -3678,7 +3849,22 @@
           }
         },
         "security": [],
-        "summary": "Broker readiness"
+        "summary": "Broker readiness",
+        "x-capability": {
+          "operationId": "getready",
+          "method": "GET",
+          "path": "/ready",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": false,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "broker-local",
+          "providerKinds": [],
+          "limitationCode": "readiness_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/state": {
@@ -3714,7 +3900,22 @@
           }
         },
         "security": [],
-        "summary": "Typed broker lifecycle state"
+        "summary": "Typed broker lifecycle state",
+        "x-capability": {
+          "operationId": "getstate",
+          "method": "GET",
+          "path": "/state",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": false,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "broker-local",
+          "providerKinds": [],
+          "limitationCode": "metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/status": {
@@ -3750,7 +3951,22 @@
           }
         },
         "security": [],
-        "summary": "Safe broker status"
+        "summary": "Safe broker status",
+        "x-capability": {
+          "operationId": "getstatus",
+          "method": "GET",
+          "path": "/status",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": false,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "broker-local",
+          "providerKinds": [],
+          "limitationCode": "metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/v1/events": {
@@ -3895,7 +4111,22 @@
           }
         },
         "security": [],
-        "summary": "List bounded operational events"
+        "summary": "List bounded operational events",
+        "x-capability": {
+          "operationId": "getv1_events",
+          "method": "GET",
+          "path": "/v1/events",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": false,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "broker-local",
+          "providerKinds": [],
+          "limitationCode": "metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/v1/management/lockouts/clear": {
@@ -3948,7 +4179,22 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Clear a scoped local API lockout"
+        "summary": "Clear a scoped local API lockout",
+        "x-capability": {
+          "operationId": "postv1_management_lockouts_clear",
+          "method": "POST",
+          "path": "/v1/management/lockouts/clear",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [],
+          "limitationCode": "scoped_lockout_only",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
       }
     },
     "/v1/management/secrets": {
@@ -4001,7 +4247,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "List managed secret metadata"
+        "summary": "List managed secret metadata",
+        "x-capability": {
+          "operationId": "getv1_management_secrets",
+          "method": "GET",
+          "path": "/v1/management/secrets",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/v1/management/secrets/campaigns/apply": {
@@ -4054,7 +4325,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Apply a bulk secret campaign"
+        "summary": "Apply a bulk secret campaign",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_campaigns_apply",
+          "method": "POST",
+          "path": "/v1/management/secrets/campaigns/apply",
+          "maturity": "planned",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "provider_mutations_not_executed",
+          "reasonCode": "planning_only_not_executable",
+          "nextAction": "do_not_enable_apply"
+        }
       }
     },
     "/v1/management/secrets/campaigns/create": {
@@ -4107,7 +4403,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Create a bulk secret campaign"
+        "summary": "Create a bulk secret campaign",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_campaigns_create",
+          "method": "POST",
+          "path": "/v1/management/secrets/campaigns/create",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "plan_state_only",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
+        }
       }
     },
     "/v1/management/secrets/campaigns/revalidate": {
@@ -4160,7 +4481,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Revalidate a bulk secret campaign"
+        "summary": "Revalidate a bulk secret campaign",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_campaigns_revalidate",
+          "method": "POST",
+          "path": "/v1/management/secrets/campaigns/revalidate",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "plan_state_only",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
+        }
       }
     },
     "/v1/management/secrets/campaigns/status": {
@@ -4213,7 +4559,22 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Read bulk secret campaign status"
+        "summary": "Read bulk secret campaign status",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_campaigns_status",
+          "method": "POST",
+          "path": "/v1/management/secrets/campaigns/status",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "broker-local",
+          "providerKinds": [],
+          "limitationCode": "in_memory_campaign_metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/v1/management/secrets/edit/apply": {
@@ -4266,7 +4627,24 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Apply a managed secret edit"
+        "summary": "Apply a managed secret edit",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_edit_apply",
+          "method": "POST",
+          "path": "/v1/management/secrets/edit/apply",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "limitationCode": "local_store_only",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
       }
     },
     "/v1/management/secrets/edit/dry-run": {
@@ -4319,7 +4697,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Preview a managed secret edit"
+        "summary": "Preview a managed secret edit",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_edit_dry_run",
+          "method": "POST",
+          "path": "/v1/management/secrets/edit/dry-run",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "no_secret_mutation",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
+        }
       }
     },
     "/v1/management/secrets/policy/apply": {
@@ -4372,7 +4775,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Apply a managed secret policy change"
+        "summary": "Apply a managed secret policy change",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_policy_apply",
+          "method": "POST",
+          "path": "/v1/management/secrets/policy/apply",
+          "maturity": "planned",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "policy_binding_not_persisted",
+          "reasonCode": "planning_only_not_executable",
+          "nextAction": "do_not_enable_apply"
+        }
       }
     },
     "/v1/management/secrets/policy/preview": {
@@ -4425,7 +4853,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Preview a managed secret policy change"
+        "summary": "Preview a managed secret policy change",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_policy_preview",
+          "method": "POST",
+          "path": "/v1/management/secrets/policy/preview",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "no_policy_mutation",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
+        }
       }
     },
     "/v1/management/secrets/reset/apply": {
@@ -4478,7 +4931,24 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Apply a managed secret reset"
+        "summary": "Apply a managed secret reset",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_reset_apply",
+          "method": "POST",
+          "path": "/v1/management/secrets/reset/apply",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "limitationCode": "local_store_only",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
       }
     },
     "/v1/management/secrets/reset/dry-run": {
@@ -4531,7 +5001,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Preview a managed secret reset"
+        "summary": "Preview a managed secret reset",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_reset_dry_run",
+          "method": "POST",
+          "path": "/v1/management/secrets/reset/dry-run",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "no_secret_mutation",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
+        }
       }
     },
     "/v1/management/secrets/reveal": {
@@ -4584,7 +5079,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Reveal one managed secret under policy"
+        "summary": "Reveal one managed secret under policy",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_reveal",
+          "method": "POST",
+          "path": "/v1/management/secrets/reveal",
+          "maturity": "validated",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "single_ref_ttl_bounded",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
       }
     },
     "/v1/management/secrets/rotation/dry-run": {
@@ -4637,7 +5157,25 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Preview credential rotation"
+        "summary": "Preview credential rotation",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_rotation_dry_run",
+          "method": "POST",
+          "path": "/v1/management/secrets/rotation/dry-run",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "aws-secrets-manager"
+          ],
+          "limitationCode": "no_rotation_apply_route",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
+        }
       }
     },
     "/v1/management/secrets/sync/dry-run": {
@@ -4690,7 +5228,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Preview secret synchronisation"
+        "summary": "Preview secret synchronisation",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_sync_dry_run",
+          "method": "POST",
+          "path": "/v1/management/secrets/sync/dry-run",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "no_sync_apply_route",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
+        }
       }
     },
     "/v1/management/secrets/value-search": {
@@ -4743,7 +5306,25 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Search secret values without returning them"
+        "summary": "Search secret values without returning them",
+        "x-capability": {
+          "operationId": "getv1_management_secrets_value_search",
+          "method": "GET",
+          "path": "/v1/management/secrets/value-search",
+          "maturity": "validated",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "aws-secrets-manager"
+          ],
+          "limitationCode": "values_never_returned",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
       }
     },
     "/v1/providers/capabilities": {
@@ -4779,7 +5360,32 @@
           }
         },
         "security": [],
-        "summary": "List provider capabilities"
+        "summary": "List provider capabilities",
+        "x-capability": {
+          "operationId": "getv1_providers_capabilities",
+          "method": "GET",
+          "path": "/v1/providers/capabilities",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": false,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "provider_family_upper_bound",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/v1/providers/config/apply": {
@@ -4832,7 +5438,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Apply provider configuration"
+        "summary": "Apply provider configuration",
+        "x-capability": {
+          "operationId": "postv1_providers_config_apply",
+          "method": "POST",
+          "path": "/v1/providers/config/apply",
+          "maturity": "planned",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "configuration_not_persisted",
+          "reasonCode": "planning_only_not_executable",
+          "nextAction": "do_not_enable_apply"
+        }
       }
     },
     "/v1/providers/config/status": {
@@ -4875,7 +5506,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "List safe provider configuration status"
+        "summary": "List safe provider configuration status",
+        "x-capability": {
+          "operationId": "getv1_providers_config_status",
+          "method": "GET",
+          "path": "/v1/providers/config/status",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/v1/providers/config/validate": {
@@ -4928,7 +5584,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Validate provider configuration"
+        "summary": "Validate provider configuration",
+        "x-capability": {
+          "operationId": "postv1_providers_config_validate",
+          "method": "POST",
+          "path": "/v1/providers/config/validate",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "configuration_validation_only",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
+        }
       }
     },
     "/v1/providers/migration/apply": {
@@ -4981,7 +5662,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Apply provider migration"
+        "summary": "Apply provider migration",
+        "x-capability": {
+          "operationId": "postv1_providers_migration_apply",
+          "method": "POST",
+          "path": "/v1/providers/migration/apply",
+          "maturity": "planned",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "migration_items_not_copied",
+          "reasonCode": "planning_only_not_executable",
+          "nextAction": "do_not_enable_apply"
+        }
       }
     },
     "/v1/providers/migration/dry-run": {
@@ -5034,7 +5740,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Plan provider migration"
+        "summary": "Plan provider migration",
+        "x-capability": {
+          "operationId": "postv1_providers_migration_dry_run",
+          "method": "POST",
+          "path": "/v1/providers/migration/dry-run",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "local_target_only",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
+        }
       }
     },
     "/v1/provisioning/operations/apply": {
@@ -5087,7 +5818,24 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Apply a provisioning operation"
+        "summary": "Apply a provisioning operation",
+        "x-capability": {
+          "operationId": "postv1_provisioning_operations_apply",
+          "method": "POST",
+          "path": "/v1/provisioning/operations/apply",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "limitationCode": "broker_generated_local_values_only",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
       }
     },
     "/v1/provisioning/operations/plan": {
@@ -5140,7 +5888,24 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Plan a provisioning operation"
+        "summary": "Plan a provisioning operation",
+        "x-capability": {
+          "operationId": "postv1_provisioning_operations_plan",
+          "method": "POST",
+          "path": "/v1/provisioning/operations/plan",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "limitationCode": "no_secret_mutation",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
+        }
       }
     },
     "/v1/provisioning/status": {
@@ -5201,7 +5966,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "List generated-secret provisioning status"
+        "summary": "List generated-secret provisioning status",
+        "x-capability": {
+          "operationId": "getv1_provisioning_status",
+          "method": "GET",
+          "path": "/v1/provisioning/status",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/v1/recovery/policy": {
@@ -5237,7 +6027,24 @@
           }
         },
         "security": [],
-        "summary": "Read recovery policy metadata"
+        "summary": "Read recovery policy metadata",
+        "x-capability": {
+          "operationId": "getv1_recovery_policy",
+          "method": "GET",
+          "path": "/v1/recovery/policy",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": false,
+          "policyRequired": false,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "limitationCode": "recovery_metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       },
       "post": {
         "operationId": "postv1_recovery_policy",
@@ -5288,7 +6095,24 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Create or update recovery policy metadata"
+        "summary": "Create or update recovery policy metadata",
+        "x-capability": {
+          "operationId": "postv1_recovery_policy",
+          "method": "POST",
+          "path": "/v1/recovery/policy",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "limitationCode": "metadata_only_no_share_material",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
       }
     },
     "/v1/resolve": {
@@ -5341,7 +6165,32 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Resolve a batch of secret references"
+        "summary": "Resolve a batch of secret references",
+        "x-capability": {
+          "operationId": "postv1_resolve",
+          "method": "POST",
+          "path": "/v1/resolve",
+          "maturity": "validated",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "runtime_controls_revalidated",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
       }
     },
     "/v1/secrets": {
@@ -5394,7 +6243,24 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Write a local secret"
+        "summary": "Write a local secret",
+        "x-capability": {
+          "operationId": "postv1_secrets",
+          "method": "POST",
+          "path": "/v1/secrets",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "limitationCode": "local_store_only",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
       }
     },
     "/v1/sources/status": {
@@ -5430,7 +6296,32 @@
           }
         },
         "security": [],
-        "summary": "List source lifecycle and capability status"
+        "summary": "List source lifecycle and capability status",
+        "x-capability": {
+          "operationId": "getv1_sources_status",
+          "method": "GET",
+          "path": "/v1/sources/status",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": false,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao",
+            "aws-secrets-manager",
+            "env",
+            "file",
+            "exec",
+            "bitwarden-bws",
+            "onepassword-cli"
+          ],
+          "limitationCode": "metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/v1/telemetry": {
@@ -5466,7 +6357,22 @@
           }
         },
         "security": [],
-        "summary": "Read redacted telemetry"
+        "summary": "Read redacted telemetry",
+        "x-capability": {
+          "operationId": "getv1_telemetry",
+          "method": "GET",
+          "path": "/v1/telemetry",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": false,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "broker-local",
+          "providerKinds": [],
+          "limitationCode": "redacted_metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
       }
     },
     "/v1/telemetry/export": {
@@ -5502,7 +6408,22 @@
           }
         },
         "security": [],
-        "summary": "Export redacted telemetry"
+        "summary": "Export redacted telemetry",
+        "x-capability": {
+          "operationId": "postv1_telemetry_export",
+          "method": "POST",
+          "path": "/v1/telemetry/export",
+          "maturity": "executable",
+          "classification": "mutation",
+          "authenticationRequired": false,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "provider-remote",
+          "providerKinds": [],
+          "limitationCode": "configured_exporter_only",
+          "reasonCode": "implemented_executable",
+          "nextAction": "satisfy_runtime_preconditions"
+        }
       }
     },
     "/v1/writeback": {
@@ -5555,7 +6476,24 @@
             "localHeaderToken": []
           }
         ],
-        "summary": "Capture a generated secret"
+        "summary": "Capture a generated secret",
+        "x-capability": {
+          "operationId": "postv1_writeback",
+          "method": "POST",
+          "path": "/v1/writeback",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "limitationCode": "local_store_only",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
       }
     }
   },
@@ -5570,6 +6508,7 @@
     "breakingChanges": "new major contract version",
     "unknownResponseFields": "ignore"
   },
-  "x-contract-version": "1.0.0",
+  "x-contract-version": "1.1.0",
+  "x-operation-manifest-version": "1.0.0",
   "x-service-id": "@secretsbroker"
 }

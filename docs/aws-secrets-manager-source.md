@@ -2,6 +2,11 @@
 
 `aws-secrets-manager` is a Secrets Broker source kind behind the stable `@secretsbroker` contract. It may reveal secret values to broker resolution and broker-internal value-search paths, but status, diagnostics, management lists, audit events, logs, and fixtures remain metadata-only.
 
+The connection-scoped operation manifest is authoritative for action
+enablement. Read/reveal and metadata-only value search are validated; rotation
+planning is dry-run; remote edit, reset, rotation, policy, migration, and sync
+apply paths are not currently executable.
+
 ## Source config
 
 AWS sources use the same `SECRETSBROKER_SOURCES_PATH` config as other external adapters:
