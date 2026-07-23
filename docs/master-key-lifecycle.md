@@ -40,6 +40,20 @@ secretsbroker key initialize `
 
 Creates an empty encrypted local store if one does not already exist and validates the portable key format. The response includes `outcome`, `state`, `keyId`, `storePath`, and `nextAction`; it does not include the portable key.
 
+First initialization also creates the Service Lasso vault root owner identity and stores safe metadata under `rootIdentity`. The root identity is the vault owner for bootstrap/recovery contract purposes and is not OS root/admin. The store records only metadata such as vault id, root actor id, key id/fingerprint, key source type, machine context, and loss semantics.
+
+### Initialize with broker-generated key
+
+```powershell
+secretsbroker key initialize `
+  --store .\data\secretsbroker-store.json `
+  --audit .\data\secretsbroker-audit.jsonl `
+  --generate `
+  --one-time-reveal
+```
+
+When the broker generates the bootstrap key, `--one-time-reveal` is required for the CLI setup ceremony. The generated key appears only in the initialize response. The store, wrapper, audit log, event log, and later status metadata contain only safe key id/fingerprint and source metadata.
+
 ### Unlock with portable master key
 
 ```powershell
@@ -95,6 +109,12 @@ Reports whether a local wrapper exists, whether the current OS wrapper provider 
 Lifecycle operations emit audit events with operation, outcome, timestamp, and safe metadata only:
 
 - `key_initialize`
+- `key_generated`
+- `supplied_key_used`
+- `vault_created`
+- `root_identity_created`
+- `setup_completed`
+- `vault_unlock_failure`
 - `key_unlock`
 - `key_import`
 - `key_rewrap`

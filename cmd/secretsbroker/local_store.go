@@ -56,14 +56,16 @@ type localBackend struct {
 }
 
 type localStoreFile struct {
-	Version    int                     `json:"version"`
-	ServiceID  string                  `json:"serviceId"`
-	KeyID      string                  `json:"keyId,omitempty"`
-	KeyVersion string                  `json:"keyVersion,omitempty"`
-	CreatedAt  time.Time               `json:"createdAt"`
-	UpdatedAt  time.Time               `json:"updatedAt"`
-	Secrets    map[string]secretEntry  `json:"secrets"`
-	Recovery   *recoveryPolicyMetadata `json:"recoveryPolicy,omitempty"`
+	Version      int                        `json:"version"`
+	ServiceID    string                     `json:"serviceId"`
+	VaultID      string                     `json:"vaultId,omitempty"`
+	KeyID        string                     `json:"keyId,omitempty"`
+	KeyVersion   string                     `json:"keyVersion,omitempty"`
+	RootIdentity *vaultRootIdentityMetadata `json:"rootIdentity,omitempty"`
+	CreatedAt    time.Time                  `json:"createdAt"`
+	UpdatedAt    time.Time                  `json:"updatedAt"`
+	Secrets      map[string]secretEntry     `json:"secrets"`
+	Recovery     *recoveryPolicyMetadata    `json:"recoveryPolicy,omitempty"`
 }
 
 type secretEntry struct {
