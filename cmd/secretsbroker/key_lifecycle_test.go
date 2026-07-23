@@ -37,6 +37,12 @@ func TestInitializeUnlockImportAndRewrapMasterKeyLifecycle(t *testing.T) {
 	if initialized.State != "ready" || initialized.KeyID != masterKeyID(key) || initialized.SecretCount != 0 || strings.Contains(initialized.RecoveryGuidance, key) {
 		t.Fatalf("initialize response = %#v", initialized)
 	}
+	if initialized.RootIdentity == nil || initialized.RootIdentity.VaultID == "" || initialized.RootIdentity.RootActorID == "" || initialized.RootIdentity.KeySourceType != "supplied" {
+		t.Fatalf("initialize response missing root identity metadata: %#v", initialized.RootIdentity)
+	}
+	if initialized.BootstrapKey == nil || initialized.BootstrapKey.SourceType != "supplied" || initialized.BootstrapKey.Fingerprint != masterKeyID(key) {
+		t.Fatalf("initialize response missing bootstrap key metadata: %#v", initialized.BootstrapKey)
+	}
 
 	unlocked, err := backend.unlockWithMasterKey(key)
 	if err != nil {
@@ -71,6 +77,109 @@ func TestInitializeUnlockImportAndRewrapMasterKeyLifecycle(t *testing.T) {
 	}
 }
 
+func TestInitializeStoreCreatesRootIdentityAndSafeAuditContract(t *testing.T) {
+	key := lifecycleTestKey(11)
+	backend := lifecycleBackend(t, key)
+
+	initialized, err := backend.initializeStoreWithSource(key, "file", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if initialized.OneTimeReveal != nil {
+		t.Fatalf("supplied-key bootstrap must not include one-time reveal: %#v", initialized.OneTimeReveal)
+	}
+	if initialized.RootIdentity == nil || initialized.RootIdentity.KeySourceType != "supplied_file" || initialized.RootIdentity.LossSemantics.RecoverableWithoutKey {
+		t.Fatalf("root identity metadata = %#v", initialized.RootIdentity)
+	}
+	if initialized.BootstrapKey == nil || initialized.BootstrapKey.Generated || initialized.BootstrapKey.OneTimeRevealAvailable {
+		t.Fatalf("bootstrap key metadata = %#v", initialized.BootstrapKey)
+	}
+
+	bytes, err := os.ReadFile(backend.storePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(bytes), key) {
+		t.Fatalf("store leaked supplied key material: %s", string(bytes))
+	}
+	var store localStoreFile
+	if err := json.Unmarshal(bytes, &store); err != nil {
+		t.Fatal(err)
+	}
+	if store.VaultID != initialized.RootIdentity.VaultID || store.RootIdentity == nil || store.RootIdentity.RootActorID != initialized.RootIdentity.RootActorID {
+		t.Fatalf("stored root identity = %#v", store.RootIdentity)
+	}
+
+	auditBytes, err := os.ReadFile(backend.auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	audit := string(auditBytes)
+	if strings.Contains(audit, key) {
+		t.Fatalf("audit leaked supplied key material: %s", audit)
+	}
+	for _, want := range []string{"supplied_key_used", "vault_created", "root_identity_created", "setup_completed"} {
+		if !strings.Contains(audit, want) {
+			t.Fatalf("audit missing %q: %s", want, audit)
+		}
+	}
+}
+
+func TestGeneratedBootstrapOneTimeRevealIsResponseOnly(t *testing.T) {
+	key := lifecycleTestKey(12)
+	backend := lifecycleBackend(t, key)
+
+	initialized, err := backend.initializeStoreWithSource(key, "generated", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if initialized.OneTimeReveal == nil || initialized.OneTimeReveal.MasterKey != key {
+		t.Fatalf("generated bootstrap missing one-time reveal: %#v", initialized.OneTimeReveal)
+	}
+	if initialized.BootstrapKey == nil || !initialized.BootstrapKey.Generated || !initialized.BootstrapKey.OneTimeRevealAvailable {
+		t.Fatalf("generated bootstrap key metadata = %#v", initialized.BootstrapKey)
+	}
+
+	storeBytes, err := os.ReadFile(backend.storePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auditBytes, err := os.ReadFile(backend.auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(storeBytes), key) {
+		t.Fatalf("store leaked generated key material: %s", string(storeBytes))
+	}
+	if strings.Contains(string(auditBytes), key) {
+		t.Fatalf("audit leaked generated key material: %s", string(auditBytes))
+	}
+	for _, want := range []string{"key_generated", "vault_created", "root_identity_created", "setup_completed"} {
+		if !strings.Contains(string(auditBytes), want) {
+			t.Fatalf("audit missing %q: %s", want, string(auditBytes))
+		}
+	}
+}
+
+func TestGeneratedBootstrapRequiresExplicitOneTimeReveal(t *testing.T) {
+	key := lifecycleTestKey(13)
+	dir := t.TempDir()
+	storePath := filepath.Join(dir, "store.json")
+	auditPath := filepath.Join(dir, "audit.jsonl")
+	err := runKeyInitialize([]string{"--store", storePath, "--audit", auditPath, "--generate"})
+	if !errors.Is(err, errOneTimeRevealMissing) {
+		t.Fatalf("generated initialize err = %v, want %v", err, errOneTimeRevealMissing)
+	}
+
+	backend := newLocalBackend(filepath.Join(dir, "generated-store.json"), filepath.Join(dir, "generated-audit.jsonl"), key)
+	if _, err := backend.initializeStoreWithSource(key, "generated", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(backend.storePath); err != nil {
+		t.Fatalf("direct generated bootstrap should still initialize store: %v", err)
+	}
+}
+
 func TestUnlockFailureWrongKeyAndCorruptedCiphertext(t *testing.T) {
 	key := lifecycleTestKey(8)
 	wrong := lifecycleTestKey(9)
@@ -85,6 +194,13 @@ func TestUnlockFailureWrongKeyAndCorruptedCiphertext(t *testing.T) {
 	wrongBackend := newLocalBackend(backend.storePath, filepath.Join(t.TempDir(), "wrong-audit.jsonl"), wrong)
 	if _, err := wrongBackend.unlockWithMasterKey(wrong); !errors.Is(err, errInvalidBackupKey) {
 		t.Fatalf("wrong-key unlock err = %v", err)
+	}
+	wrongAudit, err := os.ReadFile(wrongBackend.auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(wrongAudit), "vault_unlock_failure") || strings.Contains(string(wrongAudit), wrong) {
+		t.Fatalf("wrong-key audit = %s", string(wrongAudit))
 	}
 
 	bytes, err := os.ReadFile(backend.storePath)
