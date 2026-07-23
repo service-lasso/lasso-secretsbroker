@@ -43,7 +43,10 @@
       }
     }
   },
-  "healthcheck": {
-    "type": "process"
-  }
+  "healthchecks": [
+    {
+      "id": "serviceadmin-process-health",
+      "type": "process"
+    }
+  ]
 }

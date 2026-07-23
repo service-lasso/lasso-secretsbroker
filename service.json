@@ -140,11 +140,14 @@
       "SECRETSBROKER_STATE": "setup_needed",
       "SECRETSBROKER_LISTEN": "127.0.0.1:17890"
     },
-    "depend_on": [],
-    "healthcheck": {
+    "depend_on": []
+  },
+  "healthchecks": [
+    {
+      "id": "secretsbroker-http-health",
       "type": "http",
       "url": "http://127.0.0.1:17890/health",
       "timeoutSeconds": 5
     }
-  }
+  ]
 }
