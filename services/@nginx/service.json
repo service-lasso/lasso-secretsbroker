@@ -91,11 +91,14 @@
       }
     ]
   },
-  "healthcheck": {
-    "type": "http",
-    "url": "http://127.0.0.1:${HTTP_PORT}/health",
-    "expected_status": 200,
-    "retries": 80,
-    "interval": 250
-  }
+  "healthchecks": [
+    {
+      "id": "nginx-http-health",
+      "type": "http",
+      "url": "http://127.0.0.1:${HTTP_PORT}/health",
+      "expected_status": 200,
+      "retries": 80,
+      "interval": 250
+    }
+  ]
 }

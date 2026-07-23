@@ -10,7 +10,7 @@ Key starter files:
 - `scripts/package.*` - reference packaging entrypoints
 - `runtime/` - sample payload/runtime files
 - `config/` - example config inputs
-- `docs/service-json-reference.md` - one-stop reference for `service.json` fields, healthcheck setup, and first-pass contract guidance
+- `docs/service-json-reference.md` - one-stop reference for `service.json` fields, `healthchecks[]` setup, and first-pass contract guidance
 
 This starter is intentionally minimal. It is meant to prove the contract shape, not to be a full production service.
 

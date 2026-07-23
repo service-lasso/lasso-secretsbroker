@@ -69,7 +69,10 @@
       "kind": "local"
     }
   ],
-  "healthcheck": {
-    "type": "process"
-  }
+  "healthchecks": [
+    {
+      "id": "echo-process-health",
+      "type": "process"
+    }
+  ]
 }
