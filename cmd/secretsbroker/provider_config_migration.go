@@ -326,11 +326,17 @@ func (b *localBackend) buildMigrationPlan(req migrationPlanRequest, operation st
 		return res, errLocked
 	}
 	target := b.lookupProvider(req.TargetProviderID)
-	if !providerCanBeMigrationTarget(target.ProviderKind) || target.Outcome != "ready" {
+	if !providerCanPlanMigrationTarget(target.ProviderKind) || target.Outcome != "ready" {
 		res.Outcome = providerMigrationOutcome(target)
 		res.NextAction = providerNextAction(res.Outcome)
 		res.Results = b.migrationItems(req, target, apply, res.Outcome)
 		return res, outcomeErrorForProvider(res.Outcome)
+	}
+	if apply && !providerCanApplyMigrationTarget(target.ProviderKind) {
+		res.Outcome = "unsupported"
+		res.NextAction = "implement_provider_operation_executor"
+		res.Results = b.migrationItems(req, target, apply, res.Outcome)
+		return res, errUnsupportedProvider
 	}
 	res.Results = b.migrationItems(req, target, apply, "")
 	res.Outcome = migrationAggregateOutcome(res.Results, apply)
@@ -358,7 +364,7 @@ func (b *localBackend) migrationItems(req migrationPlanRequest, target providerC
 	sort.Strings(refs)
 	items := make([]migrationItemStatus, 0, len(refs))
 	for _, ref := range refs {
-		item := migrationItemStatus{Ref: ref, SourceProviderID: firstNonEmpty(req.SourceProviderID, "local"), TargetProviderID: req.TargetProviderID, OwnerServiceID: ownerFromRef(ref), Risk: "low", ExpectedAction: "copy_value_inside_broker", PolicyResult: "allowed", AuditRequirement: "required", Recovery: "retry_after_fix_or_restore_from_backup"}
+		item := migrationItemStatus{Ref: ref, SourceProviderID: firstNonEmpty(req.SourceProviderID, "local"), TargetProviderID: req.TargetProviderID, OwnerServiceID: ownerFromRef(ref), Risk: migrationRiskForTarget(target.ProviderKind), ExpectedAction: migrationExpectedActionForTarget(target.ProviderKind, apply, forcedOutcome), PolicyResult: "allowed", AuditRequirement: "required", Recovery: migrationRecoveryForTarget(target.ProviderKind)}
 		if forcedOutcome != "" {
 			item.State = "failed"
 			item.Outcome = forcedOutcome
@@ -401,8 +407,44 @@ func (b *localBackend) lookupProvider(providerID string) providerConfigStatus {
 	return providerStatusWithOperations(providerConfigStatus{ProviderID: providerID, ProviderKind: kind, DisplayName: providerID, State: "unsupported", Outcome: "unsupported", Capabilities: capability.Capabilities, Namespaces: []string{}, AuditStatus: "audit_available"})
 }
 
-func providerCanBeMigrationTarget(kind string) bool {
+func providerCanPlanMigrationTarget(kind string) bool {
+	if kind == "local-encrypted-store" {
+		return true
+	}
+	contract, ok := adapterContractForKind(kind)
+	return ok && adapterHasCapability(contract, AdapterCapabilityMigration) && adapterHasCapability(contract, AdapterCapabilityWrite)
+}
+
+func providerCanApplyMigrationTarget(kind string) bool {
 	return kind == "local-encrypted-store"
+}
+
+func providerUsesRemoteMutationPath(kind string) bool {
+	return providerCanPlanMigrationTarget(kind) && !providerCanApplyMigrationTarget(kind)
+}
+
+func migrationRiskForTarget(kind string) string {
+	if providerUsesRemoteMutationPath(kind) {
+		return "medium"
+	}
+	return "low"
+}
+
+func migrationExpectedActionForTarget(kind string, apply bool, forcedOutcome string) string {
+	if providerUsesRemoteMutationPath(kind) {
+		if apply || forcedOutcome != "" {
+			return "implement_provider_operation_executor"
+		}
+		return "write_value_to_remote_provider_after_revalidation"
+	}
+	return "copy_value_inside_broker"
+}
+
+func migrationRecoveryForTarget(kind string) string {
+	if providerUsesRemoteMutationPath(kind) {
+		return "source_retained_until_target_verification_succeeds"
+	}
+	return "retry_after_fix_or_restore_from_backup"
 }
 
 func providerMigrationOutcome(target providerConfigStatus) string {

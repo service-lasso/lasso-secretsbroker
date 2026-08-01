@@ -124,17 +124,62 @@ func TestMigrationUnsupportedTargetAndLockedFailClosed(t *testing.T) {
 	writeManagedTestSecret(t, backend, "services/@serviceadmin/runtime/SESSION_SIGNING_KEY", managedSecretValue)
 	backend.sources = sourceConfigFile{Sources: []sourceConfig{{SourceID: "vault-readonly", Kind: "vault", Enabled: true, Address: "https://vault.invalid", Token: "token-fixture", Refs: map[string]sourceRefConfig{"services/api/runtime/API_TOKEN": {Path: "secret/data/api", Field: "token"}}}}}
 
-	unsupported, err := backend.migrationDryRun(migrationPlanRequest{RequestID: "req-vault-target", ServiceID: "@serviceadmin", OperationID: "migration-op-b", TargetProviderID: "vault-readonly"})
-	if err == nil || unsupported.Outcome != "unsupported" || len(unsupported.Results) == 0 {
-		t.Fatalf("unsupported target response = %#v err=%v", unsupported, err)
+	planned, err := backend.migrationDryRun(migrationPlanRequest{RequestID: "req-vault-target", ServiceID: "@serviceadmin", OperationID: "migration-op-b", TargetProviderID: "vault-readonly"})
+	if err != nil || planned.Outcome != "dry_run_ready" || len(planned.Results) == 0 {
+		t.Fatalf("remote target dry-run response = %#v err=%v", planned, err)
 	}
-	assertNoSecretMaterial(t, mustManagedJSON(t, unsupported), managedSecretValue, "token-fixture")
+	assertNoSecretMaterial(t, mustManagedJSON(t, planned), managedSecretValue, "token-fixture")
 
 	locked := newLocalBackend(t.TempDir()+"/store.json", t.TempDir()+"/audit.jsonl", "")
 	lockedPlan, err := locked.migrationDryRun(migrationPlanRequest{RequestID: "req-locked", ServiceID: "@serviceadmin", OperationID: "migration-op-c", TargetProviderID: "local"})
 	if err == nil || lockedPlan.Outcome != "locked" || len(lockedPlan.Results) != 0 {
 		t.Fatalf("locked migration response = %#v err=%v", lockedPlan, err)
 	}
+}
+
+func TestMigrationDryRunPlansConfiguredRemoteProviderTargets(t *testing.T) {
+	backend := managedTestBackend(t)
+	writeManagedTestSecret(t, backend, "services/@serviceadmin/runtime/SESSION_SIGNING_KEY", managedSecretValue)
+	backend.sources = sourceConfigFile{Sources: []sourceConfig{
+		{SourceID: "vault-ready", Kind: "vault", Enabled: true, Address: "https://vault.invalid", Token: "vault-token-fixture", Refs: map[string]sourceRefConfig{"services/api/runtime/API_TOKEN": {Path: "secret/data/api", Field: "token"}}},
+		{SourceID: "openbao-ready", Kind: "openbao", Enabled: true, Address: "https://openbao.invalid", Token: "openbao-token-fixture", Refs: map[string]sourceRefConfig{"services/api/runtime/API_TOKEN": {Path: "secret/data/api", Field: "token"}}},
+		{SourceID: "aws-ready", Kind: "aws-secrets-manager", Enabled: true, Address: "https://aws.invalid", Token: "aws-token-fixture", Refs: map[string]sourceRefConfig{"services/api/runtime/API_TOKEN": {Path: "service-lasso/api/token"}}},
+	}}
+
+	for _, target := range []string{"vault-ready", "openbao-ready", "aws-ready"} {
+		t.Run(target, func(t *testing.T) {
+			plan, err := backend.migrationDryRun(migrationPlanRequest{RequestID: "req-remote-plan", ServiceID: "@serviceadmin", OperationID: "migration-op-remote", SourceProviderID: "local", TargetProviderID: target, Refs: []string{"services/@serviceadmin/runtime/SESSION_SIGNING_KEY"}})
+			if err != nil || plan.Outcome != "dry_run_ready" || plan.Applied || len(plan.Results) != 1 {
+				t.Fatalf("remote migration dry-run = %#v err=%v", plan, err)
+			}
+			item := plan.Results[0]
+			if item.State != "planned" || item.Outcome != "dry_run_ready" || item.Risk != "medium" || item.ExpectedAction != "write_value_to_remote_provider_after_revalidation" {
+				t.Fatalf("remote migration item = %#v", item)
+			}
+			if item.Recovery != "source_retained_until_target_verification_succeeds" {
+				t.Fatalf("remote migration recovery should preserve source until verification: %#v", item)
+			}
+			assertNoSecretMaterial(t, mustManagedJSON(t, plan), managedSecretValue, "vault-token-fixture", "openbao-token-fixture", "aws-token-fixture")
+		})
+	}
+}
+
+func TestMigrationApplyRemoteProviderFailsClosedUntilExecutorExists(t *testing.T) {
+	backend := managedTestBackend(t)
+	writeManagedTestSecret(t, backend, "services/@serviceadmin/runtime/SESSION_SIGNING_KEY", managedSecretValue)
+	backend.sources = sourceConfigFile{Sources: []sourceConfig{{
+		SourceID: "aws-ready", Kind: "aws-secrets-manager", Enabled: true, Address: "https://aws.invalid", Token: "aws-token-fixture", Refs: map[string]sourceRefConfig{"services/api/runtime/API_TOKEN": {Path: "service-lasso/api/token"}},
+	}}}
+
+	apply, err := backend.migrationApply(migrationPlanRequest{RequestID: "req-remote-apply", ServiceID: "@serviceadmin", OperationID: "migration-op-remote", SourceProviderID: "local", TargetProviderID: "aws-ready", Refs: []string{"services/@serviceadmin/runtime/SESSION_SIGNING_KEY"}, Confirm: true, Reason: "approved remote migration"})
+	if err == nil || apply.Applied || apply.Outcome != "unsupported" || apply.NextAction != "implement_provider_operation_executor" || len(apply.Results) != 1 {
+		t.Fatalf("remote migration apply should fail closed: %#v err=%v", apply, err)
+	}
+	item := apply.Results[0]
+	if item.State != "failed" || item.Outcome != "unsupported" || item.ExpectedAction != "implement_provider_operation_executor" {
+		t.Fatalf("remote migration apply item = %#v", item)
+	}
+	assertNoSecretMaterial(t, mustManagedJSON(t, apply), managedSecretValue, "aws-token-fixture")
 }
 
 func TestProviderConfigMigrationHTTPContract(t *testing.T) {

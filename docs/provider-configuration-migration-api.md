@@ -106,11 +106,20 @@ Builds a metadata-only migration plan.
 }
 ```
 
+Configured remote targets whose adapter contract supports write/update and
+migration, including Vault/OpenBao and AWS Secrets Manager, are valid dry-run
+targets. Remote dry-runs return per-ref `planned` items with
+`expectedAction: "write_value_to_remote_provider_after_revalidation"` and
+`recovery: "source_retained_until_target_verification_succeeds"` so clients can
+show the exact remote operation path without copying or returning secret values.
+
 ### `POST /v1/providers/migration/apply` (planned)
 
 The current handler reports per-ref metadata outcomes after confirmation,
 operation id and audit reason. It does not copy local values or perform remote
-provider writes. Its manifest maturity is `planned`.
+provider writes. Remote targets fail closed with `outcome: "unsupported"` and
+`nextAction: "implement_provider_operation_executor"` until a provider-specific
+executor is wired and validated. Its manifest maturity is `planned`.
 
 ## Typed outcomes
 
