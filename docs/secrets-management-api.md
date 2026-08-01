@@ -466,6 +466,41 @@ Campaign apply is retry-safe by `idempotencyKey` and `operationItemId`. The firs
 
 Preview/apply policy changes. This first contract records the requested policy handle/status and returns metadata-only outcomes; provider-specific enforcement can be expanded behind the same response shape.
 
+## Operation lifecycle and status
+
+The current management endpoints are synchronous request/response operations.
+`GET /capabilities` is the machine-readable authority: every management
+operation record currently has `"completionMode": "synchronous"` and no
+`statusPath`.
+
+Service Admin must not invent or poll a secret-operation status endpoint unless
+the selected operation advertises `"completionMode": "asynchronous"` with a
+non-empty `statusPath`. A future asynchronous operation must return an operation
+id, correlation id, terminal state, retry safety, and metadata-only status
+response before it can be advertised as executable.
+
+## Delete, disable and decommission
+
+No delete, disable, or decommission management route is implemented or
+advertised in this release. Admin must therefore hide destructive actions or
+show them as unavailable from the operation manifest instead of calling a
+non-existent endpoint.
+
+Future destructive routes must keep these semantics separate:
+
+- `disable`: stop new use while retaining recoverable metadata and value
+  material according to retention policy.
+- `delete`: remove a managed secret only after dry-run dependency checks,
+  explicit confirmation, audit reason, policy approval, and recovery/retention
+  decision.
+- `decommission`: retire a service-owned secret set with dependency impact,
+  generated configuration impact, audit, tombstone, and recovery metadata.
+
+Destructive dry-runs must be metadata-only and must report dependency, policy,
+audit, lockout, stale-plan, unsupported-provider, and recovery blockers before
+any apply route can mutate state. Apply requests must be idempotent through a
+server-issued plan or must return an explicit non-retry-safe result.
+
 ## Typed outcomes
 
 Common outcomes: `ready`, `dry_run_ready`, `applied`, `migrated`, `partial_failure`, `missing_ref`, `invalid_ref`, `locked`, `policy_denied`, `source_auth_required`, `source_unavailable`, `unsupported`, `degraded`, `audit_unavailable`, `stale`, `stale_plan`, `skipped`, `failed`.

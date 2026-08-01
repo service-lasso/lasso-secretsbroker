@@ -34,6 +34,13 @@ const (
 	OperationScopeMixed          OperationScope = "mixed"
 )
 
+type OperationCompletionMode string
+
+const (
+	OperationCompletionSynchronous  OperationCompletionMode = "synchronous"
+	OperationCompletionAsynchronous OperationCompletionMode = "asynchronous"
+)
+
 // OperationCapability is the canonical machine-readable release statement for
 // one Broker HTTP operation. Codes are intentionally safe for logs and UI.
 type OperationCapability struct {
@@ -47,6 +54,8 @@ type OperationCapability struct {
 	AuditRequired          bool                    `json:"auditRequired"`
 	Scope                  OperationScope          `json:"scope"`
 	ProviderKinds          []string                `json:"providerKinds"`
+	CompletionMode         OperationCompletionMode `json:"completionMode"`
+	StatusPath             string                  `json:"statusPath,omitempty"`
 	LimitationCode         string                  `json:"limitationCode"`
 	ReasonCode             string                  `json:"reasonCode"`
 	NextAction             string                  `json:"nextAction"`
@@ -84,6 +93,7 @@ func manifestOperation(method, path string, maturity OperationMaturity, classifi
 		AuditRequired:          auditRequired,
 		Scope:                  scope,
 		ProviderKinds:          append([]string{}, providerKinds...),
+		CompletionMode:         OperationCompletionSynchronous,
 		LimitationCode:         limitationCode,
 		ReasonCode:             reasonCode,
 		NextAction:             nextAction,

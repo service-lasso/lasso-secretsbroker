@@ -368,6 +368,8 @@ func (b *contractSchemaBuilder) schemaFor(typ reflect.Type) map[string]any {
 			schema["enum"] = []string{"read", "mutation"}
 		case "OperationScope":
 			schema["enum"] = []string{"broker-local", "provider-remote", "source-boundary", "mixed"}
+		case "OperationCompletionMode":
+			schema["enum"] = []string{"synchronous", "asynchronous"}
 		}
 		return schema
 	case reflect.Bool:

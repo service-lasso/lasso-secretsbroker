@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -24,6 +25,10 @@ func TestOperationManifestRecordsAreCompleteAndRegistered(t *testing.T) {
 		OperationScopeSourceBoundary: true,
 		OperationScopeMixed:          true,
 	}
+	validCompletionMode := map[OperationCompletionMode]bool{
+		OperationCompletionSynchronous:  true,
+		OperationCompletionAsynchronous: true,
+	}
 
 	backend := managedTestBackend(t)
 	state := "ready"
@@ -43,8 +48,14 @@ func TestOperationManifestRecordsAreCompleteAndRegistered(t *testing.T) {
 			t.Fatalf("duplicate operation route %q", key)
 		}
 		seenRoutes[key] = true
-		if !validMaturity[operation.Maturity] || !validClassification[operation.Classification] || !validScope[operation.Scope] {
+		if !validMaturity[operation.Maturity] || !validClassification[operation.Classification] || !validScope[operation.Scope] || !validCompletionMode[operation.CompletionMode] {
 			t.Fatalf("invalid operation classification for %s: %#v", key, operation)
+		}
+		if operation.CompletionMode == OperationCompletionSynchronous && operation.StatusPath != "" {
+			t.Fatalf("synchronous operation must not advertise polling status path for %s: %#v", key, operation)
+		}
+		if operation.CompletionMode == OperationCompletionAsynchronous && operation.StatusPath == "" {
+			t.Fatalf("asynchronous operation must advertise a status path for %s: %#v", key, operation)
 		}
 		if operation.LimitationCode == "" || operation.ReasonCode == "" || operation.NextAction == "" || operation.ProviderKinds == nil {
 			t.Fatalf("operation safe decision fields are incomplete for %s: %#v", key, operation)
@@ -58,6 +69,27 @@ func TestOperationManifestRecordsAreCompleteAndRegistered(t *testing.T) {
 		handler.ServeHTTP(response, request)
 		if response.Code == 404 {
 			t.Errorf("manifest route is not registered: %s", key)
+		}
+	}
+}
+
+func TestManagementOperationsAdvertiseSynchronousNoPollingContract(t *testing.T) {
+	for _, endpoint := range defaultCapabilities().Endpoints {
+		if endpoint == "GET /v1/management/secret-operations/{operationId}" ||
+			endpoint == "GET /v1/management/secrets/operations/{operationId}" {
+			t.Fatalf("capabilities advertise unsupported management operation polling endpoint: %s", endpoint)
+		}
+	}
+
+	for _, operation := range defaultOperationManifest() {
+		if !strings.HasPrefix(operation.Path, "/v1/management/secrets/") {
+			continue
+		}
+		if operation.CompletionMode != OperationCompletionSynchronous {
+			t.Fatalf("management operation should complete synchronously until async status is implemented: %#v", operation)
+		}
+		if operation.StatusPath != "" {
+			t.Fatalf("management operation must not point Admin at a missing status endpoint: %#v", operation)
 		}
 	}
 }

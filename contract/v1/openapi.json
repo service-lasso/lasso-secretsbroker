@@ -168,6 +168,13 @@
             ],
             "type": "string"
           },
+          "completionMode": {
+            "enum": [
+              "synchronous",
+              "asynchronous"
+            ],
+            "type": "string"
+          },
           "limitationCode": {
             "type": "string"
           },
@@ -214,12 +221,16 @@
               "mixed"
             ],
             "type": "string"
+          },
+          "statusPath": {
+            "type": "string"
           }
         },
         "required": [
           "auditRequired",
           "authenticationRequired",
           "classification",
+          "completionMode",
           "limitationCode",
           "maturity",
           "method",
@@ -3759,6 +3770,7 @@
           "auditRequired": false,
           "scope": "broker-local",
           "providerKinds": [],
+          "completionMode": "synchronous",
           "limitationCode": "release_metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -3810,6 +3822,7 @@
           "auditRequired": false,
           "scope": "broker-local",
           "providerKinds": [],
+          "completionMode": "synchronous",
           "limitationCode": "liveness_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -3861,6 +3874,7 @@
           "auditRequired": false,
           "scope": "broker-local",
           "providerKinds": [],
+          "completionMode": "synchronous",
           "limitationCode": "readiness_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -3912,6 +3926,7 @@
           "auditRequired": false,
           "scope": "broker-local",
           "providerKinds": [],
+          "completionMode": "synchronous",
           "limitationCode": "metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -3963,6 +3978,7 @@
           "auditRequired": false,
           "scope": "broker-local",
           "providerKinds": [],
+          "completionMode": "synchronous",
           "limitationCode": "metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -4123,6 +4139,7 @@
           "auditRequired": false,
           "scope": "broker-local",
           "providerKinds": [],
+          "completionMode": "synchronous",
           "limitationCode": "metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -4191,6 +4208,7 @@
           "auditRequired": true,
           "scope": "broker-local",
           "providerKinds": [],
+          "completionMode": "synchronous",
           "limitationCode": "scoped_lockout_only",
           "reasonCode": "implemented_and_validated",
           "nextAction": "invoke_with_required_controls"
@@ -4269,6 +4287,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -4347,6 +4366,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "provider_mutations_not_executed",
           "reasonCode": "planning_only_not_executable",
           "nextAction": "do_not_enable_apply"
@@ -4425,6 +4445,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "plan_state_only",
           "reasonCode": "implemented_dry_run",
           "nextAction": "review_plan_before_apply"
@@ -4503,6 +4524,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "plan_state_only",
           "reasonCode": "implemented_dry_run",
           "nextAction": "review_plan_before_apply"
@@ -4571,6 +4593,7 @@
           "auditRequired": false,
           "scope": "broker-local",
           "providerKinds": [],
+          "completionMode": "synchronous",
           "limitationCode": "in_memory_campaign_metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -4641,6 +4664,7 @@
           "providerKinds": [
             "local-encrypted-store"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "local_store_only",
           "reasonCode": "implemented_and_validated",
           "nextAction": "invoke_with_required_controls"
@@ -4719,6 +4743,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "no_secret_mutation",
           "reasonCode": "implemented_dry_run",
           "nextAction": "review_plan_before_apply"
@@ -4797,6 +4822,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "policy_binding_not_persisted",
           "reasonCode": "planning_only_not_executable",
           "nextAction": "do_not_enable_apply"
@@ -4875,6 +4901,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "no_policy_mutation",
           "reasonCode": "implemented_dry_run",
           "nextAction": "review_plan_before_apply"
@@ -4945,6 +4972,7 @@
           "providerKinds": [
             "local-encrypted-store"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "local_store_only",
           "reasonCode": "implemented_and_validated",
           "nextAction": "invoke_with_required_controls"
@@ -5023,6 +5051,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "no_secret_mutation",
           "reasonCode": "implemented_dry_run",
           "nextAction": "review_plan_before_apply"
@@ -5101,6 +5130,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "single_ref_ttl_bounded",
           "reasonCode": "implemented_and_validated",
           "nextAction": "invoke_with_required_controls"
@@ -5172,6 +5202,7 @@
             "local-encrypted-store",
             "aws-secrets-manager"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "no_rotation_apply_route",
           "reasonCode": "implemented_dry_run",
           "nextAction": "review_plan_before_apply"
@@ -5250,6 +5281,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "no_sync_apply_route",
           "reasonCode": "implemented_dry_run",
           "nextAction": "review_plan_before_apply"
@@ -5321,6 +5353,7 @@
             "local-encrypted-store",
             "aws-secrets-manager"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "values_never_returned",
           "reasonCode": "implemented_and_validated",
           "nextAction": "invoke_with_required_controls"
@@ -5382,6 +5415,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "provider_family_upper_bound",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -5460,6 +5494,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "configuration_not_persisted",
           "reasonCode": "planning_only_not_executable",
           "nextAction": "do_not_enable_apply"
@@ -5528,6 +5563,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -5606,6 +5642,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "configuration_validation_only",
           "reasonCode": "implemented_dry_run",
           "nextAction": "review_plan_before_apply"
@@ -5684,6 +5721,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "migration_items_not_copied",
           "reasonCode": "planning_only_not_executable",
           "nextAction": "do_not_enable_apply"
@@ -5762,6 +5800,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "local_target_only",
           "reasonCode": "implemented_dry_run",
           "nextAction": "review_plan_before_apply"
@@ -5832,6 +5871,7 @@
           "providerKinds": [
             "local-encrypted-store"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "broker_generated_local_values_only",
           "reasonCode": "implemented_and_validated",
           "nextAction": "invoke_with_required_controls"
@@ -5902,6 +5942,7 @@
           "providerKinds": [
             "local-encrypted-store"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "no_secret_mutation",
           "reasonCode": "implemented_dry_run",
           "nextAction": "review_plan_before_apply"
@@ -5988,6 +6029,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -6041,6 +6083,7 @@
           "providerKinds": [
             "local-encrypted-store"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "recovery_metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -6109,6 +6152,7 @@
           "providerKinds": [
             "local-encrypted-store"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "metadata_only_no_share_material",
           "reasonCode": "implemented_and_validated",
           "nextAction": "invoke_with_required_controls"
@@ -6187,6 +6231,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "runtime_controls_revalidated",
           "reasonCode": "implemented_and_validated",
           "nextAction": "invoke_with_required_controls"
@@ -6257,6 +6302,7 @@
           "providerKinds": [
             "local-encrypted-store"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "local_store_only",
           "reasonCode": "implemented_and_validated",
           "nextAction": "invoke_with_required_controls"
@@ -6318,6 +6364,7 @@
             "bitwarden-bws",
             "onepassword-cli"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -6369,6 +6416,7 @@
           "auditRequired": false,
           "scope": "broker-local",
           "providerKinds": [],
+          "completionMode": "synchronous",
           "limitationCode": "redacted_metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
@@ -6420,6 +6468,7 @@
           "auditRequired": false,
           "scope": "provider-remote",
           "providerKinds": [],
+          "completionMode": "synchronous",
           "limitationCode": "configured_exporter_only",
           "reasonCode": "implemented_executable",
           "nextAction": "satisfy_runtime_preconditions"
@@ -6490,6 +6539,7 @@
           "providerKinds": [
             "local-encrypted-store"
           ],
+          "completionMode": "synchronous",
           "limitationCode": "local_store_only",
           "reasonCode": "implemented_and_validated",
           "nextAction": "invoke_with_required_controls"
