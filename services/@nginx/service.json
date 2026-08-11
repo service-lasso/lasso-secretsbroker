@@ -4,9 +4,6 @@
   "description": "Release-backed NGINX Open Source service for local Service Lasso routing dependencies.",
   "version": "1.30.0",
   "enabled": true,
-  "ports": {
-    "http": 18080
-  },
   "commandline": {
     "win32": " -p \"${SERVICE_ROOT}\" -c \"runtime\\nginx.conf\" -g \"daemon off;\"",
     "darwin": " -p \"${SERVICE_ROOT}\" -c \"runtime/nginx.conf\" -g \"daemon off;\"",
@@ -14,27 +11,15 @@
     "default": " -p \"${SERVICE_ROOT}\" -c \"runtime/nginx.conf\" -g \"daemon off;\""
   },
   "env": {
-    "NGINX_HTTP_PORT": "${HTTP_PORT}",
-    "NGINX_URL": "http://127.0.0.1:${HTTP_PORT}/",
+    "NGINX_HTTP_PORT": "${endpoint.http.port}",
+    "NGINX_URL": "${endpoint.web.url}",
     "NGINX_ROOT": "${SERVICE_ROOT}"
   },
   "globalenv": {
-    "NGINX_HTTP_PORT": "${HTTP_PORT}",
-    "NGINX_URL": "http://127.0.0.1:${HTTP_PORT}/",
+    "NGINX_HTTP_PORT": "${endpoint.http.port}",
+    "NGINX_URL": "${endpoint.web.url}",
     "NGINX_ROOT": "${SERVICE_ROOT}"
   },
-  "urls": [
-    {
-      "label": "health",
-      "url": "http://127.0.0.1:${HTTP_PORT}/health",
-      "kind": "local"
-    },
-    {
-      "label": "web",
-      "url": "http://127.0.0.1:${HTTP_PORT}/",
-      "kind": "local"
-    }
-  ],
   "artifact": {
     "kind": "archive",
     "source": {
@@ -47,19 +32,25 @@
         "assetName": "lasso-nginx-1.30.0-win32.zip",
         "archiveType": "zip",
         "command": ".\\nginx.exe",
-        "args": ["-v"]
+        "args": [
+          "-v"
+        ]
       },
       "linux": {
         "assetName": "lasso-nginx-1.30.0-linux.tar.gz",
         "archiveType": "tar.gz",
         "command": "./sbin/nginx",
-        "args": ["-v"]
+        "args": [
+          "-v"
+        ]
       },
       "darwin": {
         "assetName": "lasso-nginx-1.30.0-darwin.tar.gz",
         "archiveType": "tar.gz",
         "command": "./sbin/nginx",
-        "args": ["-v"]
+        "args": [
+          "-v"
+        ]
       }
     }
   },
@@ -87,7 +78,7 @@
     "files": [
       {
         "path": "./runtime/nginx.conf",
-        "content": "worker_processes  1;\nmaster_process off;\nerror_log  logs/error.log info;\npid        runtime/nginx.pid;\n\nevents {\n  worker_connections  256;\n}\n\nhttp {\n  access_log logs/access.log;\n  default_type  application/octet-stream;\n  sendfile      on;\n  keepalive_timeout  30;\n\n  server {\n    listen 127.0.0.1:${HTTP_PORT};\n    server_name localhost;\n\n    location / {\n      root runtime/www;\n      index index.html;\n    }\n  }\n}\n"
+        "content": "worker_processes  1;\nmaster_process off;\nerror_log  logs/error.log info;\npid        runtime/nginx.pid;\n\nevents {\n  worker_connections  256;\n}\n\nhttp {\n  access_log logs/access.log;\n  default_type  application/octet-stream;\n  sendfile      on;\n  keepalive_timeout  30;\n\n  server {\n    listen ${endpoint.http.bind}:${endpoint.http.port};\n    server_name localhost;\n\n    location / {\n      root runtime/www;\n      index index.html;\n    }\n  }\n}\n"
       }
     ]
   },
@@ -95,10 +86,47 @@
     {
       "id": "nginx-http-health",
       "type": "http",
-      "url": "http://127.0.0.1:${HTTP_PORT}/health",
+      "url": "${endpoint.health.url}",
       "expected_status": 200,
       "retries": 80,
       "interval": 250
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "http",
+      "kind": "network",
+      "label": "HTTP",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 18080,
+        "strategy": "preferred"
+      },
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    },
+    {
+      "id": "health",
+      "kind": "url",
+      "label": "Health",
+      "target": "http",
+      "url": "http://${endpoint.http.bind}:${endpoint.http.port}/health",
+      "exposure": "local",
+      "required": true
+    },
+    {
+      "id": "web",
+      "kind": "url",
+      "label": "Web",
+      "target": "http",
+      "url": "http://${endpoint.http.bind}:${endpoint.http.port}/",
+      "exposure": "local",
+      "required": true,
+      "primary": true
     }
   ]
 }

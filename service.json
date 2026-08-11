@@ -130,7 +130,6 @@
   },
   "execconfig": {
     "serviceorder": 5,
-    "serviceport": 17890,
     "execcwd": ".",
     "executable": "secretsbroker",
     "args": [
@@ -138,7 +137,7 @@
     ],
     "env": {
       "SECRETSBROKER_STATE": "setup_needed",
-      "SECRETSBROKER_LISTEN": "127.0.0.1:17890"
+      "SECRETSBROKER_LISTEN": "127.0.0.1:${endpoint.api.port}"
     },
     "depend_on": []
   },
@@ -146,8 +145,62 @@
     {
       "id": "secretsbroker-http-health",
       "type": "http",
-      "url": "http://127.0.0.1:17890/health",
+      "url": "${endpoint.health.url}",
       "timeoutSeconds": 5
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "api",
+      "kind": "network",
+      "label": "Secrets Broker API",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 17890,
+        "strategy": "preferred"
+      },
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    },
+    {
+      "id": "health",
+      "kind": "url",
+      "label": "Health",
+      "target": "api",
+      "url": "http://${endpoint.api.bind}:${endpoint.api.port}/health",
+      "exposure": "local",
+      "required": true
+    },
+    {
+      "id": "ready",
+      "kind": "url",
+      "label": "Readiness",
+      "target": "api",
+      "url": "http://${endpoint.api.bind}:${endpoint.api.port}/ready",
+      "exposure": "local",
+      "required": true
+    },
+    {
+      "id": "status",
+      "kind": "url",
+      "label": "Status",
+      "target": "api",
+      "url": "http://${endpoint.api.bind}:${endpoint.api.port}/status",
+      "exposure": "local",
+      "required": true
+    },
+    {
+      "id": "capabilities",
+      "kind": "url",
+      "label": "Capabilities",
+      "target": "api",
+      "url": "http://${endpoint.api.bind}:${endpoint.api.port}/capabilities",
+      "exposure": "local",
+      "required": true
     }
   ]
 }

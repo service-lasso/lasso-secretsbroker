@@ -14,6 +14,21 @@ try {
     throw 'service.json id mismatch'
   }
 
+  $manifestPaths = @('service.json') + (Get-ChildItem -Path (Join-Path $root 'services') -Recurse -Filter 'service.json' | ForEach-Object {
+    $_.FullName.Substring($root.Length + 1)
+  })
+  foreach ($manifestPath in $manifestPaths) {
+    $manifest = Get-Content (Join-Path $root $manifestPath) -Raw | ConvertFrom-Json
+    foreach ($legacyField in @('ports', 'urls', 'portmapping')) {
+      if ($manifest.PSObject.Properties.Name -contains $legacyField) {
+        throw "$manifestPath uses legacy top-level $legacyField; use endpoints[] plus env/globalenv aliases"
+      }
+    }
+    if ($manifestPath -in @('service.json', 'services\@nginx\service.json', 'services\@serviceadmin\service.json', 'services\@traefik\service.json', 'services\echo-service\service.json') -and -not $manifest.endpoints) {
+      throw "$manifestPath is missing endpoints[]"
+    }
+  }
+
   $contract = Get-Content (Join-Path $root 'verify\service-harness.json') -Raw | ConvertFrom-Json
   if ($contract.serviceId -ne '@secretsbroker') {
     throw 'service-harness.json serviceId mismatch'

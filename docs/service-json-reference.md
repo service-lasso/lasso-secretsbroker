@@ -12,7 +12,7 @@ It is meant to make the template usable without forcing service authors to recon
 - common top-level fields
 - `actions`
 - `execconfig`
-- env / dependencies / ports
+- env / dependencies / endpoints
 - `healthchecks[]` direction
 - examples
 - what is currently canonical vs still illustrative
@@ -93,14 +93,39 @@ The current sample in this repo is:
   },
   "execconfig": {
     "serviceorder": 100,
-    "serviceport": 0,
     "execcwd": "runtime",
     "executable": "echo-service",
     "env": {
-      "ECHO_MESSAGE": "hello from service-template"
+      "ECHO_MESSAGE": "hello from service-template",
+      "ECHO_PORT": "${endpoint.service.port}"
     },
     "depend_on": []
   },
+  "endpoints": [
+    {
+      "id": "service",
+      "kind": "network",
+      "label": "Service HTTP",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 0,
+        "strategy": "automatic"
+      },
+      "exposure": "local",
+      "primary": true
+    },
+    {
+      "id": "health",
+      "kind": "url",
+      "label": "Health",
+      "target": "service",
+      "url": "http://${endpoint.service.bind}:${endpoint.service.port}/health",
+      "exposure": "local"
+    }
+  ],
   "healthchecks": [
     {
       "id": "process-health",
@@ -213,11 +238,6 @@ Example:
 ```json
 "serviceorder": 100
 ```
-
-### `serviceport`
-Primary service port.
-
-In the sample, `0` is being used as a simple first-pass placeholder/default meaning “no fixed service port required by this sample”.
 
 ### `execcwd`
 Execution working directory.
@@ -402,15 +422,35 @@ Current broader Service Lasso direction includes:
 
 The sample template keeps this minimal for now.
 
-### Ports and URLs
-Donor material shows additional fields such as:
-- `serviceportsecondary`
-- `serviceportconsole`
-- `serviceportdebug`
-- `portmapping`
-- `urls`
+### Endpoints
+`endpoints[]` is the canonical authoring surface for service interfaces and resources. A network listener should be represented by a `kind: "network"` endpoint, and a routable/operator-facing link should be represented by a `kind: "url"` endpoint.
 
-These are not all used in the minimal sample, but they remain relevant for more complex services.
+Use selector form `${endpoint.<id>.<field>}` in env, globalenv, command lines, healthchecks, and generated config. For example:
+
+```json
+{
+  "endpoints": [
+    {
+      "id": "service",
+      "kind": "network",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 4010,
+        "strategy": "preferred"
+      }
+    },
+    {
+      "id": "health",
+      "kind": "url",
+      "target": "service",
+      "url": "http://${endpoint.service.bind}:${endpoint.service.port}/health"
+    }
+  ]
+}
+```
+
+Legacy top-level `ports`, `portmapping`, `urls`, and `serviceport*` fields can still be understood by compatibility readers, but new package authoring in this repo should not use them. Keep compatibility aliases in `env` or `globalenv` when existing consumers still need uppercase values.
 
 ### Runtime-provider relationships
 Donor material also shows patterns such as:
@@ -429,6 +469,7 @@ The minimal sample does not use this yet.
 - `execconfig` as the execution contract section
 - explicit `env`
 - explicit `depend_on`
+- explicit `endpoints[]` for network, URL, mount, and device resources
 - default health model of `process`
 - explicit override to other health models when needed
 
@@ -444,9 +485,10 @@ The minimal sample does not use this yet.
 For the first template-based service:
 1. keep the manifest small
 2. use `process` health unless another model is clearly needed
-3. explicitly declare env and dependencies
-4. avoid donor baggage that mixes generated runtime state into package content
-5. prefer clarity over trying to model every advanced donor feature on day one
+3. explicitly declare env, dependencies, and endpoints
+4. use endpoint selectors instead of authoring new top-level port or URL fields
+5. avoid donor baggage that mixes generated runtime state into package content
+6. prefer clarity over trying to model every advanced donor feature on day one
 
 ## Related docs
 
