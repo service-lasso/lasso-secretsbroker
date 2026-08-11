@@ -14,13 +14,6 @@
     "JAVA": "${SERVICE_ARTIFACT_COMMAND}",
     "JAVA_HOME": "${SERVICE_ARTIFACT_ROOT}"
   },
-  "urls": [
-    {
-      "label": "temurin",
-      "url": "https://adoptium.net/temurin/",
-      "kind": "external"
-    }
-  ],
   "artifact": {
     "kind": "archive",
     "source": {
@@ -54,5 +47,15 @@
         ]
       }
     }
-  }
+  },
+  "endpoints": [
+    {
+      "id": "temurin",
+      "kind": "url",
+      "label": "Temurin",
+      "url": "https://adoptium.net/temurin/",
+      "exposure": "public",
+      "required": false
+    }
+  ]
 }

@@ -6,7 +6,9 @@
   "role": "provider",
   "enabled": true,
   "executable": "node",
-  "args": ["--version"],
+  "args": [
+    "--version"
+  ],
   "env": {
     "NODE_ENV": "development"
   },
@@ -14,13 +16,6 @@
     "NODE": "${SERVICE_ARTIFACT_COMMAND}",
     "NODE_HOME": "${SERVICE_ARTIFACT_ROOT}"
   },
-  "urls": [
-    {
-      "label": "docs",
-      "url": "https://nodejs.org",
-      "kind": "external"
-    }
-  ],
   "artifact": {
     "kind": "archive",
     "source": {
@@ -33,20 +28,36 @@
         "assetName": "lasso-node-v24.15.0-win32.zip",
         "archiveType": "zip",
         "command": ".\\node.exe",
-        "args": ["--version"]
+        "args": [
+          "--version"
+        ]
       },
       "linux": {
         "assetName": "lasso-node-v24.15.0-linux.tar.gz",
         "archiveType": "tar.gz",
         "command": "./bin/node",
-        "args": ["--version"]
+        "args": [
+          "--version"
+        ]
       },
       "darwin": {
         "assetName": "lasso-node-v24.15.0-darwin.tar.gz",
         "archiveType": "tar.gz",
         "command": "./bin/node",
-        "args": ["--version"]
+        "args": [
+          "--version"
+        ]
       }
     }
-  }
+  },
+  "endpoints": [
+    {
+      "id": "docs",
+      "kind": "url",
+      "label": "Docs",
+      "url": "https://nodejs.org",
+      "exposure": "public",
+      "required": false
+    }
+  ]
 }

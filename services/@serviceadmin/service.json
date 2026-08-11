@@ -4,16 +4,8 @@
   "description": "Core operator/admin UI service backed by the canonical lasso-serviceadmin release artifact.",
   "version": "0.1.0",
   "enabled": true,
-  "depend_on": ["@node"],
-  "ports": {
-    "ui": 17700
-  },
-  "urls": [
-    {
-      "label": "ui",
-      "url": "http://127.0.0.1:${UI_PORT}/",
-      "kind": "local"
-    }
+  "depend_on": [
+    "@node"
   ],
   "artifact": {
     "kind": "archive",
@@ -27,19 +19,25 @@
         "assetName": "@serviceadmin-win32.zip",
         "archiveType": "zip",
         "command": "node",
-        "args": ["runtime/server.js"]
+        "args": [
+          "runtime/server.js"
+        ]
       },
       "linux": {
         "assetName": "@serviceadmin-linux.tar.gz",
         "archiveType": "tar.gz",
         "command": "node",
-        "args": ["runtime/server.js"]
+        "args": [
+          "runtime/server.js"
+        ]
       },
       "darwin": {
         "assetName": "@serviceadmin-darwin.tar.gz",
         "archiveType": "tar.gz",
         "command": "node",
-        "args": ["runtime/server.js"]
+        "args": [
+          "runtime/server.js"
+        ]
       }
     }
   },
@@ -47,6 +45,34 @@
     {
       "id": "serviceadmin-process-health",
       "type": "process"
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "ui",
+      "kind": "network",
+      "label": "Service Admin UI",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 17700,
+        "strategy": "preferred"
+      },
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    },
+    {
+      "id": "ui_url",
+      "kind": "url",
+      "label": "UI",
+      "target": "ui",
+      "url": "http://${endpoint.ui.bind}:${endpoint.ui.port}/",
+      "exposure": "local",
+      "required": true,
+      "primary": true
     }
   ]
 }
