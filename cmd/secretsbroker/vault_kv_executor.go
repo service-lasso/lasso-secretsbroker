@@ -41,7 +41,16 @@ func (b *localBackend) configureProviderMigrationExecutors() {
 		if !source.EnableMigrationTarget {
 			continue
 		}
-		executor, err := newVaultKVMigrationExecutor(source)
+		var executor providerMigrationExecutor
+		var err error
+		switch strings.ToLower(strings.TrimSpace(source.Kind)) {
+		case "vault", "openbao":
+			executor, err = newVaultKVMigrationExecutor(source)
+		case "aws-secrets-manager":
+			executor, err = newAWSSecretsManagerMigrationExecutor(source)
+		default:
+			continue
+		}
 		if err != nil {
 			continue
 		}

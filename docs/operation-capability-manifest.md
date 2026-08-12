@@ -85,7 +85,7 @@ machine-readable authority.
 | Policy preview | dry-run | dry-run | dry-run | unavailable |
 | Policy apply | planned | planned | planned | unavailable |
 | Migration dry-run | dry-run | dry-run | dry-run | dry-run |
-| Migration apply | planned | validated* | planned | planned |
+| Migration apply | planned | validated* | validated** | planned |
 | Secrets Sync dry-run | dry-run | dry-run | dry-run | dry-run |
 
 `validated*` applies only to a Vault/OpenBao connection whose source config
@@ -93,9 +93,15 @@ explicitly sets `enableMigrationTarget: true` and passes address, auth and KV v2
 mapping validation. The family capability and every disabled/incomplete
 connection remain `planned`.
 
+`validated**` applies only to an AWS Secrets Manager connection whose source
+config explicitly sets `enableMigrationTarget: true` and passes region,
+endpoint, SigV4 credential-handle, credential-availability, and ref mapping
+validation. The family capability and every disabled/incomplete connection
+remain `planned`.
+
 The current provider configuration apply handler validates and reports an apply
-result but does not persist a connection. AWS and bulk campaign apply do not yet
-mutate provider values. Provider-family upper bounds never authorize apply.
+result but does not persist a connection. Bulk campaign apply does not yet use
+the provider executor layer. Provider-family upper bounds never authorize apply.
 
 ## Drift and conformance gates
 
