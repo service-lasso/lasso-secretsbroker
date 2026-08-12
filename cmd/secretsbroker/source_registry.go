@@ -92,6 +92,7 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 				AffectedServices: []string{},
 			}
 			status.Operations = providerOperationCapabilitiesForSource(status.Kind, status.Lifecycle, status.AuditStatus)
+			status.Operations = backend.connectionProviderOperations(status.SourceID, status.Lifecycle, status.AuditStatus, status.Operations)
 			if len(status.Namespaces) == 0 {
 				status.Namespaces = []string{"*"}
 			}
@@ -134,6 +135,11 @@ func sourceRegistryLifecycle(source sourceConfig) SourceLifecycle {
 		}
 		if strings.TrimSpace(firstNonEmpty(source.Token, os.Getenv(source.TokenEnv))) == "" {
 			return normalizeSourceLifecycle("source_auth_required")
+		}
+		if source.EnableMigrationTarget {
+			if _, err := newVaultKVMigrationExecutor(source); err != nil {
+				return normalizeSourceLifecycle("invalid_ref")
+			}
 		}
 	case "bitwarden-bws":
 		if len(source.Refs) == 0 {

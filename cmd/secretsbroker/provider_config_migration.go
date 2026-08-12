@@ -180,7 +180,9 @@ func providerStatusFromSource(source SourceStatus, backend *localBackend) provid
 		}
 	}
 	auditStatus := firstNonEmpty(source.AuditStatus, "audit_available")
-	return providerConfigStatus{ProviderID: source.SourceID, ProviderKind: source.Kind, DisplayName: source.DisplayName, State: source.State, Outcome: source.Outcome, CredentialHandle: credential, Address: address, Namespaces: safeList(source.Namespaces), Capabilities: providerCapabilitiesByKind(source.Kind).Capabilities, Operations: providerOperationCapabilitiesForSource(source.Kind, source.Lifecycle, auditStatus), NextAction: source.NextAction, AuditStatus: auditStatus}
+	operations := providerOperationCapabilitiesForSource(source.Kind, source.Lifecycle, auditStatus)
+	operations = backend.connectionProviderOperations(source.SourceID, source.Lifecycle, auditStatus, operations)
+	return providerConfigStatus{ProviderID: source.SourceID, ProviderKind: source.Kind, DisplayName: source.DisplayName, State: source.State, Outcome: source.Outcome, CredentialHandle: credential, Address: address, Namespaces: safeList(source.Namespaces), Capabilities: providerCapabilitiesByKind(source.Kind).Capabilities, Operations: operations, NextAction: source.NextAction, AuditStatus: auditStatus}
 }
 
 func (b *localBackend) validateProviderConfig(req providerConfigRequest) (providerConfigActionResponse, error) {

@@ -145,9 +145,12 @@ inventory, provider readiness, and exact target capability. It then requires an
 explicit in-process executor registration for the selected provider id. Without
 that registration every target fails closed with `outcome: "unsupported"`,
 `applied: false`, and `nextAction: "implement_provider_operation_executor"`.
-Vault/OpenBao and AWS have no production executor registration in this release,
-so their operation manifest maturity remains `planned` and Service Admin must
-not enable apply from the family capability alone.
+Vault/OpenBao KV v2 sources can register the production executor only when the
+exact source sets `enableMigrationTarget: true` and its address, token/token env,
+and every ref path/field mapping pass validation. That connection reports
+validated migration apply. Disabled or incomplete Vault/OpenBao sources, AWS,
+and all provider-family upper bounds remain `planned`; Service Admin must not
+enable apply from those records.
 
 The executor seam receives an operation-scoped idempotency key and source value
 inside the Broker process. A ref is reported `migrated` only after a separate
@@ -155,6 +158,14 @@ target verification succeeds. Durable operation state contains only provider
 ids, refs, a plan fingerprint, typed outcomes, attempt counts and verification
 flags. It never contains a source value, credential, ciphertext copy, or remote
 response body.
+
+The Vault/OpenBao executor uses a bounded, no-redirect HTTP client. It performs
+an authenticated KV v2 read, preserves sibling fields, and writes with CAS 0 or
+the observed metadata version. A separately authenticated bounded readback must
+match before the operation is verified. HTTP 401/403/429, CAS conflicts,
+unavailable endpoints and readback mismatch become typed metadata-only results;
+the provider body, token, mapped provider path and transport error are not
+returned or persisted.
 
 An exact retry skips already verified refs. A retry after `partial_failure`
 resumes failed refs; a ref whose write succeeded but verification failed retries

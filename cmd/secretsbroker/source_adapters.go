@@ -24,21 +24,22 @@ type sourceConfigFile struct {
 }
 
 type sourceConfig struct {
-	SourceID            string                     `json:"sourceId"`
-	Kind                string                     `json:"kind"`
-	DisplayName         string                     `json:"displayName"`
-	Enabled             bool                       `json:"enabled"`
-	Critical            bool                       `json:"critical"`
-	Priority            int                        `json:"priority"`
-	Namespaces          []string                   `json:"namespaces"`
-	TrustedDirs         []string                   `json:"trustedDirs"`
-	AllowSymlinkCommand bool                       `json:"allowSymlinkCommand"`
-	Address             string                     `json:"address"`
-	Region              string                     `json:"region"`
-	AccountID           string                     `json:"accountId"`
-	Token               string                     `json:"token"`
-	TokenEnv            string                     `json:"tokenEnv"`
-	Refs                map[string]sourceRefConfig `json:"refs"`
+	SourceID              string                     `json:"sourceId"`
+	Kind                  string                     `json:"kind"`
+	DisplayName           string                     `json:"displayName"`
+	Enabled               bool                       `json:"enabled"`
+	Critical              bool                       `json:"critical"`
+	Priority              int                        `json:"priority"`
+	Namespaces            []string                   `json:"namespaces"`
+	TrustedDirs           []string                   `json:"trustedDirs"`
+	AllowSymlinkCommand   bool                       `json:"allowSymlinkCommand"`
+	EnableMigrationTarget bool                       `json:"enableMigrationTarget,omitempty"`
+	Address               string                     `json:"address"`
+	Region                string                     `json:"region"`
+	AccountID             string                     `json:"accountId"`
+	Token                 string                     `json:"token"`
+	TokenEnv              string                     `json:"tokenEnv"`
+	Refs                  map[string]sourceRefConfig `json:"refs"`
 }
 
 type sourceRefConfig struct {
