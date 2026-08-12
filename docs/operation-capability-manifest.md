@@ -85,16 +85,17 @@ machine-readable authority.
 | Policy preview | dry-run | dry-run | dry-run | unavailable |
 | Policy apply | planned | planned | planned | unavailable |
 | Migration dry-run | dry-run | dry-run | dry-run | dry-run |
-| Migration apply | planned | planned | planned | planned |
+| Migration apply | planned | validated* | planned | planned |
 | Secrets Sync dry-run | dry-run | dry-run | dry-run | dry-run |
 
+`validated*` applies only to a Vault/OpenBao connection whose source config
+explicitly sets `enableMigrationTarget: true` and passes address, auth and KV v2
+mapping validation. The family capability and every disabled/incomplete
+connection remain `planned`.
+
 The current provider configuration apply handler validates and reports an apply
-result but does not persist a connection. Migration apply has a durable,
-idempotent executor seam, but no real remote provider executor is registered in
-the release runtime; bulk campaign apply likewise does not mutate provider
-values. Those operations remain deliberately `planned`. A test-only or future
-explicit executor registration does not let Service Admin infer executable
-capability from the provider-family upper bound.
+result but does not persist a connection. AWS and bulk campaign apply do not yet
+mutate provider values. Provider-family upper bounds never authorize apply.
 
 ## Drift and conformance gates
 

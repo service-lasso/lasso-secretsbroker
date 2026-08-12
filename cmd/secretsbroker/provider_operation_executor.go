@@ -84,6 +84,21 @@ func (b *localBackend) providerMigrationExecutor(providerID string) (providerMig
 	return executor, ok && executor != nil
 }
 
+func (b *localBackend) connectionProviderOperations(providerID string, lifecycle SourceLifecycle, auditStatus string, operations []OperationCapability) []OperationCapability {
+	if _, ok := b.providerMigrationExecutor(providerID); !ok || lifecycle.Outcome != "ready" || auditStatus != "audit_available" {
+		return operations
+	}
+	for index := range operations {
+		if operations[index].Path != "/v1/providers/migration/apply" {
+			continue
+		}
+		operations[index].Maturity = OperationMaturityValidated
+		operations[index].ReasonCode, operations[index].NextAction = maturityCodes(OperationMaturityValidated)
+		operations[index].LimitationCode = ""
+	}
+	return operations
+}
+
 func (b *localBackend) providerMigrationPlanConflicts(req migrationPlanRequest) (bool, error) {
 	store, err := b.loadStore()
 	if err != nil {
@@ -284,6 +299,10 @@ func providerMigrationRetryAction(outcome string) string {
 		return "retry_after_provider_backoff"
 	case "verification_failed", "verification_pending":
 		return "retry_target_verification"
+	case "conflict":
+		return "refresh_target_version_and_retry"
+	case "invalid_ref":
+		return "fix_target_mapping"
 	case "source_unavailable", "degraded":
 		return "restore_provider_availability_and_retry"
 	case "unsupported":
@@ -297,7 +316,7 @@ func normalizeProviderExecutorWriteOutcome(outcome string) string {
 	switch strings.TrimSpace(outcome) {
 	case "applied":
 		return "applied"
-	case "source_auth_required", "rate_limited", "source_unavailable", "policy_denied", "degraded":
+	case "source_auth_required", "rate_limited", "source_unavailable", "policy_denied", "conflict", "invalid_ref", "degraded":
 		return strings.TrimSpace(outcome)
 	default:
 		return "degraded"

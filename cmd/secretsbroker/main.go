@@ -408,6 +408,7 @@ func serve(args []string) error {
 		return err
 	}
 	backend.sources = sources
+	backend.configureProviderMigrationExecutors()
 
 	binding, err := resolveServeTransport(serveTransportOptions{
 		Mode:                        *mode,
