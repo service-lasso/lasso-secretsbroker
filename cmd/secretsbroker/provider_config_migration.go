@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 )
@@ -182,44 +183,53 @@ func providerStatusFromSource(source SourceStatus, backend *localBackend) provid
 
 func (b *localBackend) validateProviderConfig(req providerConfigRequest) (providerConfigActionResponse, error) {
 	res := baseProviderConfigResponse(req, "validate")
-	status, err := providerStatusFromConfigRequest(req, false)
+	status, err := providerStatusFromConfigRequest(req)
 	res.Provider = status
 	if err != nil {
 		res.Outcome = outcomeForError(err)
 		res.NextAction = providerNextAction(res.Outcome)
-		_ = b.audit("provider_config_validate", req.ProviderID, res.Outcome, req.ServiceID, req.RequestID)
-		return res, err
+		return b.finalizeProviderConfigAudit("provider_config_validate", req, res, err)
 	}
 	res.Outcome = "ready"
-	res.AuditStatus = "audit_recorded"
-	_ = b.audit("provider_config_validate", req.ProviderID, "ready", req.ServiceID, req.RequestID)
-	return res, nil
+	return b.finalizeProviderConfigAudit("provider_config_validate", req, res, nil)
 }
 
 func (b *localBackend) applyProviderConfig(req providerConfigRequest) (providerConfigActionResponse, error) {
 	res := baseProviderConfigResponse(req, "configure")
-	status, err := providerStatusFromConfigRequest(req, true)
+	status, err := providerStatusFromConfigRequest(req)
 	res.Provider = status
 	if err != nil {
 		res.Outcome = outcomeForError(err)
 		res.NextAction = providerNextAction(res.Outcome)
-		_ = b.audit("provider_config_apply", req.ProviderID, res.Outcome, req.ServiceID, req.RequestID)
-		return res, err
+		return b.finalizeProviderConfigAudit("provider_config_apply", req, res, err)
 	}
 	if !req.Confirm || strings.TrimSpace(req.Reason) == "" || strings.TrimSpace(req.OperationID) == "" {
 		res.Outcome = "policy_denied"
 		res.NextAction = "confirm_with_operation_id_and_audit_reason"
-		_ = b.audit("provider_config_apply", req.ProviderID, res.Outcome, req.ServiceID, req.RequestID)
-		return res, errPolicyDenied
+		return b.finalizeProviderConfigAudit("provider_config_apply", req, res, errPolicyDenied)
 	}
-	res.Outcome = "applied"
-	res.Applied = true
-	res.AuditStatus = "audit_recorded"
-	_ = b.audit("provider_config_apply", req.ProviderID, "applied", req.ServiceID, req.RequestID)
-	return res, nil
+	res.Outcome = "unsupported"
+	res.Applied = false
+	res.RequiresConfirmation = false
+	res.NextAction = "implement_persisted_provider_configuration"
+	res.UnsupportedCapability = "provider_configuration_persistence"
+	return b.finalizeProviderConfigAudit("provider_config_apply", req, res, errUnsupportedProvider)
 }
 
-func providerStatusFromConfigRequest(req providerConfigRequest, apply bool) (providerConfigStatus, error) {
+func (b *localBackend) finalizeProviderConfigAudit(operation string, req providerConfigRequest, res providerConfigActionResponse, operationErr error) (providerConfigActionResponse, error) {
+	if b == nil || strings.TrimSpace(b.auditPath) == "" || b.audit(operation, req.ProviderID, res.Outcome, req.ServiceID, req.RequestID) != nil {
+		res.Outcome = "audit_unavailable"
+		res.Applied = false
+		res.AuditStatus = "audit_unavailable"
+		res.Provider.AuditStatus = "audit_unavailable"
+		res.NextAction = "restore_audit_and_retry"
+		return res, errProviderAuditUnavailable
+	}
+	res.AuditStatus = "audit_recorded"
+	return res, operationErr
+}
+
+func providerStatusFromConfigRequest(req providerConfigRequest) (providerConfigStatus, error) {
 	providerID := strings.TrimSpace(req.ProviderID)
 	kind := strings.TrimSpace(req.ProviderKind)
 	capability := providerCapabilitiesByKind(kind)
@@ -244,16 +254,13 @@ func providerStatusFromConfigRequest(req providerConfigRequest, apply bool) (pro
 		status.Outcome = "source_auth_required"
 		return providerStatusWithOperations(status), errSourceAuthRequired
 	}
-	if (kind == "vault" || kind == "openbao" || kind == "bitwarden-bws" || kind == "aws-secrets-manager") && strings.TrimSpace(req.Address) == "" {
+	if (kind == "vault" || kind == "openbao" || kind == "bitwarden-bws" || kind == "aws-secrets-manager") && status.Address == "" {
 		status.State = "config_error"
 		status.Outcome = "invalid_ref"
 		return providerStatusWithOperations(status), errInvalidRef
 	}
 	status.State = "connected"
 	status.Outcome = "ready"
-	if apply {
-		status.Outcome = "applied"
-	}
 	if len(status.Namespaces) == 0 {
 		status.Namespaces = []string{"*"}
 	}
@@ -281,7 +288,12 @@ func safeProviderAddress(address string) string {
 	if address == "" {
 		return ""
 	}
-	return strings.TrimRight(address, "/")
+	parsed, err := url.Parse(address)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
+		return ""
+	}
+	parsed.User = nil
+	return strings.ToLower(parsed.Scheme) + "://" + parsed.Host
 }
 
 func baseProviderConfigResponse(req providerConfigRequest, operation string) providerConfigActionResponse {
@@ -290,22 +302,29 @@ func baseProviderConfigResponse(req providerConfigRequest, operation string) pro
 
 func (b *localBackend) migrationDryRun(req migrationPlanRequest) (migrationPlanResponse, error) {
 	res, err := b.buildMigrationPlan(req, "migration_dry_run", false)
-	if err != nil {
-		_ = b.audit("provider_migration_dry_run", req.TargetProviderID, res.Outcome, req.ServiceID, req.RequestID)
-		return res, err
-	}
-	_ = b.audit("provider_migration_dry_run", req.TargetProviderID, res.Outcome, req.ServiceID, req.RequestID)
-	return res, nil
+	return b.finalizeMigrationAudit("provider_migration_dry_run", req, res, err)
 }
 
 func (b *localBackend) migrationApply(req migrationPlanRequest) (migrationPlanResponse, error) {
 	res, err := b.buildMigrationPlan(req, "migration_apply", true)
-	if err != nil {
-		_ = b.audit("provider_migration_apply", req.TargetProviderID, res.Outcome, req.ServiceID, req.RequestID)
-		return res, err
+	return b.finalizeMigrationAudit("provider_migration_apply", req, res, err)
+}
+
+func (b *localBackend) finalizeMigrationAudit(operation string, req migrationPlanRequest, res migrationPlanResponse, operationErr error) (migrationPlanResponse, error) {
+	if b == nil || strings.TrimSpace(b.auditPath) == "" || b.audit(operation, req.TargetProviderID, res.Outcome, req.ServiceID, req.RequestID) != nil {
+		res.Outcome = "audit_unavailable"
+		res.Applied = false
+		res.AuditStatus = "audit_unavailable"
+		res.NextAction = "restore_audit_and_retry"
+		for index := range res.Results {
+			res.Results[index].State = "failed"
+			res.Results[index].Outcome = "audit_unavailable"
+			res.Results[index].PolicyResult = "denied"
+		}
+		return res, errProviderAuditUnavailable
 	}
-	_ = b.audit("provider_migration_apply", req.TargetProviderID, res.Outcome, req.ServiceID, req.RequestID)
-	return res, nil
+	res.AuditStatus = "audit_recorded"
+	return res, operationErr
 }
 
 func (b *localBackend) buildMigrationPlan(req migrationPlanRequest, operation string, apply bool) (migrationPlanResponse, error) {
@@ -326,19 +345,29 @@ func (b *localBackend) buildMigrationPlan(req migrationPlanRequest, operation st
 		return res, errLocked
 	}
 	target := b.lookupProvider(req.TargetProviderID)
-	if !providerCanBeMigrationTarget(target.ProviderKind) || target.Outcome != "ready" {
+	if !providerCanPlanMigrationTarget(target.ProviderKind) || target.Outcome != "ready" {
 		res.Outcome = providerMigrationOutcome(target)
 		res.NextAction = providerNextAction(res.Outcome)
 		res.Results = b.migrationItems(req, target, apply, res.Outcome)
 		return res, outcomeErrorForProvider(res.Outcome)
 	}
-	res.Results = b.migrationItems(req, target, apply, "")
-	res.Outcome = migrationAggregateOutcome(res.Results, apply)
-	res.AuditStatus = "audit_recorded"
-	if apply && res.Outcome != "policy_denied" {
-		res.Applied = true
-		res.RequiresConfirmation = false
+	if len(safeList(req.Refs)) == 0 {
+		refs, sourceOutcome := b.migrationSourceRefs(firstNonEmpty(req.SourceProviderID, "local"))
+		if sourceOutcome != "ready" {
+			res.Outcome = sourceOutcome
+			res.NextAction = providerNextAction(sourceOutcome)
+			return res, outcomeErrorForProvider(sourceOutcome)
+		}
+		req.Refs = refs
 	}
+	if apply {
+		res.Outcome = "unsupported"
+		res.NextAction = "implement_provider_operation_executor"
+		res.Results = b.migrationItems(req, target, apply, res.Outcome)
+		return res, errUnsupportedProvider
+	}
+	res.Results = b.migrationItems(req, target, apply, "")
+	res.Outcome = migrationAggregateOutcome(res.Results)
 	if res.Outcome == "partial_failure" || res.Outcome == "policy_denied" {
 		res.NextAction = "review_denied_or_failed_refs"
 	}
@@ -347,18 +376,10 @@ func (b *localBackend) buildMigrationPlan(req migrationPlanRequest, operation st
 
 func (b *localBackend) migrationItems(req migrationPlanRequest, target providerConfigStatus, apply bool, forcedOutcome string) []migrationItemStatus {
 	refs := safeList(req.Refs)
-	if len(refs) == 0 {
-		listed, err := b.listManagedSecrets("", false)
-		if err == nil {
-			for _, record := range listed.Results {
-				refs = append(refs, record.Ref)
-			}
-		}
-	}
 	sort.Strings(refs)
 	items := make([]migrationItemStatus, 0, len(refs))
 	for _, ref := range refs {
-		item := migrationItemStatus{Ref: ref, SourceProviderID: firstNonEmpty(req.SourceProviderID, "local"), TargetProviderID: req.TargetProviderID, OwnerServiceID: ownerFromRef(ref), Risk: "low", ExpectedAction: "copy_value_inside_broker", PolicyResult: "allowed", AuditRequirement: "required", Recovery: "retry_after_fix_or_restore_from_backup"}
+		item := migrationItemStatus{Ref: ref, SourceProviderID: firstNonEmpty(req.SourceProviderID, "local"), TargetProviderID: req.TargetProviderID, OwnerServiceID: ownerFromRef(ref), Risk: migrationRiskForTarget(target.ProviderKind), ExpectedAction: migrationExpectedActionForTarget(target.ProviderKind, apply, forcedOutcome), PolicyResult: "allowed", AuditRequirement: "required", Recovery: migrationRecoveryForTarget(target.ProviderKind)}
 		if forcedOutcome != "" {
 			item.State = "failed"
 			item.Outcome = forcedOutcome
@@ -367,6 +388,11 @@ func (b *localBackend) migrationItems(req migrationPlanRequest, target providerC
 			item.State = "denied"
 			item.Outcome = "invalid_ref"
 			item.PolicyResult = "denied"
+		} else if sourceOutcome := b.migrationSourceOutcome(item.SourceProviderID, ref); sourceOutcome != "ready" {
+			item.State = "failed"
+			item.Outcome = sourceOutcome
+			item.PolicyResult = "denied"
+			item.ExpectedAction = providerNextAction(sourceOutcome)
 		} else if strings.Contains(strings.ToLower(ref), "deny") {
 			item.State = "denied"
 			item.Outcome = "policy_denied"
@@ -386,6 +412,63 @@ func (b *localBackend) migrationItems(req migrationPlanRequest, target providerC
 	return items
 }
 
+func (b *localBackend) migrationSourceRefs(sourceProviderID string) ([]string, string) {
+	sourceProviderID = firstNonEmpty(strings.TrimSpace(sourceProviderID), "local")
+	refs := []string{}
+	if sourceProviderID == "local" || sourceProviderID == "local-encrypted-store" {
+		store, err := b.loadStore()
+		if err != nil {
+			return refs, outcomeForError(err)
+		}
+		for ref := range store.Secrets {
+			refs = append(refs, ref)
+		}
+		return refs, "ready"
+	}
+	status := b.lookupProvider(sourceProviderID)
+	if status.Outcome != "ready" {
+		return refs, providerMigrationOutcome(status)
+	}
+	for _, source := range b.sources.enabledSources() {
+		if source.SourceID != sourceProviderID {
+			continue
+		}
+		for ref := range source.Refs {
+			refs = append(refs, ref)
+		}
+		break
+	}
+	return refs, "ready"
+}
+
+func (b *localBackend) migrationSourceOutcome(sourceProviderID, ref string) string {
+	sourceProviderID = firstNonEmpty(strings.TrimSpace(sourceProviderID), "local")
+	if sourceProviderID == "local" || sourceProviderID == "local-encrypted-store" {
+		store, err := b.loadStore()
+		if err != nil {
+			return "degraded"
+		}
+		if _, ok := store.Secrets[ref]; !ok {
+			return "missing_ref"
+		}
+		return "ready"
+	}
+	status := b.lookupProvider(sourceProviderID)
+	if status.Outcome != "ready" {
+		return providerMigrationOutcome(status)
+	}
+	for _, source := range b.sources.enabledSources() {
+		if source.SourceID != sourceProviderID {
+			continue
+		}
+		if _, ok := source.Refs[ref]; !ok {
+			return "missing_ref"
+		}
+		return "ready"
+	}
+	return "missing_ref"
+}
+
 func (b *localBackend) lookupProvider(providerID string) providerConfigStatus {
 	status := b.providerConfigStatusResponse()
 	for _, provider := range status.Providers {
@@ -401,8 +484,50 @@ func (b *localBackend) lookupProvider(providerID string) providerConfigStatus {
 	return providerStatusWithOperations(providerConfigStatus{ProviderID: providerID, ProviderKind: kind, DisplayName: providerID, State: "unsupported", Outcome: "unsupported", Capabilities: capability.Capabilities, Namespaces: []string{}, AuditStatus: "audit_available"})
 }
 
-func providerCanBeMigrationTarget(kind string) bool {
+func providerCanPlanMigrationTarget(kind string) bool {
+	if kind == "local-encrypted-store" {
+		return true
+	}
+	contract, ok := adapterContractForKind(kind)
+	return ok && adapterHasCapability(contract, AdapterCapabilityMigration) && adapterHasCapability(contract, AdapterCapabilityWrite)
+}
+
+func providerCanApplyMigrationTarget(kind string) bool {
 	return kind == "local-encrypted-store"
+}
+
+func providerUsesRemoteMutationPath(kind string) bool {
+	return providerCanPlanMigrationTarget(kind) && !providerCanApplyMigrationTarget(kind)
+}
+
+func migrationRiskForTarget(kind string) string {
+	if providerUsesRemoteMutationPath(kind) {
+		return "medium"
+	}
+	return "low"
+}
+
+func migrationExpectedActionForTarget(kind string, apply bool, forcedOutcome string) string {
+	if apply && forcedOutcome == "unsupported" {
+		return "implement_provider_operation_executor"
+	}
+	if forcedOutcome != "" {
+		return providerNextAction(forcedOutcome)
+	}
+	if providerUsesRemoteMutationPath(kind) {
+		if apply {
+			return "implement_provider_operation_executor"
+		}
+		return "write_value_to_remote_provider_after_revalidation"
+	}
+	return "copy_value_inside_broker"
+}
+
+func migrationRecoveryForTarget(kind string) string {
+	if providerUsesRemoteMutationPath(kind) {
+		return "source_retained_until_target_verification_succeeds"
+	}
+	return "retry_after_fix_or_restore_from_backup"
 }
 
 func providerMigrationOutcome(target providerConfigStatus) string {
@@ -418,7 +543,7 @@ func providerMigrationOutcome(target providerConfigStatus) string {
 	return "unsupported"
 }
 
-func migrationAggregateOutcome(items []migrationItemStatus, apply bool) string {
+func migrationAggregateOutcome(items []migrationItemStatus) string {
 	if len(items) == 0 {
 		return "ready"
 	}
@@ -434,13 +559,13 @@ func migrationAggregateOutcome(items []migrationItemStatus, apply bool) string {
 	if denied || failed {
 		return "partial_failure"
 	}
-	if apply {
-		return "applied"
-	}
 	return "dry_run_ready"
 }
 
-var errUnsupportedProvider = errors.New("unsupported provider capability")
+var (
+	errUnsupportedProvider      = errors.New("unsupported provider capability")
+	errProviderAuditUnavailable = errors.New("provider action audit unavailable")
+)
 
 func outcomeErrorForProvider(outcome string) error {
 	switch outcome {
@@ -452,6 +577,8 @@ func outcomeErrorForProvider(outcome string) error {
 		return errInvalidRef
 	case "policy_denied":
 		return errPolicyDenied
+	case "degraded", "source_unavailable", "missing_ref":
+		return errBackendDegraded
 	default:
 		return errUnsupportedProvider
 	}
