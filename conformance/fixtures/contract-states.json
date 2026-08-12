@@ -547,7 +547,7 @@
               "onepassword-cli"
             ],
             "completionMode": "synchronous",
-            "limitationCode": "migration_items_not_copied",
+            "limitationCode": "registered_provider_executor_required",
             "reasonCode": "planning_only_not_executable",
             "nextAction": "do_not_enable_apply"
           },
@@ -1120,6 +1120,8 @@
           "applied",
           "rolled_back",
           "retired",
+          "rate_limited",
+          "verification_failed",
           "identity_invalid",
           "identity_expired",
           "identity_replayed",
@@ -1667,7 +1669,7 @@
                   "local-encrypted-store"
                 ],
                 "completionMode": "synchronous",
-                "limitationCode": "migration_items_not_copied",
+                "limitationCode": "registered_provider_executor_required",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
               },
@@ -2164,7 +2166,7 @@
                   "openbao"
                 ],
                 "completionMode": "synchronous",
-                "limitationCode": "migration_items_not_copied",
+                "limitationCode": "registered_provider_executor_required",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
               },
@@ -2664,7 +2666,7 @@
                   "aws-secrets-manager"
                 ],
                 "completionMode": "synchronous",
-                "limitationCode": "migration_items_not_copied",
+                "limitationCode": "registered_provider_executor_required",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
               },
@@ -3163,7 +3165,7 @@
                   "vault"
                 ],
                 "completionMode": "synchronous",
-                "limitationCode": "migration_items_not_copied",
+                "limitationCode": "registered_provider_executor_required",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
               },
@@ -3662,7 +3664,7 @@
                   "vault"
                 ],
                 "completionMode": "synchronous",
-                "limitationCode": "migration_items_not_copied",
+                "limitationCode": "registered_provider_executor_required",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
               },

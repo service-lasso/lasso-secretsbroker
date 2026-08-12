@@ -56,21 +56,25 @@ type localBackend struct {
 	seenLaunchLeaseJTI       map[string]time.Time
 	decommissionMu           sync.Mutex
 	rotationMu               sync.Mutex
+	providerMigrationMu      sync.Mutex
+	providerExecutorMu       sync.RWMutex
+	providerExecutors        map[string]providerMigrationExecutor
 }
 
 type localStoreFile struct {
-	Version      int                             `json:"version"`
-	ServiceID    string                          `json:"serviceId"`
-	VaultID      string                          `json:"vaultId,omitempty"`
-	KeyID        string                          `json:"keyId,omitempty"`
-	KeyVersion   string                          `json:"keyVersion,omitempty"`
-	RootIdentity *vaultRootIdentityMetadata      `json:"rootIdentity,omitempty"`
-	CreatedAt    time.Time                       `json:"createdAt"`
-	UpdatedAt    time.Time                       `json:"updatedAt"`
-	Secrets      map[string]secretEntry          `json:"secrets"`
-	Tombstones   map[string]localSecretTombstone `json:"tombstones,omitempty"`
-	Rotations    map[string]rotationLedger       `json:"rotations,omitempty"`
-	Recovery     *recoveryPolicyMetadata         `json:"recoveryPolicy,omitempty"`
+	Version      int                                   `json:"version"`
+	ServiceID    string                                `json:"serviceId"`
+	VaultID      string                                `json:"vaultId,omitempty"`
+	KeyID        string                                `json:"keyId,omitempty"`
+	KeyVersion   string                                `json:"keyVersion,omitempty"`
+	RootIdentity *vaultRootIdentityMetadata            `json:"rootIdentity,omitempty"`
+	CreatedAt    time.Time                             `json:"createdAt"`
+	UpdatedAt    time.Time                             `json:"updatedAt"`
+	Secrets      map[string]secretEntry                `json:"secrets"`
+	Tombstones   map[string]localSecretTombstone       `json:"tombstones,omitempty"`
+	Rotations    map[string]rotationLedger             `json:"rotations,omitempty"`
+	Migrations   map[string]providerMigrationOperation `json:"migrations,omitempty"`
+	Recovery     *recoveryPolicyMetadata               `json:"recoveryPolicy,omitempty"`
 }
 
 type secretEntry struct {
@@ -235,7 +239,7 @@ type auditEvent struct {
 }
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
-	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}, telemetry: newTelemetryRequestRecorder(50), seenLaunchLeaseJTI: map[string]time.Time{}}
+	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}, telemetry: newTelemetryRequestRecorder(50), seenLaunchLeaseJTI: map[string]time.Time{}, providerExecutors: map[string]providerMigrationExecutor{}}
 	backend.lockouts = newLockoutStore(func() time.Time {
 		if backend.now == nil {
 			return time.Now().UTC()
@@ -874,7 +878,7 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 
 func (b *localBackend) loadStore() (localStoreFile, error) {
 	now := b.now()
-	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}, Rotations: map[string]rotationLedger{}}
+	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}, Rotations: map[string]rotationLedger{}, Migrations: map[string]providerMigrationOperation{}}
 	bytes, err := os.ReadFile(b.storePath)
 	if errors.Is(err, os.ErrNotExist) {
 		return store, nil
@@ -896,6 +900,9 @@ func (b *localBackend) loadStore() (localStoreFile, error) {
 	}
 	if store.Rotations == nil {
 		store.Rotations = map[string]rotationLedger{}
+	}
+	if store.Migrations == nil {
+		store.Migrations = map[string]providerMigrationOperation{}
 	}
 	return store, nil
 }

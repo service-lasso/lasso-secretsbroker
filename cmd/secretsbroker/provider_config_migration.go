@@ -106,6 +106,8 @@ type migrationItemStatus struct {
 	PolicyResult     string `json:"policyResult"`
 	AuditRequirement string `json:"auditRequirement"`
 	Recovery         string `json:"recovery"`
+	Verified         bool   `json:"verified"`
+	Attempts         int    `json:"attempts,omitempty"`
 }
 
 type migrationPlanResponse struct {
@@ -361,10 +363,33 @@ func (b *localBackend) buildMigrationPlan(req migrationPlanRequest, operation st
 		req.Refs = refs
 	}
 	if apply {
-		res.Outcome = "unsupported"
-		res.NextAction = "implement_provider_operation_executor"
-		res.Results = b.migrationItems(req, target, apply, res.Outcome)
-		return res, errUnsupportedProvider
+		conflict, conflictErr := b.providerMigrationPlanConflicts(req)
+		if conflictErr != nil {
+			res.Outcome = "degraded"
+			res.NextAction = "retry_or_inspect_source"
+			return res, errBackendDegraded
+		}
+		if conflict {
+			res.Outcome = "conflict"
+			res.NextAction = "create_new_operation_id_for_changed_plan"
+			res.Results = b.migrationItems(req, target, apply, res.Outcome)
+			return res, errMigrationPlanConflict
+		}
+		executor, ok := b.providerMigrationExecutor(req.TargetProviderID)
+		if !ok {
+			res.Outcome = "unsupported"
+			res.NextAction = "implement_provider_operation_executor"
+			res.Results = b.migrationItems(req, target, apply, res.Outcome)
+			return res, errUnsupportedProvider
+		}
+		if strings.TrimSpace(b.auditPath) == "" || b.audit("provider_migration_apply_authorized", req.TargetProviderID, "ready", req.ServiceID, req.RequestID) != nil {
+			res.Outcome = "audit_unavailable"
+			res.AuditStatus = "audit_unavailable"
+			res.NextAction = "restore_audit_and_retry"
+			res.Results = b.migrationItems(req, target, apply, res.Outcome)
+			return res, errProviderAuditUnavailable
+		}
+		return b.executeProviderMigration(req, target, executor, res)
 	}
 	res.Results = b.migrationItems(req, target, apply, "")
 	res.Outcome = migrationAggregateOutcome(res.Results)
@@ -693,6 +718,8 @@ func writeMigrationActionError(w http.ResponseWriter, err error, res migrationPl
 		status = http.StatusBadRequest
 	case errors.Is(err, errPolicyDenied):
 		status = http.StatusForbidden
+	case errors.Is(err, errMigrationPlanConflict):
+		status = http.StatusConflict
 	case errors.Is(err, errUnsupportedProvider):
 		status = http.StatusNotImplemented
 	}

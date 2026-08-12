@@ -128,23 +128,42 @@ user information, path, query, and fragment are stripped so accidentally
 embedded credentials or request details cannot enter Admin responses, audit
 evidence, or diagnostics. Invalid/non-HTTP provider addresses fail validation.
 
-The Broker records every migration dry-run and apply attempt in the configured
-metadata-only audit/event sinks before returning an auditable result. If either
+The Broker records every migration dry-run in the configured metadata-only
+audit/event sinks. Apply requires a durable metadata-only authorization record
+before an executor can receive source material, then records the typed outcome
+after durable operation state is updated. If either
 sink cannot accept the record, the response fails closed with
 `outcome: "audit_unavailable"`, `auditStatus: "audit_unavailable"`,
 `applied: false`, and `nextAction: "restore_audit_and_retry"`. Per-ref items are
 also marked `audit_unavailable`; provider credentials, source values, and raw
 provider bodies are never returned.
 
-### `POST /v1/providers/migration/apply` (planned)
+### `POST /v1/providers/migration/apply` (executor-gated; advertised as planned)
 
-The current handler validates confirmation, operation id and audit reason, but
-it does not copy local values or perform remote provider writes. Every target
-therefore fails closed with `outcome: "unsupported"`, `applied: false`, and
-`nextAction: "implement_provider_operation_executor"` until a provider-specific
-executor is wired and validated. Its manifest maturity is `planned`; per-ref
-items are metadata-only evidence and never indicate a completed copy.
+The handler validates confirmation, operation id, audit reason, selected-source
+inventory, provider readiness, and exact target capability. It then requires an
+explicit in-process executor registration for the selected provider id. Without
+that registration every target fails closed with `outcome: "unsupported"`,
+`applied: false`, and `nextAction: "implement_provider_operation_executor"`.
+Vault/OpenBao and AWS have no production executor registration in this release,
+so their operation manifest maturity remains `planned` and Service Admin must
+not enable apply from the family capability alone.
+
+The executor seam receives an operation-scoped idempotency key and source value
+inside the Broker process. A ref is reported `migrated` only after a separate
+target verification succeeds. Durable operation state contains only provider
+ids, refs, a plan fingerprint, typed outcomes, attempt counts and verification
+flags. It never contains a source value, credential, ciphertext copy, or remote
+response body.
+
+An exact retry skips already verified refs. A retry after `partial_failure`
+resumes failed refs; a ref whose write succeeded but verification failed retries
+verification without issuing a duplicate write. This state survives Broker
+restart. Reusing an operation id with different source, target, or refs returns
+HTTP 409 with `outcome: "conflict"` and
+`nextAction: "create_new_operation_id_for_changed_plan"`. Source entries remain
+unchanged and recoverable after both partial and successful migration.
 
 ## Typed outcomes
 
-Common outcomes: `ready`, `applied`, `dry_run_ready`, `partial_failure`, `invalid_ref`, `locked`, `policy_denied`, `source_auth_required`, `source_unavailable`, `unsupported`, `degraded`, `audit_unavailable`.
+Common outcomes: `ready`, `applied`, `dry_run_ready`, `partial_failure`, `conflict`, `invalid_ref`, `locked`, `policy_denied`, `source_auth_required`, `rate_limited`, `source_unavailable`, `verification_failed`, `unsupported`, `degraded`, `audit_unavailable`.
