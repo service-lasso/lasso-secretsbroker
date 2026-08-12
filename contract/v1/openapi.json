@@ -494,6 +494,9 @@
           "applied": {
             "type": "boolean"
           },
+          "attempts": {
+            "type": "integer"
+          },
           "auditRequirement": {
             "type": "string"
           },
@@ -550,6 +553,9 @@
           },
           "targetProviderId": {
             "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -567,7 +573,8 @@
           "ref",
           "retrySafe",
           "risk",
-          "sourceId"
+          "sourceId",
+          "verified"
         ],
         "type": "object"
       },
@@ -651,8 +658,21 @@
           "auditStatus": {
             "type": "string"
           },
+          "backpressurePolicy": {
+            "type": "string"
+          },
           "campaignId": {
             "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "durable": {
+            "type": "boolean"
+          },
+          "maxConcurrency": {
+            "type": "integer"
           },
           "mode": {
             "type": "string"
@@ -690,6 +710,10 @@
             },
             "type": "array"
           },
+          "revalidatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
           "serviceId": {
             "type": "string"
           },
@@ -704,6 +728,10 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
@@ -712,7 +740,11 @@
           "apiVersion",
           "applied",
           "auditStatus",
+          "backpressurePolicy",
           "campaignId",
+          "createdAt",
+          "durable",
+          "maxConcurrency",
           "mode",
           "operation",
           "operationId",
@@ -724,7 +756,8 @@
           "results",
           "serviceId",
           "staleAfterSeconds",
-          "summary"
+          "summary",
+          "updatedAt"
         ],
         "type": "object"
       },
@@ -4784,7 +4817,7 @@
             "onepassword-cli"
           ],
           "completionMode": "synchronous",
-          "limitationCode": "provider_mutations_not_executed",
+          "limitationCode": "migrate_remap_provider_registered_executor_only",
           "reasonCode": "planning_only_not_executable",
           "nextAction": "do_not_enable_apply"
         }
@@ -5011,7 +5044,7 @@
           "scope": "broker-local",
           "providerKinds": [],
           "completionMode": "synchronous",
-          "limitationCode": "in_memory_campaign_metadata_only",
+          "limitationCode": "durable_campaign_metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
         }

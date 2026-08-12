@@ -86,6 +86,7 @@ machine-readable authority.
 | Policy apply | planned | planned | planned | unavailable |
 | Migration dry-run | dry-run | dry-run | dry-run | dry-run |
 | Migration apply | planned | validated* | validated** | planned |
+| Bulk migration campaign apply | planned | validated* | validated** | planned |
 | Secrets Sync dry-run | dry-run | dry-run | dry-run | dry-run |
 
 `validated*` applies only to a Vault/OpenBao connection whose source config
@@ -100,8 +101,10 @@ validation. The family capability and every disabled/incomplete connection
 remain `planned`.
 
 The current provider configuration apply handler validates and reports an apply
-result but does not persist a connection. Bulk campaign apply does not yet use
-the provider executor layer. Provider-family upper bounds never authorize apply.
+result but does not persist a connection. Bulk campaign apply is executable only
+for a revalidated `migrate_remap_provider` plan targeting an exact registered
+Vault/OpenBao or AWS executor. Rotation, edit, policy, and metadata-only bulk
+apply remain non-executable. Provider-family upper bounds never authorize apply.
 
 ## Drift and conformance gates
 

@@ -947,7 +947,7 @@
               "onepassword-cli"
             ],
             "completionMode": "synchronous",
-            "limitationCode": "provider_mutations_not_executed",
+            "limitationCode": "migrate_remap_provider_registered_executor_only",
             "reasonCode": "planning_only_not_executable",
             "nextAction": "do_not_enable_apply"
           },
@@ -963,7 +963,7 @@
             "scope": "broker-local",
             "providerKinds": [],
             "completionMode": "synchronous",
-            "limitationCode": "in_memory_campaign_metadata_only",
+            "limitationCode": "durable_campaign_metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
           },

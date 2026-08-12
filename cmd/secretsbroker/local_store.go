@@ -56,6 +56,7 @@ type localBackend struct {
 	seenLaunchLeaseJTI       map[string]time.Time
 	decommissionMu           sync.Mutex
 	rotationMu               sync.Mutex
+	bulkCampaignMu           sync.Mutex
 	providerMigrationMu      sync.Mutex
 	providerExecutorMu       sync.RWMutex
 	providerExecutors        map[string]providerMigrationExecutor
@@ -74,6 +75,7 @@ type localStoreFile struct {
 	Tombstones   map[string]localSecretTombstone       `json:"tombstones,omitempty"`
 	Rotations    map[string]rotationLedger             `json:"rotations,omitempty"`
 	Migrations   map[string]providerMigrationOperation `json:"migrations,omitempty"`
+	Campaigns    map[string]bulkCampaignResponse       `json:"campaigns,omitempty"`
 	Recovery     *recoveryPolicyMetadata               `json:"recoveryPolicy,omitempty"`
 }
 
@@ -878,7 +880,7 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 
 func (b *localBackend) loadStore() (localStoreFile, error) {
 	now := b.now()
-	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}, Rotations: map[string]rotationLedger{}, Migrations: map[string]providerMigrationOperation{}}
+	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}, Rotations: map[string]rotationLedger{}, Migrations: map[string]providerMigrationOperation{}, Campaigns: map[string]bulkCampaignResponse{}}
 	bytes, err := os.ReadFile(b.storePath)
 	if errors.Is(err, os.ErrNotExist) {
 		return store, nil
@@ -903,6 +905,9 @@ func (b *localBackend) loadStore() (localStoreFile, error) {
 	}
 	if store.Migrations == nil {
 		store.Migrations = map[string]providerMigrationOperation{}
+	}
+	if store.Campaigns == nil {
+		store.Campaigns = map[string]bulkCampaignResponse{}
 	}
 	return store, nil
 }
