@@ -41,6 +41,13 @@ var typedOutcomes = []string{
 	"missing_ref",
 	"invalid_ref",
 	"source_unavailable",
+	"conflict",
+	"staged",
+	"applied",
+	"rolled_back",
+	"retired",
+	"rate_limited",
+	"verification_failed",
 	"identity_invalid",
 	"identity_expired",
 	"identity_replayed",
@@ -51,6 +58,8 @@ var typedOutcomes = []string{
 	"stale",
 	"unsupported",
 	"audit_unavailable",
+	"dependency_blocked",
+	"stale_plan",
 	"failed",
 }
 
@@ -257,7 +266,9 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/management/secrets/reveal",
 			"POST /v1/management/secrets/edit/dry-run|apply",
 			"POST /v1/management/secrets/reset/dry-run|apply",
+			"POST /v1/management/secrets/decommission/dry-run|apply|restore",
 			"POST /v1/management/secrets/rotation/dry-run",
+			"POST /v1/management/secrets/rotation/status|stage|activate|rollback|retire",
 			"POST /v1/management/secrets/campaigns/create|revalidate|apply|status",
 			"POST /v1/management/secrets/sync/dry-run",
 			"POST /v1/management/secrets/policy/preview|apply",
@@ -293,7 +304,9 @@ func defaultCapabilities() CapabilitiesResponse {
 			"secrets-management-value-search-metadata-only",
 			"secrets-management-controlled-reveal",
 			"secrets-management-dry-run-apply",
+			"local-secret-decommission-tombstone-restore",
 			"credential-rotation-dry-run",
+			"credential-rotation-local-versioning",
 			"bulk-secret-operation-campaigns",
 			"metadata-only-secrets-sync-dry-run",
 			"env-source",
@@ -395,6 +408,7 @@ func serve(args []string) error {
 		return err
 	}
 	backend.sources = sources
+	backend.configureProviderMigrationExecutors()
 
 	binding, err := resolveServeTransport(serveTransportOptions{
 		Mode:                        *mode,
@@ -468,7 +482,9 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		registerLocalStoreHandlers(mux, backend, security)
 		registerSourceRegistryHandlers(mux, backend)
 		registerSecretsManagementHandlers(mux, backend, security)
+		registerDecommissionHandlers(mux, backend, security)
 		registerRotationHandlers(mux, backend, security)
+		registerRotationVersionHandlers(mux, backend, security)
 		registerBulkCampaignHandlers(mux, backend, security)
 		registerSyncDryRunHandlers(mux, backend, security)
 		registerProviderConfigMigrationHandlers(mux, backend, security)

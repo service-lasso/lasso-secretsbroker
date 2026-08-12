@@ -20,6 +20,8 @@ Service Lasso core should keep only a tiny bootstrap client/state machine:
 
 The daemon in this repo owns storage, unlock, policy, audit, source adapters, resolve/write-back behavior, and external provider/source state.
 
+Fresh vault root owner identity and bootstrap key semantics are defined in `docs/vault-root-bootstrap-contract.md`. In short, first initialization records safe `vaultId`, root actor, key id/fingerprint, source type, local machine context, loss semantics, and audit expectations. Raw vault keys are never stored or re-exposed; generated-key initialization reveals the key only in the explicit one-time setup response.
+
 ## Transport shape
 
 Preferred production transports:
@@ -143,6 +145,27 @@ Example response:
   "affectedServices": []
 }
 ```
+
+After first initialization, setup-oriented CLI/API metadata may include safe vault owner fields:
+
+```json
+{
+  "rootIdentity": {
+    "vaultId": "vault-8f4c1e3d2a0b9c7d",
+    "rootActorId": "root-9e2a1d3c4b5f6071",
+    "bootstrapSource": "key_initialize",
+    "keySourceType": "supplied_file",
+    "keyId": "mk-safe-fingerprint",
+    "keyVersion": "v1",
+    "lossSemantics": {
+      "recoverableWithoutKey": false,
+      "nextAction": "recreate_vault_if_key_and_recovery_are_lost"
+    }
+  }
+}
+```
+
+`rootActorId` is the Service Lasso vault owner identity, not OS root/admin.
 
 ### `GET /capabilities`
 

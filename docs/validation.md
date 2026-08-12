@@ -11,7 +11,7 @@ Current first-pass direction:
 - local and CI usage should share the same harness contract path
 - default health model is `process`; other health models should come from explicit service config
 
-Ref/code-backed donor healthcheck types observed:
+Ref/code-backed donor healthchecks types observed:
 - `http`
 - `tcp`
 - `file`

@@ -46,6 +46,9 @@ func contractRoutes() []contractRoute {
 	migrationAction := func(path, summary string) contractRoute {
 		return contractRoute{Method: http.MethodPost, Path: path, Summary: summary, Auth: true, Request: migrationPlanRequest{}, Response: migrationPlanResponse{}}
 	}
+	decommissionAction := func(path, summary string) contractRoute {
+		return contractRoute{Method: http.MethodPost, Path: path, Summary: summary, Auth: true, Request: decommissionRequest{}, Response: decommissionResponse{}}
+	}
 
 	return []contractRoute{
 		{Method: http.MethodGet, Path: "/health", Summary: "Broker liveness", Response: HealthResponse{}},
@@ -79,7 +82,15 @@ func contractRoutes() []contractRoute {
 		managedAction("/v1/management/secrets/edit/apply", "Apply a managed secret edit"),
 		managedAction("/v1/management/secrets/reset/dry-run", "Preview a managed secret reset"),
 		managedAction("/v1/management/secrets/reset/apply", "Apply a managed secret reset"),
+		decommissionAction("/v1/management/secrets/decommission/dry-run", "Plan a local secret decommission"),
+		decommissionAction("/v1/management/secrets/decommission/apply", "Decommission a local secret into an encrypted tombstone"),
+		decommissionAction("/v1/management/secrets/decommission/restore", "Restore a local secret from an encrypted tombstone"),
 		{Method: http.MethodPost, Path: "/v1/management/secrets/rotation/dry-run", Summary: "Preview credential rotation", Auth: true, Request: rotationDryRunRequest{}, Response: rotationDryRunResponse{}},
+		{Method: http.MethodPost, Path: "/v1/management/secrets/rotation/status", Summary: "Read local rotation version metadata", Auth: true, Request: rotationVersionRequest{}, Response: rotationVersionResponse{}},
+		{Method: http.MethodPost, Path: "/v1/management/secrets/rotation/stage", Summary: "Stage a local secret version", Auth: true, Request: rotationVersionRequest{}, Response: rotationVersionResponse{}},
+		{Method: http.MethodPost, Path: "/v1/management/secrets/rotation/activate", Summary: "Activate a staged local secret version", Auth: true, Request: rotationVersionRequest{}, Response: rotationVersionResponse{}},
+		{Method: http.MethodPost, Path: "/v1/management/secrets/rotation/rollback", Summary: "Roll back to a retained local secret version", Auth: true, Request: rotationVersionRequest{}, Response: rotationVersionResponse{}},
+		{Method: http.MethodPost, Path: "/v1/management/secrets/rotation/retire", Summary: "Retire retained local secret versions", Auth: true, Request: rotationVersionRequest{}, Response: rotationVersionResponse{}},
 		bulkAction("/v1/management/secrets/campaigns/create", "Create a bulk secret campaign"),
 		bulkAction("/v1/management/secrets/campaigns/revalidate", "Revalidate a bulk secret campaign"),
 		bulkAction("/v1/management/secrets/campaigns/apply", "Apply a bulk secret campaign"),
@@ -368,6 +379,8 @@ func (b *contractSchemaBuilder) schemaFor(typ reflect.Type) map[string]any {
 			schema["enum"] = []string{"read", "mutation"}
 		case "OperationScope":
 			schema["enum"] = []string{"broker-local", "provider-remote", "source-boundary", "mixed"}
+		case "OperationCompletionMode":
+			schema["enum"] = []string{"synchronous", "asynchronous"}
 		}
 		return schema
 	case reflect.Bool:

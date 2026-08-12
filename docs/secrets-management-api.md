@@ -13,6 +13,7 @@ The contract is metadata-first. List/search/value-search responses return safe r
 - Edit/reset/policy operations expose dry-run/preview before apply.
 - Apply requests are secret-bearing where relevant and use the same local API auth and body-size guardrails as existing write/resolve endpoints.
 - Audit entries record operation/ref/outcome/request identity only; they do not include raw values.
+- Local rotation stage, activate, rollback, and retire record a metadata-only audit authorization before changing encrypted state. If the configured audit or operational-event sink cannot accept that record, the operation returns `audit_unavailable` and leaves the store byte-for-byte unchanged.
 - Provisioning status is metadata-only. It reports generated value policy classes and per-ref status, never generated values, master keys, provider credentials, tokens, private keys, cookies, passwords, environment values, or recovery material.
 - Provisioning operation planning is metadata-only. Caller-provided generation currently plans the existing signed write-back path. Broker-generated apply is available only through the explicit apply endpoint, and still requires confirmation, audit reason, local API auth, signed launch identity, namespace/ref policy, and operation policy.
 
@@ -291,7 +292,7 @@ Dry-run validates reset/rotate readiness. Apply stores caller-provided replaceme
 
 ### `POST /v1/management/secrets/rotation/dry-run`
 
-Metadata-only credential rotation planning. The first broker-side slice is dry-run only: it reports local encrypted-store rotation/reset readiness and provider capability results, but it does not generate replacement material, mutate secrets, call external provider apply APIs, or return raw values.
+Metadata-only credential rotation planning. The dry-run route reports local encrypted-store rotation/reset readiness and provider capability results, but it does not generate replacement material, mutate secrets, call external provider apply APIs, or return raw values. Local encrypted-store mutation is exposed through the explicit stage, activate, rollback and retire endpoints below.
 
 Request:
 
@@ -360,20 +361,106 @@ Response:
 
 Provider-backed refs are represented as metadata-only capability results. A provider/source that does not currently advertise rotate/reset support returns `unsupported` with `nextAction: "inspect_provider_capabilities"`. Unknown policy, audit, provider auth, or broker state fails closed and must be rechecked with a fresh dry-run before any later apply path.
 
+### `POST /v1/management/secrets/rotation/status`
+### `POST /v1/management/secrets/rotation/stage`
+### `POST /v1/management/secrets/rotation/activate`
+### `POST /v1/management/secrets/rotation/rollback`
+### `POST /v1/management/secrets/rotation/retire`
+
+Executable local encrypted-store rotation version operations. These endpoints are local-store only; remote providers remain capability-gated behind provider-specific mutation paths.
+
+`status` returns active, previous, staged and retained version metadata without values. `stage` accepts candidate secret material on the protected secret-bearing request path, encrypts it into a staged version, and leaves the current active value unchanged. `activate` requires `confirm: true`, an audit `reason`, a staged `versionId`, and `expectedCurrentVersion`; if the active version changed, it returns `conflict` and does not mutate state. `rollback` restores a retained previous version after a caller reports consumer convergence failure. An exact rollback retry returns `conflict` with `nextAction: "already_active"`, including when the original request selected the implicit previous version, and leaves the encrypted store unchanged. `retire` removes explicitly selected or retention-limit old versions only after confirmation; retries of an already completed retirement are successful no-ops.
+
+All four mutation routes fail closed before changing the encrypted store when audit evidence cannot be persisted. A successful stage or activation persists its encrypted ledger with the store file; broker process restart preserves active, previous, staged, and retained version metadata and the active value selected before restart.
+
+Stage request:
+
+```json
+{
+  "requestId": "req-stage-1",
+  "serviceId": "@serviceadmin",
+  "ref": "services/@serviceadmin/runtime/SESSION_SIGNING_KEY",
+  "operationId": "rotation-2026-08-04-a",
+  "expectedCurrentVersion": "2026-08-04T00:00:00Z",
+  "reason": "operator rotation",
+  "value": "<candidate value only in request body>"
+}
+```
+
+Activate request:
+
+```json
+{
+  "requestId": "req-activate-1",
+  "serviceId": "@serviceadmin",
+  "ref": "services/@serviceadmin/runtime/SESSION_SIGNING_KEY",
+  "operationId": "rotation-2026-08-04-a",
+  "versionId": "rv-rotation-2026-08-04-a",
+  "expectedCurrentVersion": "2026-08-04T00:00:00Z",
+  "reason": "consumer preflight passed",
+  "confirm": true
+}
+```
+
+Response:
+
+```json
+{
+  "serviceId": "@secretsbroker",
+  "apiVersion": "secretsbroker.local/v1",
+  "requestId": "req-activate-1",
+  "ref": "services/@serviceadmin/runtime/SESSION_SIGNING_KEY",
+  "operation": "rotation_activate",
+  "mode": "activate",
+  "outcome": "applied",
+  "applied": true,
+  "requiresConfirmation": true,
+  "auditStatus": "audit_recorded",
+  "policyResult": "allowed",
+  "activeVersionId": "rv-rotation-2026-08-04-a",
+  "previousVersionId": "2026-08-04T00:00:00Z",
+  "currentVersion": {
+    "versionId": "rv-rotation-2026-08-04-a",
+    "sourceId": "rotation:staged:@serviceadmin",
+    "state": "active",
+    "fingerprint": "sha256:...",
+    "createdAt": "2026-08-04T00:01:00Z",
+    "updatedAt": "2026-08-04T00:02:00Z",
+    "auditStatus": "audit_available",
+    "policyResult": "allowed"
+  },
+  "versions": [],
+  "affectedRefs": ["services/@serviceadmin/runtime/SESSION_SIGNING_KEY"],
+  "affectedServices": ["@serviceadmin"]
+}
+```
+
+Responses, audit records, events, telemetry, diagnostics and status surfaces never include raw values. Audit records cover `rotation_stage`, `rotation_activate`, `rotation_rollback` and `rotation_retire` outcomes including `conflict`, `staged`, `applied`, `rolled_back` and `retired`.
+
 ### `POST /v1/management/secrets/campaigns/create`
 ### `POST /v1/management/secrets/campaigns/revalidate`
 ### `POST /v1/management/secrets/campaigns/apply`
 ### `POST /v1/management/secrets/campaigns/status`
 
-Bulk operation campaigns are the metadata-safe apply contract for multi-ref operations. They are designed for Service Admin bulk workflow Stage 2/3 and must be preceded by a campaign create/revalidate plan. They never return raw secret values, provider credentials, tokens, private keys, cookies, passwords, raw environment values, or recovery material.
+Bulk operation campaigns are the durable metadata-safe contract for multi-ref
+operations. They are designed for Service Admin bulk workflow Stage 2/3 and
+must be preceded by a persisted campaign create/revalidate plan. They never
+return or persist raw secret values, provider credentials, tokens, private keys,
+cookies, passwords, raw environment values, audit reasons, provider response
+bodies, or recovery material.
 
-Supported operation families:
+Planning supports these operation families:
 
 - `rotate_reset`
 - `update_edit`
 - `apply_policy`
 - `migrate_remap_provider`
 - `mark_action_required`
+
+Apply is executable only for `migrate_remap_provider` from the local encrypted
+store to an exact ready Vault/OpenBao or AWS Secrets Manager connection with a
+registered migration executor. Other apply families fail closed with
+`unsupported`; they never turn a plan into metadata-only success.
 
 Create builds a non-mutating plan and returns a server-side `planToken`, retry-safe `operationItemId` values, and per-item `idempotencyKey` values.
 
@@ -382,8 +469,9 @@ Create builds a non-mutating plan and returns a server-side `planToken`, retry-s
   "requestId": "req-campaign-create",
   "serviceId": "@serviceadmin",
   "campaignId": "campaign-2026-06-19-a",
-  "operationId": "bulk-rotate-a",
-  "operation": "rotate_reset",
+  "operationId": "bulk-migrate-a",
+  "operation": "migrate_remap_provider",
+  "targetProviderId": "vault-prod",
   "refs": [
     "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
   ],
@@ -399,16 +487,16 @@ Response:
   "apiVersion": "secretsbroker.local/v1",
   "requestId": "req-campaign-create",
   "campaignId": "campaign-2026-06-19-a",
-  "planToken": "campaign-2026-06-19-a:rotate_reset:sha256:...",
-  "operationId": "bulk-rotate-a",
-  "operation": "rotate_reset",
+  "planToken": "campaign-2026-06-19-a:migrate_remap_provider:sha256:...",
+  "operationId": "bulk-migrate-a",
+  "operation": "migrate_remap_provider",
   "mode": "create",
   "outcome": "dry_run_ready",
   "applied": false,
   "requiresConfirmation": true,
   "requiresAuditReason": true,
   "requiresRevalidation": true,
-  "auditStatus": "audit_ready",
+  "auditStatus": "audit_recorded",
   "staleAfterSeconds": 300,
   "nextAction": "revalidate_confirm_and_apply",
   "results": [
@@ -417,20 +505,22 @@ Response:
       "sourceId": "local-test",
       "providerKind": "local-encrypted-store",
       "ownerServiceId": "@serviceadmin",
-      "operation": "rotate_reset",
+      "operation": "migrate_remap_provider",
       "capabilityResult": "supported",
       "policyResult": "allowed",
       "auditRequirement": "required",
       "risk": "high",
-      "expectedAction": "generate_or_accept_replacement_inside_broker",
+      "expectedAction": "copy_or_remap_value_inside_broker_to_target_provider",
       "outcome": "dry_run_ready",
       "nextAction": "revalidate_confirm_and_apply",
-      "idempotencyKey": "campaign-2026-06-19-a:rotate_reset:sha256:...",
+      "idempotencyKey": "sha256:...",
       "operationItemId": "campaign-2026-06-19-a:item:sha256:...",
-      "recovery": "retry_with_same_idempotency_key_or_restore_from_backup",
-      "providerAction": "rotate_or_reset",
+      "recovery": "retry_after_fix_or_restore_from_backup",
+      "targetProviderId": "vault-prod",
+      "providerAction": "migrate_or_remap",
       "applied": false,
-      "retrySafe": true
+      "retrySafe": true,
+      "verified": false
     }
   ],
   "summary": {
@@ -453,18 +543,93 @@ Response:
   ],
   "unsupportedFamilies": [
     "bulk_raw_value_reveal"
-  ]
+  ],
+  "durable": true,
+  "maxConcurrency": 1,
+  "backpressurePolicy": "stop_and_defer_remaining",
+  "createdAt": "2026-06-19T00:00:00Z",
+  "updatedAt": "2026-06-19T00:00:00Z"
 }
 ```
 
-Apply requires `planToken`, `confirm: true`, and `reason`. The broker reuses the server-side plan, records campaign-level and per-item audit events, and applies only ready items. Denied, unsupported, auth-required, skipped, failed, and stale items remain typed per item. A missing or unknown `planToken` returns `stale_plan` and applies nothing.
+Apply requires `planToken`, `confirm: true`, an audit `reason`, and
+`highRiskConfirm` equal to the exact stored campaign id. The stored plan must
+have been revalidated, and any supplied operation, target, campaign id,
+operation id, policy, or refs must match it. A mismatch or unknown token returns
+`stale_plan` before provider calls.
 
-Campaign apply is retry-safe by `idempotencyKey` and `operationItemId`. The first implementation records metadata-level campaign outcomes and local-store-supported item outcomes; provider-specific live remote writes may continue returning typed `unsupported` until a provider operation path exists.
+The Broker records an authorization audit event before an executor can receive
+source material. Items run in deterministic ref order with a Broker-wide
+maximum concurrency of one. Provider `rate_limited`, `source_auth_required`,
+`source_unavailable`, `degraded`, or `audit_unavailable` stops scheduling;
+later refs are persisted as `skipped` with
+`retry_after_provider_backoff`. Policy-denied and unsupported refs remain typed
+without blocking unrelated eligible refs.
+
+Each item delegates to the same durable provider migration layer used by the
+single-plan API. Stable `operationItemId` values become provider operation ids,
+so exact retry or Broker restart skips verified refs, retries verification
+without another write, and resumes failed/deferred refs. Campaign status,
+summary, attempts, and verification flags survive restart. Local source values
+remain unchanged and recoverable.
+
+Vault/OpenBao and AWS protocol correctness remains covered by their production
+executor suites. Bulk tests use deterministic registered executors and do not
+claim live provider, cloud account, IAM, or endpoint-version certification.
 
 ### `POST /v1/management/secrets/policy/preview`
 ### `POST /v1/management/secrets/policy/apply`
 
 Preview/apply policy changes. This first contract records the requested policy handle/status and returns metadata-only outcomes; provider-specific enforcement can be expanded behind the same response shape.
+
+## Operation lifecycle and status
+
+The current management endpoints are synchronous request/response operations.
+`GET /capabilities` is the machine-readable authority: every management
+operation record currently has `"completionMode": "synchronous"` and no
+`statusPath`.
+
+Service Admin must not invent or poll a secret-operation status endpoint unless
+the selected operation advertises `"completionMode": "asynchronous"` with a
+non-empty `statusPath`. A future asynchronous operation must return an operation
+id, correlation id, terminal state, retry safety, and metadata-only status
+response before it can be advertised as executable.
+
+## Delete, disable and decommission
+
+Delete, disable and decommission remain separate capabilities. Hard delete and
+disable are not implemented or advertised in this release. Admin must hide
+those actions or show them as unavailable instead of mapping them to the local
+decommission route.
+
+The local encrypted store implements a recoverable decommission lifecycle:
+
+- `POST /v1/management/secrets/decommission/dry-run`
+- `POST /v1/management/secrets/decommission/apply`
+- `POST /v1/management/secrets/decommission/restore`
+
+The dry-run requires a caller-supplied authoritative dependency result:
+`dependencyStatus: "clear"`, no dependency ids, and a `sha256:` dependency
+graph snapshot. The Broker binds that snapshot, ref, current secret version,
+operation id, and five-minute expiry into an HMAC-signed plan. Apply requires
+the unmodified plan, explicit confirmation, and an audit reason. A changed
+active version, expired/tampered plan, or different operation id returns
+`stale_plan` without changing state. Unknown or non-clear dependencies return
+`dependency_blocked` and no plan.
+
+Successful apply moves the encrypted local entry out of the active secret map
+and into a durable encrypted tombstone. The response exposes only safe
+tombstone metadata; it never includes plaintext or encrypted payload fields.
+Retrying the same signed operation is idempotent. Restore requires explicit
+confirmation, audit reason, a new operation id, and the exact tombstone version;
+it reactivates the encrypted entry and is also retry-idempotent. Tombstone state
+survives Broker restart and is included in encrypted-store backup/restore.
+
+Dry-run, apply, and restore require the local API token and fail closed when the
+Broker is locked or audit/event evidence cannot be persisted. Remote/provider
+refs return `unsupported`; provider-specific destructive execution remains a
+later capability. Hard delete will require an explicit retention expiry and
+separate non-recoverable confirmation contract before it can be advertised.
 
 ## Typed outcomes
 

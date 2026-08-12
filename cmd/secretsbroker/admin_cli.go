@@ -649,6 +649,7 @@ func backendFromAdminOptions(opts *adminCommonOptions) (*localBackend, keyMateri
 		return nil, material, sourceErr
 	}
 	backend.sources = sources
+	backend.configureProviderMigrationExecutors()
 	return backend, material, err
 }
 

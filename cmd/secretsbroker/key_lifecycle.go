@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -28,7 +29,48 @@ var (
 	errStoreAlreadyExists   = errors.New("local encrypted store already exists")
 	errUnsupportedOSWrapper = errors.New("os wrapper provider is unsupported")
 	errInvalidWrapper       = errors.New("local key wrapper is invalid")
+	errOneTimeRevealMissing = errors.New("generated bootstrap requires explicit one-time reveal")
 )
+
+type vaultRootIdentityMetadata struct {
+	VaultID             string              `json:"vaultId"`
+	RootActorID         string              `json:"rootActorId"`
+	CreatedAt           time.Time           `json:"createdAt"`
+	BootstrapSource     string              `json:"bootstrapSource"`
+	KeySourceType       string              `json:"keySourceType"`
+	KeyID               string              `json:"keyId"`
+	KeyVersion          string              `json:"keyVersion"`
+	LocalMachineContext localMachineContext `json:"localMachineContext"`
+	LossSemantics       vaultLossSemantics  `json:"lossSemantics"`
+	AuditExpectations   []string            `json:"auditExpectations"`
+}
+
+type localMachineContext struct {
+	OS       string `json:"os"`
+	Username string `json:"username,omitempty"`
+	Machine  string `json:"machine,omitempty"`
+}
+
+type vaultLossSemantics struct {
+	RecoverableWithoutKey bool   `json:"recoverableWithoutKey"`
+	NextAction            string `json:"nextAction"`
+	Message               string `json:"message"`
+}
+
+type bootstrapKeyMetadata struct {
+	KeyID                  string             `json:"keyId"`
+	KeyVersion             string             `json:"keyVersion"`
+	SourceType             string             `json:"sourceType"`
+	Fingerprint            string             `json:"fingerprint"`
+	Generated              bool               `json:"generated"`
+	OneTimeRevealAvailable bool               `json:"oneTimeRevealAvailable"`
+	LossSemantics          vaultLossSemantics `json:"lossSemantics"`
+}
+
+type bootstrapOneTimeReveal struct {
+	MasterKey string `json:"masterKey"`
+	Warning   string `json:"warning"`
+}
 
 type localKeyWrapper struct {
 	Version     int       `json:"version"`
@@ -48,19 +90,22 @@ type localKeyWrapper struct {
 }
 
 type keyLifecycleResponse struct {
-	ServiceID        string               `json:"serviceId"`
-	APIVersion       string               `json:"apiVersion"`
-	Outcome          string               `json:"outcome"`
-	State            string               `json:"state"`
-	Ready            bool                 `json:"ready"`
-	KeyID            string               `json:"keyId,omitempty"`
-	KeyVersion       string               `json:"keyVersion,omitempty"`
-	StorePath        string               `json:"storePath,omitempty"`
-	WrapperPath      string               `json:"wrapperPath,omitempty"`
-	Wrapper          *wrapperStatusDetail `json:"wrapper,omitempty"`
-	SecretCount      int                  `json:"secretCount"`
-	NextAction       string               `json:"nextAction"`
-	RecoveryGuidance string               `json:"recoveryGuidance"`
+	ServiceID        string                     `json:"serviceId"`
+	APIVersion       string                     `json:"apiVersion"`
+	Outcome          string                     `json:"outcome"`
+	State            string                     `json:"state"`
+	Ready            bool                       `json:"ready"`
+	KeyID            string                     `json:"keyId,omitempty"`
+	KeyVersion       string                     `json:"keyVersion,omitempty"`
+	StorePath        string                     `json:"storePath,omitempty"`
+	WrapperPath      string                     `json:"wrapperPath,omitempty"`
+	Wrapper          *wrapperStatusDetail       `json:"wrapper,omitempty"`
+	RootIdentity     *vaultRootIdentityMetadata `json:"rootIdentity,omitempty"`
+	BootstrapKey     *bootstrapKeyMetadata      `json:"bootstrapKey,omitempty"`
+	OneTimeReveal    *bootstrapOneTimeReveal    `json:"oneTimeReveal,omitempty"`
+	SecretCount      int                        `json:"secretCount"`
+	NextAction       string                     `json:"nextAction"`
+	RecoveryGuidance string                     `json:"recoveryGuidance"`
 }
 
 type wrapperStatusDetail struct {
@@ -92,15 +137,26 @@ func runKeyInitialize(args []string) error {
 	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "portable master key")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
+	generate := fs.Bool("generate", false, "generate a portable master key when no key is supplied")
+	oneTimeReveal := fs.Bool("one-time-reveal", false, "include generated key material in this initialize response only")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	material, err := loadKeyMaterial(*masterKey, *masterKeyFile)
-	if err != nil {
+	if errors.Is(err, errLocked) && *generate {
+		generated, genErr := generatePortableMasterKey()
+		if genErr != nil {
+			return genErr
+		}
+		material = keyMaterial{Value: generated, Source: "generated"}
+	} else if err != nil {
 		return err
 	}
+	if material.Source == "generated" && !*oneTimeReveal {
+		return errOneTimeRevealMissing
+	}
 	backend := newLocalBackend(*storePath, *auditPath, material.Value)
-	res, err := backend.initializeStore(material.Value)
+	res, err := backend.initializeStoreWithSource(material.Value, material.Source, *oneTimeReveal)
 	if err != nil {
 		return err
 	}
@@ -174,6 +230,11 @@ func runKeyWrapperStatus(args []string) error {
 }
 
 func (b *localBackend) initializeStore(masterKey string) (keyLifecycleResponse, error) {
+	return b.initializeStoreWithSource(masterKey, "supplied", false)
+}
+
+func (b *localBackend) initializeStoreWithSource(masterKey, keySourceType string, revealGenerated bool) (keyLifecycleResponse, error) {
+	keySourceType = normalizeBootstrapKeySource(keySourceType)
 	if err := validatePortableMasterKey(masterKey); err != nil {
 		_ = b.audit("key_initialize", "", "locked", "", "")
 		return keyLifecycleResponse{}, err
@@ -185,13 +246,30 @@ func (b *localBackend) initializeStore(masterKey string) (keyLifecycleResponse, 
 		_ = b.audit("key_initialize", "", "degraded", "", "")
 		return keyLifecycleResponse{}, err
 	}
-	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, KeyID: masterKeyID(masterKey), KeyVersion: masterKeyVersion, CreatedAt: b.now(), UpdatedAt: b.now(), Secrets: map[string]secretEntry{}}
+	keyID := masterKeyID(masterKey)
+	now := b.now()
+	vaultID := vaultIDFor(keyID, b.storePath)
+	rootIdentity := rootIdentityFor(vaultID, keyID, keySourceType, now)
+	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, VaultID: vaultID, KeyID: keyID, KeyVersion: masterKeyVersion, RootIdentity: &rootIdentity, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}}
 	if err := b.saveStore(store); err != nil {
 		_ = b.audit("key_initialize", "", "degraded", "", "")
 		return keyLifecycleResponse{}, errBackendDegraded
 	}
-	_ = b.audit("key_initialize", "", "ready", "", "")
-	return keyLifecycleResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "ready", State: "ready", Ready: true, KeyID: masterKeyID(masterKey), KeyVersion: masterKeyVersion, StorePath: b.storePath, SecretCount: 0, NextAction: "import_or_rewrap_for_local_os", RecoveryGuidance: "Store the portable master key securely, separately from encrypted store backups."}, nil
+	_ = b.writeAuditEvent(auditEvent{TS: now, Operation: "key_initialize", KeyID: keyID, Outcome: "ready", State: "ready"})
+	if keySourceType == "generated" {
+		_ = b.writeAuditEvent(auditEvent{TS: now, Operation: "key_generated", KeyID: keyID, Outcome: "ready"})
+	} else {
+		_ = b.writeAuditEvent(auditEvent{TS: now, Operation: "supplied_key_used", KeyID: keyID, Outcome: "ready"})
+	}
+	_ = b.writeAuditEvent(auditEvent{TS: now, Operation: "vault_created", KeyID: keyID, Outcome: "ready", State: "ready"})
+	_ = b.writeAuditEvent(auditEvent{TS: now, Operation: "root_identity_created", KeyID: keyID, Outcome: "ready", State: rootIdentity.RootActorID})
+	_ = b.writeAuditEvent(auditEvent{TS: now, Operation: "setup_completed", KeyID: keyID, Outcome: "ready", State: "ready"})
+	bootstrapKey := bootstrapKeyFor(masterKey, keySourceType, revealGenerated)
+	res := keyLifecycleResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "ready", State: "ready", Ready: true, KeyID: keyID, KeyVersion: masterKeyVersion, StorePath: b.storePath, RootIdentity: &rootIdentity, BootstrapKey: &bootstrapKey, SecretCount: 0, NextAction: "import_or_rewrap_for_local_os", RecoveryGuidance: "Store the portable master key securely, separately from encrypted store backups. If this key is lost without recovery material, recreate the vault and old encrypted secrets are not recoverable."}
+	if keySourceType == "generated" && revealGenerated {
+		res.OneTimeReveal = &bootstrapOneTimeReveal{MasterKey: strings.TrimSpace(masterKey), Warning: "One-time reveal only. Store this portable vault key now; the broker will not persist or re-reveal it."}
+	}
+	return res, nil
 }
 
 func (b *localBackend) unlockWithMasterKey(masterKey string) (keyLifecycleResponse, error) {
@@ -203,10 +281,75 @@ func (b *localBackend) unlockWithMasterKey(masterKey string) (keyLifecycleRespon
 	state, secretCount, err := b.validateStoreForKey()
 	if err != nil {
 		_ = b.audit("key_unlock", "", state, "", "")
+		_ = b.writeAuditEvent(auditEvent{TS: b.now(), Operation: "vault_unlock_failure", KeyID: masterKeyID(masterKey), Outcome: state, State: state})
 		return keyLifecycleResponse{}, err
 	}
 	_ = b.audit("key_unlock", "", "ready", "", "")
 	return keyLifecycleResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "ready", State: "ready", Ready: true, KeyID: masterKeyID(masterKey), KeyVersion: masterKeyVersion, StorePath: b.storePath, SecretCount: secretCount, NextAction: "operate_or_rewrap_for_local_os", RecoveryGuidance: "If this machine should unlock without manual key entry, run key import or key rewrap for the current OS/user wrapper."}, nil
+}
+
+func normalizeBootstrapKeySource(source string) string {
+	source = strings.TrimSpace(source)
+	switch source {
+	case "generated":
+		return "generated"
+	case "file":
+		return "supplied_file"
+	case "flag/env":
+		return "supplied"
+	default:
+		if source == "" || source == "none" {
+			return "supplied"
+		}
+		return scrubAuditField(source)
+	}
+}
+
+func vaultIDFor(keyID, storePath string) string {
+	sum := sha256.Sum256([]byte(serviceID + ":" + strings.TrimSpace(keyID) + ":" + filepath.Clean(storePath)))
+	return "vault-" + hex.EncodeToString(sum[:])[:16]
+}
+
+func rootIdentityFor(vaultID, keyID, keySourceType string, createdAt time.Time) vaultRootIdentityMetadata {
+	ctx := wrapperContextFor(runtime.GOOS)
+	sum := sha256.Sum256([]byte(serviceID + ":root-owner:" + vaultID + ":" + keyID))
+	return vaultRootIdentityMetadata{
+		VaultID:         vaultID,
+		RootActorID:     "root-" + hex.EncodeToString(sum[:])[:16],
+		CreatedAt:       createdAt.UTC(),
+		BootstrapSource: "key_initialize",
+		KeySourceType:   keySourceType,
+		KeyID:           keyID,
+		KeyVersion:      masterKeyVersion,
+		LocalMachineContext: localMachineContext{
+			OS:       ctx.OS,
+			Username: ctx.User,
+			Machine:  ctx.Machine,
+		},
+		LossSemantics:     defaultVaultLossSemantics(),
+		AuditExpectations: []string{"vault_created", "root_identity_created", "key_generated", "supplied_key_used", "setup_completed", "vault_unlock_failure"},
+	}
+}
+
+func bootstrapKeyFor(masterKey, source string, revealAvailable bool) bootstrapKeyMetadata {
+	source = normalizeBootstrapKeySource(source)
+	return bootstrapKeyMetadata{
+		KeyID:                  masterKeyID(masterKey),
+		KeyVersion:             masterKeyVersion,
+		SourceType:             source,
+		Fingerprint:            masterKeyID(masterKey),
+		Generated:              source == "generated",
+		OneTimeRevealAvailable: source == "generated" && revealAvailable,
+		LossSemantics:          defaultVaultLossSemantics(),
+	}
+}
+
+func defaultVaultLossSemantics() vaultLossSemantics {
+	return vaultLossSemantics{
+		RecoverableWithoutKey: false,
+		NextAction:            "recreate_vault_if_key_and_recovery_are_lost",
+		Message:               "If the vault key is lost and no managed recovery material exists, the vault cannot be unlocked; recreate the vault and old encrypted secrets are not recoverable.",
+	}
 }
 
 func (b *localBackend) importOrRewrapMasterKey(wrapperPath, masterKey string, ctx wrapperContext, operation string) (keyLifecycleResponse, error) {

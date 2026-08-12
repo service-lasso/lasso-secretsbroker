@@ -5,10 +5,12 @@
   "version": "0.3.0",
   "enabled": true,
   "executable": "node",
-  "args": ["runtime/fixture-harness.mjs"],
+  "args": [
+    "runtime/fixture-harness.mjs"
+  ],
   "env": {
     "ECHO_MESSAGE": "hello from echo-service harness",
-    "ECHO_PORT": "${SERVICE_PORT}",
+    "ECHO_PORT": "${endpoint.service.port}",
     "ECHO_LOG_PATH": "./runtime/echo.log",
     "ECHO_STATE_PATH": "./runtime/state.json",
     "ECHO_DB_PATH": "./runtime/echo.sqlite"
@@ -50,26 +52,51 @@
     "files": [
       {
         "path": "./runtime/config.json",
-        "content": "{\n  \"serviceId\": \"${SERVICE_ID}\",\n  \"port\": \"${SERVICE_PORT}\",\n  \"logPath\": \"${ECHO_LOG_PATH}\",\n  \"statePath\": \"${ECHO_STATE_PATH}\",\n  \"dbPath\": \"${ECHO_DB_PATH}\"\n}\n"
+        "content": "{\n  \"serviceId\": \"${SERVICE_ID}\",\n  \"port\": \"${endpoint.service.port}\",\n  \"logPath\": \"${ECHO_LOG_PATH}\",\n  \"statePath\": \"${ECHO_STATE_PATH}\",\n  \"dbPath\": \"${ECHO_DB_PATH}\"\n}\n"
       }
     ]
   },
-  "ports": {
-    "service": 4010
-  },
-  "urls": [
+  "healthchecks": [
     {
-      "label": "ui",
-      "url": "http://127.0.0.1:${SERVICE_PORT}/",
-      "kind": "local"
-    },
-    {
-      "label": "service",
-      "url": "http://127.0.0.1:${SERVICE_PORT}/health",
-      "kind": "local"
+      "id": "echo-process-health",
+      "type": "process"
     }
   ],
-  "healthcheck": {
-    "type": "process"
-  }
+  "endpoints": [
+    {
+      "id": "service",
+      "kind": "network",
+      "label": "Service HTTP",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 4010,
+        "strategy": "preferred"
+      },
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    },
+    {
+      "id": "ui",
+      "kind": "url",
+      "label": "UI",
+      "target": "service",
+      "url": "http://${endpoint.service.bind}:${endpoint.service.port}/",
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    },
+    {
+      "id": "health",
+      "kind": "url",
+      "label": "Health",
+      "target": "service",
+      "url": "http://${endpoint.service.bind}:${endpoint.service.port}/health",
+      "exposure": "local",
+      "required": true
+    }
+  ]
 }

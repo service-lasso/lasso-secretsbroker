@@ -242,6 +242,15 @@ func (b *localBackend) rotateMasterKey(newMasterKey string) (keyRotateResponse, 
 		}
 		plaintext[ref] = value
 	}
+	tombstonePlaintext := make(map[string]string, len(store.Tombstones))
+	for ref, tombstone := range store.Tombstones {
+		value, err := b.decrypt(tombstone.Entry.Payload)
+		if err != nil {
+			_ = b.audit("key_rotate", ref, "degraded", "", "")
+			return keyRotateResponse{}, errInvalidBackupKey
+		}
+		tombstonePlaintext[ref] = value
+	}
 	oldKeyID := masterKeyID(b.masterKey)
 	b.masterKey = newMasterKey
 	for ref, value := range plaintext {
@@ -254,6 +263,17 @@ func (b *localBackend) rotateMasterKey(newMasterKey string) (keyRotateResponse, 
 		entry.Payload = payload
 		entry.Metadata.UpdatedAt = b.now()
 		store.Secrets[ref] = entry
+	}
+	for ref, value := range tombstonePlaintext {
+		tombstone := store.Tombstones[ref]
+		payload, err := b.encrypt(value)
+		if err != nil {
+			_ = b.audit("key_rotate", ref, "degraded", "", "")
+			return keyRotateResponse{}, err
+		}
+		tombstone.Entry.Payload = payload
+		tombstone.Entry.Metadata.UpdatedAt = b.now()
+		store.Tombstones[ref] = tombstone
 	}
 	store.KeyID = masterKeyID(newMasterKey)
 	store.KeyVersion = masterKeyVersion
@@ -269,6 +289,11 @@ func (b *localBackend) rotateMasterKey(newMasterKey string) (keyRotateResponse, 
 func (b *localBackend) verifyStoreDecryptable(store localStoreFile) error {
 	for _, entry := range store.Secrets {
 		if _, err := b.decrypt(entry.Payload); err != nil {
+			return err
+		}
+	}
+	for _, tombstone := range store.Tombstones {
+		if _, err := b.decrypt(tombstone.Entry.Payload); err != nil {
 			return err
 		}
 	}

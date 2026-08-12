@@ -27,6 +27,9 @@ Every operation record contains:
 - `authenticationRequired`, `policyRequired`, and `auditRequired`;
 - `scope`: `broker-local`, `provider-remote`, `source-boundary`, or `mixed`;
 - explicit `providerKinds`;
+- `completionMode`: `synchronous` or `asynchronous`;
+- `statusPath`, only when an asynchronous operation status route is actually
+  implemented and advertised;
 - safe `limitationCode`, `reasonCode`, and `nextAction` values.
 
 `validated` is an executable implementation covered by contract/provider tests.
@@ -46,10 +49,23 @@ For reads, the selected connection must report `read-only`, `executable`, or
 `validated` for the exact operation. Every invocation still re-evaluates its
 declared auth, policy, audit, confirmation, lockout, and identity controls.
 
+Current management routes complete synchronously. Service Admin must treat an
+empty `statusPath` as authoritative and must not poll a secret-operation status
+endpoint that is not present in this manifest. When the broker adds durable
+asynchronous delete, decommission, or provider mutation work, it must first add
+the implemented status route to the OpenAPI contract, advertised endpoint list,
+and operation manifest.
+
 Connection lifecycle wins over family capability. `source_auth_required`,
 `policy_denied`, `audit_unavailable`, locked, disabled, invalid, and degraded
 states downgrade affected connection operations to `unavailable` with a safe
 recovery action.
+
+Local decommission is advertised as three synchronous operations: signed
+dependency/version dry-run, recoverable encrypted-tombstone apply, and exact-
+version restore. Provider-scoped matrices keep these operations unavailable
+unless the selected provider is the local encrypted store. Hard delete and
+disable are not advertised.
 
 ## Current provider operation matrix
 
@@ -64,17 +80,31 @@ machine-readable authority.
 | Edit apply | validated | unavailable | unavailable | unavailable |
 | Reset/rotation dry-run | dry-run | planned | dry-run | unavailable |
 | Reset apply | validated | unavailable | unavailable | unavailable |
+| Rotation status | read-only | unavailable | unavailable | unavailable |
+| Rotation stage/activate/rollback/retire | validated | unavailable | unavailable | unavailable |
 | Policy preview | dry-run | dry-run | dry-run | unavailable |
 | Policy apply | planned | planned | planned | unavailable |
 | Migration dry-run | dry-run | dry-run | dry-run | dry-run |
-| Migration apply | planned | planned | planned | planned |
+| Migration apply | planned | validated* | validated** | planned |
+| Bulk migration campaign apply | planned | validated* | validated** | planned |
 | Secrets Sync dry-run | dry-run | dry-run | dry-run | dry-run |
 
+`validated*` applies only to a Vault/OpenBao connection whose source config
+explicitly sets `enableMigrationTarget: true` and passes address, auth and KV v2
+mapping validation. The family capability and every disabled/incomplete
+connection remain `planned`.
+
+`validated**` applies only to an AWS Secrets Manager connection whose source
+config explicitly sets `enableMigrationTarget: true` and passes region,
+endpoint, SigV4 credential-handle, credential-availability, and ref mapping
+validation. The family capability and every disabled/incomplete connection
+remain `planned`.
+
 The current provider configuration apply handler validates and reports an apply
-result but does not persist a connection. Migration and bulk campaign apply
-handlers report metadata outcomes but do not copy or mutate provider values.
-Those operations are deliberately `planned`, regardless of legacy response
-wording.
+result but does not persist a connection. Bulk campaign apply is executable only
+for a revalidated `migrate_remap_provider` plan targeting an exact registered
+Vault/OpenBao or AWS executor. Rotation, edit, policy, and metadata-only bulk
+apply remain non-executable. Provider-family upper bounds never authorize apply.
 
 ## Drift and conformance gates
 

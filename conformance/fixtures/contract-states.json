@@ -52,7 +52,9 @@
           "POST /v1/management/secrets/reveal",
           "POST /v1/management/secrets/edit/dry-run|apply",
           "POST /v1/management/secrets/reset/dry-run|apply",
+          "POST /v1/management/secrets/decommission/dry-run|apply|restore",
           "POST /v1/management/secrets/rotation/dry-run",
+          "POST /v1/management/secrets/rotation/status|stage|activate|rollback|retire",
           "POST /v1/management/secrets/campaigns/create|revalidate|apply|status",
           "POST /v1/management/secrets/sync/dry-run",
           "POST /v1/management/secrets/policy/preview|apply",
@@ -74,6 +76,7 @@
             "auditRequired": false,
             "scope": "broker-local",
             "providerKinds": [],
+            "completionMode": "synchronous",
             "limitationCode": "liveness_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -89,6 +92,7 @@
             "auditRequired": false,
             "scope": "broker-local",
             "providerKinds": [],
+            "completionMode": "synchronous",
             "limitationCode": "readiness_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -104,6 +108,7 @@
             "auditRequired": false,
             "scope": "broker-local",
             "providerKinds": [],
+            "completionMode": "synchronous",
             "limitationCode": "metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -119,6 +124,7 @@
             "auditRequired": false,
             "scope": "broker-local",
             "providerKinds": [],
+            "completionMode": "synchronous",
             "limitationCode": "metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -134,6 +140,7 @@
             "auditRequired": false,
             "scope": "broker-local",
             "providerKinds": [],
+            "completionMode": "synchronous",
             "limitationCode": "release_metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -151,6 +158,7 @@
             "providerKinds": [
               "local-encrypted-store"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "local_store_only",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
@@ -168,6 +176,7 @@
             "providerKinds": [
               "local-encrypted-store"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "local_store_only",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
@@ -193,6 +202,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "runtime_controls_revalidated",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
@@ -218,6 +228,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -235,6 +246,7 @@
             "providerKinds": [
               "local-encrypted-store"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "no_secret_mutation",
             "reasonCode": "implemented_dry_run",
             "nextAction": "review_plan_before_apply"
@@ -252,6 +264,7 @@
             "providerKinds": [
               "local-encrypted-store"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "broker_generated_local_values_only",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
@@ -277,6 +290,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -302,6 +316,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "provider_family_upper_bound",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -327,6 +342,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -342,6 +358,7 @@
             "auditRequired": false,
             "scope": "broker-local",
             "providerKinds": [],
+            "completionMode": "synchronous",
             "limitationCode": "redacted_metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -357,6 +374,7 @@
             "auditRequired": false,
             "scope": "provider-remote",
             "providerKinds": [],
+            "completionMode": "synchronous",
             "limitationCode": "configured_exporter_only",
             "reasonCode": "implemented_executable",
             "nextAction": "satisfy_runtime_preconditions"
@@ -372,6 +390,7 @@
             "auditRequired": false,
             "scope": "broker-local",
             "providerKinds": [],
+            "completionMode": "synchronous",
             "limitationCode": "metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -389,6 +408,7 @@
             "providerKinds": [
               "local-encrypted-store"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "recovery_metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -406,6 +426,7 @@
             "providerKinds": [
               "local-encrypted-store"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "metadata_only_no_share_material",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
@@ -421,6 +442,7 @@
             "auditRequired": true,
             "scope": "broker-local",
             "providerKinds": [],
+            "completionMode": "synchronous",
             "limitationCode": "scoped_lockout_only",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
@@ -446,6 +468,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "configuration_validation_only",
             "reasonCode": "implemented_dry_run",
             "nextAction": "review_plan_before_apply"
@@ -471,6 +494,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "configuration_not_persisted",
             "reasonCode": "planning_only_not_executable",
             "nextAction": "do_not_enable_apply"
@@ -496,6 +520,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "local_target_only",
             "reasonCode": "implemented_dry_run",
             "nextAction": "review_plan_before_apply"
@@ -521,7 +546,8 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
-            "limitationCode": "migration_items_not_copied",
+            "completionMode": "synchronous",
+            "limitationCode": "registered_provider_executor_required",
             "reasonCode": "planning_only_not_executable",
             "nextAction": "do_not_enable_apply"
           },
@@ -546,6 +572,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
@@ -564,6 +591,7 @@
               "local-encrypted-store",
               "aws-secrets-manager"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "values_never_returned",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
@@ -589,6 +617,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "single_ref_ttl_bounded",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
@@ -614,6 +643,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "no_secret_mutation",
             "reasonCode": "implemented_dry_run",
             "nextAction": "review_plan_before_apply"
@@ -631,6 +661,7 @@
             "providerKinds": [
               "local-encrypted-store"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "local_store_only",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
@@ -656,6 +687,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "no_secret_mutation",
             "reasonCode": "implemented_dry_run",
             "nextAction": "review_plan_before_apply"
@@ -673,7 +705,62 @@
             "providerKinds": [
               "local-encrypted-store"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "local_store_only",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_secrets_decommission_dry_run",
+            "method": "POST",
+            "path": "/v1/management/secrets/decommission/dry-run",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "signed_expected_version_dependency_plan",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_secrets_decommission_apply",
+            "method": "POST",
+            "path": "/v1/management/secrets/decommission/apply",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "encrypted_recoverable_tombstone",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_secrets_decommission_restore",
+            "method": "POST",
+            "path": "/v1/management/secrets/decommission/restore",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "encrypted_tombstone_restore",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
           },
@@ -691,9 +778,100 @@
               "local-encrypted-store",
               "aws-secrets-manager"
             ],
-            "limitationCode": "no_rotation_apply_route",
+            "completionMode": "synchronous",
+            "limitationCode": "preflight_before_local_version_apply",
             "reasonCode": "implemented_dry_run",
             "nextAction": "review_plan_before_apply"
+          },
+          {
+            "operationId": "postv1_management_secrets_rotation_status",
+            "method": "POST",
+            "path": "/v1/management/secrets/rotation/status",
+            "maturity": "read-only",
+            "classification": "read",
+            "authenticationRequired": true,
+            "policyRequired": false,
+            "auditRequired": false,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "metadata_only",
+            "reasonCode": "implemented_read_only",
+            "nextAction": "read_when_authorized"
+          },
+          {
+            "operationId": "postv1_management_secrets_rotation_stage",
+            "method": "POST",
+            "path": "/v1/management/secrets/rotation/stage",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "local_store_staged_version_only",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_secrets_rotation_activate",
+            "method": "POST",
+            "path": "/v1/management/secrets/rotation/activate",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "expected_current_version_required",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_secrets_rotation_rollback",
+            "method": "POST",
+            "path": "/v1/management/secrets/rotation/rollback",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "retained_previous_version_only",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_secrets_rotation_retire",
+            "method": "POST",
+            "path": "/v1/management/secrets/rotation/retire",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "bounded_retention_cleanup",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
           },
           {
             "operationId": "postv1_management_secrets_campaigns_create",
@@ -716,6 +894,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "plan_state_only",
             "reasonCode": "implemented_dry_run",
             "nextAction": "review_plan_before_apply"
@@ -741,6 +920,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "plan_state_only",
             "reasonCode": "implemented_dry_run",
             "nextAction": "review_plan_before_apply"
@@ -766,7 +946,8 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
-            "limitationCode": "provider_mutations_not_executed",
+            "completionMode": "synchronous",
+            "limitationCode": "migrate_remap_provider_registered_executor_only",
             "reasonCode": "planning_only_not_executable",
             "nextAction": "do_not_enable_apply"
           },
@@ -781,7 +962,8 @@
             "auditRequired": false,
             "scope": "broker-local",
             "providerKinds": [],
-            "limitationCode": "in_memory_campaign_metadata_only",
+            "completionMode": "synchronous",
+            "limitationCode": "durable_campaign_metadata_only",
             "reasonCode": "implemented_read_only",
             "nextAction": "read_when_authorized"
           },
@@ -806,6 +988,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "no_sync_apply_route",
             "reasonCode": "implemented_dry_run",
             "nextAction": "review_plan_before_apply"
@@ -831,6 +1014,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "no_policy_mutation",
             "reasonCode": "implemented_dry_run",
             "nextAction": "review_plan_before_apply"
@@ -856,6 +1040,7 @@
               "bitwarden-bws",
               "onepassword-cli"
             ],
+            "completionMode": "synchronous",
             "limitationCode": "policy_binding_not_persisted",
             "reasonCode": "planning_only_not_executable",
             "nextAction": "do_not_enable_apply"
@@ -886,7 +1071,9 @@
           "secrets-management-value-search-metadata-only",
           "secrets-management-controlled-reveal",
           "secrets-management-dry-run-apply",
+          "local-secret-decommission-tombstone-restore",
           "credential-rotation-dry-run",
+          "credential-rotation-local-versioning",
           "bulk-secret-operation-campaigns",
           "metadata-only-secrets-sync-dry-run",
           "env-source",
@@ -928,6 +1115,13 @@
           "missing_ref",
           "invalid_ref",
           "source_unavailable",
+          "conflict",
+          "staged",
+          "applied",
+          "rolled_back",
+          "retired",
+          "rate_limited",
+          "verification_failed",
           "identity_invalid",
           "identity_expired",
           "identity_replayed",
@@ -938,6 +1132,8 @@
           "stale",
           "unsupported",
           "audit_unavailable",
+          "dependency_blocked",
+          "stale_plan",
           "failed"
         ]
       },
@@ -1112,6 +1308,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "runtime_auth_policy_audit_revalidated",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1129,6 +1326,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "runtime_auth_policy_audit_revalidated",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1146,6 +1344,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "runtime_auth_policy_audit_revalidated",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1163,6 +1362,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "runtime_auth_policy_audit_revalidated",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1180,6 +1380,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "runtime_auth_policy_audit_revalidated",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1197,6 +1398,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "runtime_auth_policy_audit_revalidated",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1214,6 +1416,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "planning_only_no_provider_mutation",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1231,6 +1434,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "runtime_auth_policy_audit_revalidated",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1248,6 +1452,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "planning_only_no_provider_mutation",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1265,6 +1470,61 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_dry_run",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/dry-run",
+                "maturity": "dry-run",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "planning_only_no_provider_mutation",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_apply",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/apply",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_restore",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/restore",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
                 "limitationCode": "runtime_auth_policy_audit_revalidated",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1282,7 +1542,98 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "planning_only_no_provider_mutation",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_status",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/status",
+                "maturity": "read-only",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": false,
+                "auditRequired": false,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_preconditions_apply",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_stage",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/stage",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_activate",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/activate",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_rollback",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/rollback",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_retire",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/retire",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
               },
@@ -1299,6 +1650,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "planning_only_no_provider_mutation",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1316,7 +1668,8 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
-                "limitationCode": "migration_items_not_copied",
+                "completionMode": "synchronous",
+                "limitationCode": "registered_provider_executor_required",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
               },
@@ -1333,6 +1686,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "planning_only_no_provider_mutation",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1350,6 +1704,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "planning_only_no_provider_mutation",
                 "reasonCode": "source_operation_available",
                 "nextAction": "invoke_with_required_controls"
@@ -1367,6 +1722,7 @@
                 "providerKinds": [
                   "local-encrypted-store"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "policy_binding_not_persisted",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
@@ -1449,6 +1805,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1466,6 +1823,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -1483,6 +1841,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1500,6 +1859,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -1517,6 +1877,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -1534,6 +1895,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -1551,6 +1913,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1568,6 +1931,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -1585,6 +1949,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_apply_path_not_implemented",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
@@ -1602,6 +1967,61 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_dry_run",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/dry-run",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "source_auth_required",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "reconnect_source"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_apply",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/apply",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_restore",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/restore",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -1619,9 +2039,100 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_apply_path_not_implemented",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_status",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/status",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": false,
+                "auditRequired": false,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_stage",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/stage",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_activate",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/activate",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_rollback",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/rollback",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_retire",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/retire",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
               },
               {
                 "operationId": "postv1_providers_migration_dry_run",
@@ -1636,6 +2147,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1653,7 +2165,8 @@
                 "providerKinds": [
                   "openbao"
                 ],
-                "limitationCode": "migration_items_not_copied",
+                "completionMode": "synchronous",
+                "limitationCode": "registered_provider_executor_required",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
               },
@@ -1670,6 +2183,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1687,6 +2201,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1704,6 +2219,7 @@
                 "providerKinds": [
                   "openbao"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "policy_binding_not_persisted",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
@@ -1789,6 +2305,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1806,6 +2323,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1823,6 +2341,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1840,6 +2359,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -1857,6 +2377,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -1874,6 +2395,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -1891,6 +2413,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1908,6 +2431,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -1925,6 +2449,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1942,6 +2467,61 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_dry_run",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/dry-run",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "source_auth_required",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "reconnect_source"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_apply",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/apply",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_restore",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/restore",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -1959,9 +2539,100 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_status",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/status",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": false,
+                "auditRequired": false,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_stage",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/stage",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_activate",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/activate",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_rollback",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/rollback",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_retire",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/retire",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
               },
               {
                 "operationId": "postv1_providers_migration_dry_run",
@@ -1976,6 +2647,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -1993,7 +2665,8 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
-                "limitationCode": "migration_items_not_copied",
+                "completionMode": "synchronous",
+                "limitationCode": "registered_provider_executor_required",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
               },
@@ -2010,6 +2683,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -2027,6 +2701,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "source_auth_required",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "reconnect_source"
@@ -2044,6 +2719,7 @@
                 "providerKinds": [
                   "aws-secrets-manager"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "policy_binding_not_persisted",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
@@ -2128,6 +2804,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "policy_denied",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "review_policy"
@@ -2145,6 +2822,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2162,6 +2840,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "policy_denied",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "review_policy"
@@ -2179,6 +2858,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2196,6 +2876,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2213,6 +2894,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2230,6 +2912,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "policy_denied",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "review_policy"
@@ -2247,6 +2930,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2264,6 +2948,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_apply_path_not_implemented",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
@@ -2281,6 +2966,61 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_dry_run",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/dry-run",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "policy_denied",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "review_policy"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_apply",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/apply",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_restore",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/restore",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2298,9 +3038,100 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_apply_path_not_implemented",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_status",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/status",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": false,
+                "auditRequired": false,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_stage",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/stage",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_activate",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/activate",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_rollback",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/rollback",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_retire",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/retire",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
               },
               {
                 "operationId": "postv1_providers_migration_dry_run",
@@ -2315,6 +3146,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "policy_denied",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "review_policy"
@@ -2332,7 +3164,8 @@
                 "providerKinds": [
                   "vault"
                 ],
-                "limitationCode": "migration_items_not_copied",
+                "completionMode": "synchronous",
+                "limitationCode": "registered_provider_executor_required",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
               },
@@ -2349,6 +3182,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "policy_denied",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "review_policy"
@@ -2366,6 +3200,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "policy_denied",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "review_policy"
@@ -2383,6 +3218,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "policy_binding_not_persisted",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
@@ -2467,6 +3303,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "audit_unavailable",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "restore_audit"
@@ -2484,6 +3321,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2501,6 +3339,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "audit_unavailable",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "restore_audit"
@@ -2518,6 +3357,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2535,6 +3375,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2552,6 +3393,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2569,6 +3411,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "audit_unavailable",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "restore_audit"
@@ -2586,6 +3429,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2603,6 +3447,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_apply_path_not_implemented",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
@@ -2620,6 +3465,61 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_dry_run",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/dry-run",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "audit_unavailable",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "restore_audit"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_apply",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/apply",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_decommission_restore",
+                "method": "POST",
+                "path": "/v1/management/secrets/decommission/restore",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_operation_not_implemented",
                 "reasonCode": "operation_not_implemented",
                 "nextAction": "do_not_enable_operation"
@@ -2637,9 +3537,100 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "provider_apply_path_not_implemented",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_status",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/status",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": false,
+                "auditRequired": false,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_stage",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/stage",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_activate",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/activate",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_rollback",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/rollback",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_retire",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/retire",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
               },
               {
                 "operationId": "postv1_providers_migration_dry_run",
@@ -2654,6 +3645,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "audit_unavailable",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "restore_audit"
@@ -2671,7 +3663,8 @@
                 "providerKinds": [
                   "vault"
                 ],
-                "limitationCode": "migration_items_not_copied",
+                "completionMode": "synchronous",
+                "limitationCode": "registered_provider_executor_required",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
               },
@@ -2688,6 +3681,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "audit_unavailable",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "restore_audit"
@@ -2705,6 +3699,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "audit_unavailable",
                 "reasonCode": "source_operation_blocked",
                 "nextAction": "restore_audit"
@@ -2722,6 +3717,7 @@
                 "providerKinds": [
                   "vault"
                 ],
+                "completionMode": "synchronous",
                 "limitationCode": "policy_binding_not_persisted",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
@@ -2824,6 +3820,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -2841,6 +3838,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -2858,6 +3856,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -2875,6 +3874,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -2892,6 +3892,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -2909,6 +3910,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -2926,6 +3928,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -2943,6 +3946,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -2960,6 +3964,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -2977,6 +3982,61 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_decommission_dry_run",
+              "method": "POST",
+              "path": "/v1/management/secrets/decommission/dry-run",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_decommission_apply",
+              "method": "POST",
+              "path": "/v1/management/secrets/decommission/apply",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_decommission_restore",
+              "method": "POST",
+              "path": "/v1/management/secrets/decommission/restore",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -2994,6 +4054,97 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_rotation_status",
+              "method": "POST",
+              "path": "/v1/management/secrets/rotation/status",
+              "maturity": "unavailable",
+              "classification": "read",
+              "authenticationRequired": true,
+              "policyRequired": false,
+              "auditRequired": false,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_rotation_stage",
+              "method": "POST",
+              "path": "/v1/management/secrets/rotation/stage",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_rotation_activate",
+              "method": "POST",
+              "path": "/v1/management/secrets/rotation/activate",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_rotation_rollback",
+              "method": "POST",
+              "path": "/v1/management/secrets/rotation/rollback",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_rotation_retire",
+              "method": "POST",
+              "path": "/v1/management/secrets/rotation/retire",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -3011,6 +4162,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -3028,6 +4180,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -3045,6 +4198,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -3062,6 +4216,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"
@@ -3079,6 +4234,7 @@
               "providerKinds": [
                 "future-provider"
               ],
+              "completionMode": "synchronous",
               "limitationCode": "provider_operation_not_implemented",
               "reasonCode": "operation_not_implemented",
               "nextAction": "do_not_enable_operation"

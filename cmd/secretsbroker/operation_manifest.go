@@ -34,6 +34,13 @@ const (
 	OperationScopeMixed          OperationScope = "mixed"
 )
 
+type OperationCompletionMode string
+
+const (
+	OperationCompletionSynchronous  OperationCompletionMode = "synchronous"
+	OperationCompletionAsynchronous OperationCompletionMode = "asynchronous"
+)
+
 // OperationCapability is the canonical machine-readable release statement for
 // one Broker HTTP operation. Codes are intentionally safe for logs and UI.
 type OperationCapability struct {
@@ -47,6 +54,8 @@ type OperationCapability struct {
 	AuditRequired          bool                    `json:"auditRequired"`
 	Scope                  OperationScope          `json:"scope"`
 	ProviderKinds          []string                `json:"providerKinds"`
+	CompletionMode         OperationCompletionMode `json:"completionMode"`
+	StatusPath             string                  `json:"statusPath,omitempty"`
 	LimitationCode         string                  `json:"limitationCode"`
 	ReasonCode             string                  `json:"reasonCode"`
 	NextAction             string                  `json:"nextAction"`
@@ -84,6 +93,7 @@ func manifestOperation(method, path string, maturity OperationMaturity, classifi
 		AuditRequired:          auditRequired,
 		Scope:                  scope,
 		ProviderKinds:          append([]string{}, providerKinds...),
+		CompletionMode:         OperationCompletionSynchronous,
 		LimitationCode:         limitationCode,
 		ReasonCode:             reasonCode,
 		NextAction:             nextAction,
@@ -136,7 +146,7 @@ func defaultOperationManifest() []OperationCapability {
 		manifestOperation(http.MethodPost, "/v1/providers/config/validate", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "configuration_validation_only"),
 		manifestOperation(http.MethodPost, "/v1/providers/config/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "configuration_not_persisted"),
 		manifestOperation(http.MethodPost, "/v1/providers/migration/dry-run", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "local_target_only"),
-		manifestOperation(http.MethodPost, "/v1/providers/migration/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "migration_items_not_copied"),
+		manifestOperation(http.MethodPost, "/v1/providers/migration/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "registered_provider_executor_required"),
 		manifestOperation(http.MethodGet, "/v1/management/secrets", OperationMaturityReadOnly, OperationClassificationRead, true, false, false, OperationScopeMixed, providers, "metadata_only"),
 		manifestOperation(http.MethodGet, "/v1/management/secrets/value-search", OperationMaturityValidated, OperationClassificationRead, true, true, true, OperationScopeMixed, localAndAWS, "values_never_returned"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/reveal", OperationMaturityValidated, OperationClassificationRead, true, true, true, OperationScopeMixed, providers, "single_ref_ttl_bounded"),
@@ -144,11 +154,19 @@ func defaultOperationManifest() []OperationCapability {
 		manifestOperation(http.MethodPost, "/v1/management/secrets/edit/apply", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "local_store_only"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/reset/dry-run", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "no_secret_mutation"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/reset/apply", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "local_store_only"),
-		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/dry-run", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, localAndAWS, "no_rotation_apply_route"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/decommission/dry-run", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "signed_expected_version_dependency_plan"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/decommission/apply", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "encrypted_recoverable_tombstone"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/decommission/restore", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "encrypted_tombstone_restore"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/dry-run", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, localAndAWS, "preflight_before_local_version_apply"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/status", OperationMaturityReadOnly, OperationClassificationRead, true, false, false, OperationScopeBrokerLocal, local, "metadata_only"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/stage", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "local_store_staged_version_only"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/activate", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "expected_current_version_required"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/rollback", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "retained_previous_version_only"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/retire", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "bounded_retention_cleanup"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/campaigns/create", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "plan_state_only"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/campaigns/revalidate", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "plan_state_only"),
-		manifestOperation(http.MethodPost, "/v1/management/secrets/campaigns/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "provider_mutations_not_executed"),
-		manifestOperation(http.MethodPost, "/v1/management/secrets/campaigns/status", OperationMaturityReadOnly, OperationClassificationRead, true, false, false, OperationScopeBrokerLocal, nil, "in_memory_campaign_metadata_only"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/campaigns/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "migrate_remap_provider_registered_executor_only"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/campaigns/status", OperationMaturityReadOnly, OperationClassificationRead, true, false, false, OperationScopeBrokerLocal, nil, "durable_campaign_metadata_only"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/sync/dry-run", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "no_sync_apply_route"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/policy/preview", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "no_policy_mutation"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/policy/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "policy_binding_not_persisted"),
@@ -185,7 +203,15 @@ func providerOperationCapabilities(kind string, lifecycle SourceLifecycle, audit
 		{http.MethodPost, "/v1/management/secrets/edit/apply"},
 		{http.MethodPost, "/v1/management/secrets/reset/dry-run"},
 		{http.MethodPost, "/v1/management/secrets/reset/apply"},
+		{http.MethodPost, "/v1/management/secrets/decommission/dry-run"},
+		{http.MethodPost, "/v1/management/secrets/decommission/apply"},
+		{http.MethodPost, "/v1/management/secrets/decommission/restore"},
 		{http.MethodPost, "/v1/management/secrets/rotation/dry-run"},
+		{http.MethodPost, "/v1/management/secrets/rotation/status"},
+		{http.MethodPost, "/v1/management/secrets/rotation/stage"},
+		{http.MethodPost, "/v1/management/secrets/rotation/activate"},
+		{http.MethodPost, "/v1/management/secrets/rotation/rollback"},
+		{http.MethodPost, "/v1/management/secrets/rotation/retire"},
 		{http.MethodPost, "/v1/providers/migration/dry-run"},
 		{http.MethodPost, "/v1/providers/migration/apply"},
 		{http.MethodPost, "/v1/management/secrets/sync/dry-run"},
@@ -244,11 +270,11 @@ func providerOperationMaturity(kind, path string) OperationMaturity {
 		if local || has(AdapterCapabilityValueSearch) {
 			return OperationMaturityValidated
 		}
-	case "/v1/secrets", "/v1/writeback", "/v1/provisioning/operations/apply", "/v1/management/secrets/edit/apply", "/v1/management/secrets/reset/apply":
+	case "/v1/secrets", "/v1/writeback", "/v1/provisioning/operations/apply", "/v1/management/secrets/edit/apply", "/v1/management/secrets/reset/apply", "/v1/management/secrets/decommission/apply", "/v1/management/secrets/decommission/restore":
 		if local {
 			return OperationMaturityValidated
 		}
-	case "/v1/management/secrets/edit/dry-run":
+	case "/v1/management/secrets/edit/dry-run", "/v1/management/secrets/decommission/dry-run":
 		if local || has(AdapterCapabilityWrite) {
 			return OperationMaturityDryRun
 		}
@@ -258,6 +284,14 @@ func providerOperationMaturity(kind, path string) OperationMaturity {
 		}
 		if has(AdapterCapabilityRotate) {
 			return OperationMaturityPlanned
+		}
+	case "/v1/management/secrets/rotation/status":
+		if local {
+			return OperationMaturityReadOnly
+		}
+	case "/v1/management/secrets/rotation/stage", "/v1/management/secrets/rotation/activate", "/v1/management/secrets/rotation/rollback", "/v1/management/secrets/rotation/retire":
+		if local {
+			return OperationMaturityValidated
 		}
 	case "/v1/providers/migration/dry-run":
 		if has(AdapterCapabilityMigration) {
@@ -292,7 +326,7 @@ func providerOperationLimitation(kind, path string, maturity OperationMaturity) 
 		return "provider_operation_not_implemented"
 	case OperationMaturityPlanned:
 		if path == "/v1/providers/migration/apply" {
-			return "migration_items_not_copied"
+			return "registered_provider_executor_required"
 		}
 		if path == "/v1/management/secrets/policy/apply" {
 			return "policy_binding_not_persisted"

@@ -6,7 +6,9 @@
   "role": "provider",
   "enabled": false,
   "executable": "python",
-  "args": ["--version"],
+  "args": [
+    "--version"
+  ],
   "env": {
     "PYTHONUTF8": "1"
   },
@@ -15,13 +17,6 @@
     "PYTHON_HOME": "${SERVICE_ARTIFACT_ROOT}",
     "PYTHONPATH": "${SERVICE_ARTIFACT_ROOT}"
   },
-  "urls": [
-    {
-      "label": "docs",
-      "url": "https://docs.python.org/3/",
-      "kind": "external"
-    }
-  ],
   "artifact": {
     "kind": "archive",
     "source": {
@@ -34,8 +29,20 @@
         "assetName": "lasso-python-3.11.5-win32.zip",
         "archiveType": "zip",
         "command": ".\\python.exe",
-        "args": ["--version"]
+        "args": [
+          "--version"
+        ]
       }
     }
-  }
+  },
+  "endpoints": [
+    {
+      "id": "docs",
+      "kind": "url",
+      "label": "Docs",
+      "url": "https://docs.python.org/3/",
+      "exposure": "public",
+      "required": false
+    }
+  ]
 }
