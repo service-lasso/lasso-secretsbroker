@@ -54,6 +54,7 @@
           "POST /v1/management/secrets/reset/dry-run|apply",
           "POST /v1/management/secrets/decommission/dry-run|apply|restore",
           "POST /v1/management/secrets/rotation/dry-run",
+          "POST /v1/management/secrets/rotation/status|stage|activate|rollback|retire",
           "POST /v1/management/secrets/campaigns/create|revalidate|apply|status",
           "POST /v1/management/secrets/sync/dry-run",
           "POST /v1/management/secrets/policy/preview|apply",
@@ -778,9 +779,99 @@
               "aws-secrets-manager"
             ],
             "completionMode": "synchronous",
-            "limitationCode": "no_rotation_apply_route",
+            "limitationCode": "preflight_before_local_version_apply",
             "reasonCode": "implemented_dry_run",
             "nextAction": "review_plan_before_apply"
+          },
+          {
+            "operationId": "postv1_management_secrets_rotation_status",
+            "method": "POST",
+            "path": "/v1/management/secrets/rotation/status",
+            "maturity": "read-only",
+            "classification": "read",
+            "authenticationRequired": true,
+            "policyRequired": false,
+            "auditRequired": false,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "metadata_only",
+            "reasonCode": "implemented_read_only",
+            "nextAction": "read_when_authorized"
+          },
+          {
+            "operationId": "postv1_management_secrets_rotation_stage",
+            "method": "POST",
+            "path": "/v1/management/secrets/rotation/stage",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "local_store_staged_version_only",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_secrets_rotation_activate",
+            "method": "POST",
+            "path": "/v1/management/secrets/rotation/activate",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "expected_current_version_required",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_secrets_rotation_rollback",
+            "method": "POST",
+            "path": "/v1/management/secrets/rotation/rollback",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "retained_previous_version_only",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_secrets_rotation_retire",
+            "method": "POST",
+            "path": "/v1/management/secrets/rotation/retire",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "bounded_retention_cleanup",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
           },
           {
             "operationId": "postv1_management_secrets_campaigns_create",
@@ -982,6 +1073,7 @@
           "secrets-management-dry-run-apply",
           "local-secret-decommission-tombstone-restore",
           "credential-rotation-dry-run",
+          "credential-rotation-local-versioning",
           "bulk-secret-operation-campaigns",
           "metadata-only-secrets-sync-dry-run",
           "env-source",
@@ -1023,6 +1115,11 @@
           "missing_ref",
           "invalid_ref",
           "source_unavailable",
+          "conflict",
+          "staged",
+          "applied",
+          "rolled_back",
+          "retired",
           "identity_invalid",
           "identity_expired",
           "identity_replayed",
@@ -1449,6 +1546,96 @@
                 "nextAction": "invoke_with_required_controls"
               },
               {
+                "operationId": "postv1_management_secrets_rotation_status",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/status",
+                "maturity": "read-only",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": false,
+                "auditRequired": false,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_preconditions_apply",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_stage",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/stage",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_activate",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/activate",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_rollback",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/rollback",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_retire",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/retire",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
                 "operationId": "postv1_providers_migration_dry_run",
                 "method": "POST",
                 "path": "/v1/providers/migration/dry-run",
@@ -1854,6 +2041,96 @@
                 "limitationCode": "provider_apply_path_not_implemented",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_status",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/status",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": false,
+                "auditRequired": false,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_stage",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/stage",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_activate",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/activate",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_rollback",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/rollback",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_retire",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/retire",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
               },
               {
                 "operationId": "postv1_providers_migration_dry_run",
@@ -2266,6 +2543,96 @@
                 "nextAction": "reconnect_source"
               },
               {
+                "operationId": "postv1_management_secrets_rotation_status",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/status",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": false,
+                "auditRequired": false,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_stage",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/stage",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_activate",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/activate",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_rollback",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/rollback",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_retire",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/retire",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
                 "operationId": "postv1_providers_migration_dry_run",
                 "method": "POST",
                 "path": "/v1/providers/migration/dry-run",
@@ -2675,6 +3042,96 @@
                 "nextAction": "do_not_enable_apply"
               },
               {
+                "operationId": "postv1_management_secrets_rotation_status",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/status",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": false,
+                "auditRequired": false,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_stage",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/stage",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_activate",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/activate",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_rollback",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/rollback",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_retire",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/retire",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
                 "operationId": "postv1_providers_migration_dry_run",
                 "method": "POST",
                 "path": "/v1/providers/migration/dry-run",
@@ -3082,6 +3539,96 @@
                 "limitationCode": "provider_apply_path_not_implemented",
                 "reasonCode": "planning_only_not_executable",
                 "nextAction": "do_not_enable_apply"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_status",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/status",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": false,
+                "auditRequired": false,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_stage",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/stage",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_activate",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/activate",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_rollback",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/rollback",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_management_secrets_rotation_retire",
+                "method": "POST",
+                "path": "/v1/management/secrets/rotation/retire",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
               },
               {
                 "operationId": "postv1_providers_migration_dry_run",
@@ -3496,6 +4043,96 @@
               "operationId": "postv1_management_secrets_rotation_dry_run",
               "method": "POST",
               "path": "/v1/management/secrets/rotation/dry-run",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_rotation_status",
+              "method": "POST",
+              "path": "/v1/management/secrets/rotation/status",
+              "maturity": "unavailable",
+              "classification": "read",
+              "authenticationRequired": true,
+              "policyRequired": false,
+              "auditRequired": false,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_rotation_stage",
+              "method": "POST",
+              "path": "/v1/management/secrets/rotation/stage",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_rotation_activate",
+              "method": "POST",
+              "path": "/v1/management/secrets/rotation/activate",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_rotation_rollback",
+              "method": "POST",
+              "path": "/v1/management/secrets/rotation/rollback",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_management_secrets_rotation_retire",
+              "method": "POST",
+              "path": "/v1/management/secrets/rotation/retire",
               "maturity": "unavailable",
               "classification": "mutation",
               "authenticationRequired": true,

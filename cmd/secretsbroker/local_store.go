@@ -37,6 +37,7 @@ var (
 	errIdentityReplayed   = errors.New("launch identity replayed")
 	errSourceAuthRequired = errors.New("source authentication required")
 	errBackendDegraded    = errors.New("backend degraded")
+	errRotationConflict   = errors.New("rotation version conflict")
 )
 
 type localBackend struct {
@@ -54,6 +55,7 @@ type localBackend struct {
 	launchLeaseMu            sync.Mutex
 	seenLaunchLeaseJTI       map[string]time.Time
 	decommissionMu           sync.Mutex
+	rotationMu               sync.Mutex
 }
 
 type localStoreFile struct {
@@ -67,6 +69,7 @@ type localStoreFile struct {
 	UpdatedAt    time.Time                       `json:"updatedAt"`
 	Secrets      map[string]secretEntry          `json:"secrets"`
 	Tombstones   map[string]localSecretTombstone `json:"tombstones,omitempty"`
+	Rotations    map[string]rotationLedger       `json:"rotations,omitempty"`
 	Recovery     *recoveryPolicyMetadata         `json:"recoveryPolicy,omitempty"`
 }
 
@@ -871,7 +874,7 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 
 func (b *localBackend) loadStore() (localStoreFile, error) {
 	now := b.now()
-	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}}
+	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}, Rotations: map[string]rotationLedger{}}
 	bytes, err := os.ReadFile(b.storePath)
 	if errors.Is(err, os.ErrNotExist) {
 		return store, nil
@@ -890,6 +893,9 @@ func (b *localBackend) loadStore() (localStoreFile, error) {
 	}
 	if store.Tombstones == nil {
 		store.Tombstones = map[string]localSecretTombstone{}
+	}
+	if store.Rotations == nil {
+		store.Rotations = map[string]rotationLedger{}
 	}
 	return store, nil
 }

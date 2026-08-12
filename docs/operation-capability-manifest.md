@@ -80,6 +80,8 @@ machine-readable authority.
 | Edit apply | validated | unavailable | unavailable | unavailable |
 | Reset/rotation dry-run | dry-run | planned | dry-run | unavailable |
 | Reset apply | validated | unavailable | unavailable | unavailable |
+| Rotation status | read-only | unavailable | unavailable | unavailable |
+| Rotation stage/activate/rollback/retire | validated | unavailable | unavailable | unavailable |
 | Policy preview | dry-run | dry-run | dry-run | unavailable |
 | Policy apply | planned | planned | planned | unavailable |
 | Migration dry-run | dry-run | dry-run | dry-run | dry-run |

@@ -157,7 +157,12 @@ func defaultOperationManifest() []OperationCapability {
 		manifestOperation(http.MethodPost, "/v1/management/secrets/decommission/dry-run", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "signed_expected_version_dependency_plan"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/decommission/apply", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "encrypted_recoverable_tombstone"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/decommission/restore", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "encrypted_tombstone_restore"),
-		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/dry-run", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, localAndAWS, "no_rotation_apply_route"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/dry-run", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, localAndAWS, "preflight_before_local_version_apply"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/status", OperationMaturityReadOnly, OperationClassificationRead, true, false, false, OperationScopeBrokerLocal, local, "metadata_only"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/stage", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "local_store_staged_version_only"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/activate", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "expected_current_version_required"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/rollback", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "retained_previous_version_only"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/retire", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "bounded_retention_cleanup"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/campaigns/create", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "plan_state_only"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/campaigns/revalidate", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "plan_state_only"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/campaigns/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "provider_mutations_not_executed"),
@@ -202,6 +207,11 @@ func providerOperationCapabilities(kind string, lifecycle SourceLifecycle, audit
 		{http.MethodPost, "/v1/management/secrets/decommission/apply"},
 		{http.MethodPost, "/v1/management/secrets/decommission/restore"},
 		{http.MethodPost, "/v1/management/secrets/rotation/dry-run"},
+		{http.MethodPost, "/v1/management/secrets/rotation/status"},
+		{http.MethodPost, "/v1/management/secrets/rotation/stage"},
+		{http.MethodPost, "/v1/management/secrets/rotation/activate"},
+		{http.MethodPost, "/v1/management/secrets/rotation/rollback"},
+		{http.MethodPost, "/v1/management/secrets/rotation/retire"},
 		{http.MethodPost, "/v1/providers/migration/dry-run"},
 		{http.MethodPost, "/v1/providers/migration/apply"},
 		{http.MethodPost, "/v1/management/secrets/sync/dry-run"},
@@ -274,6 +284,14 @@ func providerOperationMaturity(kind, path string) OperationMaturity {
 		}
 		if has(AdapterCapabilityRotate) {
 			return OperationMaturityPlanned
+		}
+	case "/v1/management/secrets/rotation/status":
+		if local {
+			return OperationMaturityReadOnly
+		}
+	case "/v1/management/secrets/rotation/stage", "/v1/management/secrets/rotation/activate", "/v1/management/secrets/rotation/rollback", "/v1/management/secrets/rotation/retire":
+		if local {
+			return OperationMaturityValidated
 		}
 	case "/v1/providers/migration/dry-run":
 		if has(AdapterCapabilityMigration) {
