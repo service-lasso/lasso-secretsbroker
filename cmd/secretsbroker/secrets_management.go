@@ -982,6 +982,8 @@ func outcomeForError(err error) string {
 		return "source_auth_required"
 	case errors.Is(err, errBackendDegraded):
 		return "degraded"
+	case errors.Is(err, errRotationConflict):
+		return "conflict"
 	case errors.Is(err, errUnsupportedProvider):
 		return "unsupported"
 	default:
@@ -1016,6 +1018,8 @@ func nextActionForManagedOutcome(outcome string) string {
 		return "fix_ref"
 	case "policy_denied":
 		return "review_policy_and_reason"
+	case "conflict":
+		return "refresh_current_version_and_retry"
 	case "source_auth_required":
 		return "reconnect_source"
 	case "source_unavailable", "degraded":

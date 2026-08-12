@@ -2804,6 +2804,195 @@
         ],
         "type": "object"
       },
+      "rotationVersionMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "activatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "policyResult": {
+            "type": "string"
+          },
+          "retainedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "stagedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "auditStatus",
+          "createdAt",
+          "fingerprint",
+          "policyResult",
+          "sourceId",
+          "state",
+          "updatedAt",
+          "versionId"
+        ],
+        "type": "object"
+      },
+      "rotationVersionRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "expectedCurrentVersion": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "retentionLimit": {
+            "type": "integer"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "type": "object"
+      },
+      "rotationVersionResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "activeVersionId": {
+            "type": "string"
+          },
+          "affectedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "affectedServices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "currentVersion": {
+            "$ref": "#/components/schemas/rotationVersionMetadata"
+          },
+          "expectedCurrentVersion": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "policyResult": {
+            "type": "string"
+          },
+          "previousVersion": {
+            "$ref": "#/components/schemas/rotationVersionMetadata"
+          },
+          "previousVersionId": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "stagedVersion": {
+            "$ref": "#/components/schemas/rotationVersionMetadata"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/rotationVersionMetadata"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "affectedRefs",
+          "affectedServices",
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "mode",
+          "operation",
+          "outcome",
+          "policyResult",
+          "ref",
+          "requiresConfirmation",
+          "serviceId",
+          "versions"
+        ],
+        "type": "object"
+      },
       "serviceSecretsPolicy": {
         "additionalProperties": true,
         "properties": {
@@ -5571,6 +5760,77 @@
         }
       }
     },
+    "/v1/management/secrets/rotation/activate": {
+      "post": {
+        "operationId": "postv1_management_secrets_rotation_activate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/rotationVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rotationVersionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/rotationVersionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Activate a staged local secret version",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_rotation_activate",
+          "method": "POST",
+          "path": "/v1/management/secrets/rotation/activate",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "expected_current_version_required",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
     "/v1/management/secrets/rotation/dry-run": {
       "post": {
         "operationId": "postv1_management_secrets_rotation_dry_run",
@@ -5637,9 +5897,293 @@
             "aws-secrets-manager"
           ],
           "completionMode": "synchronous",
-          "limitationCode": "no_rotation_apply_route",
+          "limitationCode": "preflight_before_local_version_apply",
           "reasonCode": "implemented_dry_run",
           "nextAction": "review_plan_before_apply"
+        }
+      }
+    },
+    "/v1/management/secrets/rotation/retire": {
+      "post": {
+        "operationId": "postv1_management_secrets_rotation_retire",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/rotationVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rotationVersionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/rotationVersionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Retire retained local secret versions",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_rotation_retire",
+          "method": "POST",
+          "path": "/v1/management/secrets/rotation/retire",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "bounded_retention_cleanup",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/management/secrets/rotation/rollback": {
+      "post": {
+        "operationId": "postv1_management_secrets_rotation_rollback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/rotationVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rotationVersionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/rotationVersionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Roll back to a retained local secret version",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_rotation_rollback",
+          "method": "POST",
+          "path": "/v1/management/secrets/rotation/rollback",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "retained_previous_version_only",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/management/secrets/rotation/stage": {
+      "post": {
+        "operationId": "postv1_management_secrets_rotation_stage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/rotationVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rotationVersionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/rotationVersionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Stage a local secret version",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_rotation_stage",
+          "method": "POST",
+          "path": "/v1/management/secrets/rotation/stage",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "local_store_staged_version_only",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/management/secrets/rotation/status": {
+      "post": {
+        "operationId": "postv1_management_secrets_rotation_status",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/rotationVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rotationVersionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/rotationVersionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Read local rotation version metadata",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_rotation_status",
+          "method": "POST",
+          "path": "/v1/management/secrets/rotation/status",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
         }
       }
     },
