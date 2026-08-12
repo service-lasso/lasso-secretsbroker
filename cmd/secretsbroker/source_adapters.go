@@ -37,6 +37,9 @@ type sourceConfig struct {
 	Address               string                     `json:"address"`
 	Region                string                     `json:"region"`
 	AccountID             string                     `json:"accountId"`
+	AccessKeyIDEnv        string                     `json:"accessKeyIdEnv,omitempty"`
+	SecretAccessKeyEnv    string                     `json:"secretAccessKeyEnv,omitempty"`
+	SessionTokenEnv       string                     `json:"sessionTokenEnv,omitempty"`
 	Token                 string                     `json:"token"`
 	TokenEnv              string                     `json:"tokenEnv"`
 	Refs                  map[string]sourceRefConfig `json:"refs"`

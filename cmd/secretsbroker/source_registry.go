@@ -158,6 +158,15 @@ func sourceRegistryLifecycle(source sourceConfig) SourceLifecycle {
 		if strings.TrimSpace(source.Address) == "" && strings.TrimSpace(source.Region) == "" {
 			return normalizeSourceLifecycle("invalid_ref")
 		}
+		if source.EnableMigrationTarget {
+			if !awsSecretsManagerCredentialHandlesConfigured(source) || !awsSecretsManagerCredentialsAvailable(source) {
+				return normalizeSourceLifecycle("source_auth_required")
+			}
+			if _, err := newAWSSecretsManagerMigrationExecutor(source); err != nil {
+				return normalizeSourceLifecycle("invalid_ref")
+			}
+			break
+		}
 		if strings.TrimSpace(firstNonEmpty(source.Token, os.Getenv(source.TokenEnv))) == "" {
 			return normalizeSourceLifecycle("source_auth_required")
 		}
