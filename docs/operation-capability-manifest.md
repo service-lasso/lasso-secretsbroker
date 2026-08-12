@@ -89,10 +89,12 @@ machine-readable authority.
 | Secrets Sync dry-run | dry-run | dry-run | dry-run | dry-run |
 
 The current provider configuration apply handler validates and reports an apply
-result but does not persist a connection. Migration and bulk campaign apply
-handlers report metadata outcomes but do not copy or mutate provider values.
-Those operations are deliberately `planned`, regardless of legacy response
-wording.
+result but does not persist a connection. Migration apply has a durable,
+idempotent executor seam, but no real remote provider executor is registered in
+the release runtime; bulk campaign apply likewise does not mutate provider
+values. Those operations remain deliberately `planned`. A test-only or future
+explicit executor registration does not let Service Admin infer executable
+capability from the provider-family upper bound.
 
 ## Drift and conformance gates
 

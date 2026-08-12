@@ -46,6 +46,8 @@ var typedOutcomes = []string{
 	"applied",
 	"rolled_back",
 	"retired",
+	"rate_limited",
+	"verification_failed",
 	"identity_invalid",
 	"identity_expired",
 	"identity_replayed",

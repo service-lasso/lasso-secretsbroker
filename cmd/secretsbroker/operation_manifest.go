@@ -146,7 +146,7 @@ func defaultOperationManifest() []OperationCapability {
 		manifestOperation(http.MethodPost, "/v1/providers/config/validate", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "configuration_validation_only"),
 		manifestOperation(http.MethodPost, "/v1/providers/config/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "configuration_not_persisted"),
 		manifestOperation(http.MethodPost, "/v1/providers/migration/dry-run", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "local_target_only"),
-		manifestOperation(http.MethodPost, "/v1/providers/migration/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "migration_items_not_copied"),
+		manifestOperation(http.MethodPost, "/v1/providers/migration/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "registered_provider_executor_required"),
 		manifestOperation(http.MethodGet, "/v1/management/secrets", OperationMaturityReadOnly, OperationClassificationRead, true, false, false, OperationScopeMixed, providers, "metadata_only"),
 		manifestOperation(http.MethodGet, "/v1/management/secrets/value-search", OperationMaturityValidated, OperationClassificationRead, true, true, true, OperationScopeMixed, localAndAWS, "values_never_returned"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/reveal", OperationMaturityValidated, OperationClassificationRead, true, true, true, OperationScopeMixed, providers, "single_ref_ttl_bounded"),
@@ -326,7 +326,7 @@ func providerOperationLimitation(kind, path string, maturity OperationMaturity) 
 		return "provider_operation_not_implemented"
 	case OperationMaturityPlanned:
 		if path == "/v1/providers/migration/apply" {
-			return "migration_items_not_copied"
+			return "registered_provider_executor_required"
 		}
 		if path == "/v1/management/secrets/policy/apply" {
 			return "policy_binding_not_persisted"

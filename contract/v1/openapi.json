@@ -1583,6 +1583,9 @@
       "migrationItemStatus": {
         "additionalProperties": true,
         "properties": {
+          "attempts": {
+            "type": "integer"
+          },
           "auditRequirement": {
             "type": "string"
           },
@@ -1615,6 +1618,9 @@
           },
           "targetProviderId": {
             "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -1628,7 +1634,8 @@
           "risk",
           "sourceProviderId",
           "state",
-          "targetProviderId"
+          "targetProviderId",
+          "verified"
         ],
         "type": "object"
       },
@@ -6700,7 +6707,7 @@
             "onepassword-cli"
           ],
           "completionMode": "synchronous",
-          "limitationCode": "migration_items_not_copied",
+          "limitationCode": "registered_provider_executor_required",
           "reasonCode": "planning_only_not_executable",
           "nextAction": "do_not_enable_apply"
         }
