@@ -250,7 +250,7 @@ func (b *localBackend) initializeStoreWithSource(masterKey, keySourceType string
 	now := b.now()
 	vaultID := vaultIDFor(keyID, b.storePath)
 	rootIdentity := rootIdentityFor(vaultID, keyID, keySourceType, now)
-	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, VaultID: vaultID, KeyID: keyID, KeyVersion: masterKeyVersion, RootIdentity: &rootIdentity, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}}
+	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, VaultID: vaultID, KeyID: keyID, KeyVersion: masterKeyVersion, RootIdentity: &rootIdentity, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}}
 	if err := b.saveStore(store); err != nil {
 		_ = b.audit("key_initialize", "", "degraded", "", "")
 		return keyLifecycleResponse{}, errBackendDegraded

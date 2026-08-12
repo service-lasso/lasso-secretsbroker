@@ -481,25 +481,39 @@ response before it can be advertised as executable.
 
 ## Delete, disable and decommission
 
-No delete, disable, or decommission management route is implemented or
-advertised in this release. Admin must therefore hide destructive actions or
-show them as unavailable from the operation manifest instead of calling a
-non-existent endpoint.
+Delete, disable and decommission remain separate capabilities. Hard delete and
+disable are not implemented or advertised in this release. Admin must hide
+those actions or show them as unavailable instead of mapping them to the local
+decommission route.
 
-Future destructive routes must keep these semantics separate:
+The local encrypted store implements a recoverable decommission lifecycle:
 
-- `disable`: stop new use while retaining recoverable metadata and value
-  material according to retention policy.
-- `delete`: remove a managed secret only after dry-run dependency checks,
-  explicit confirmation, audit reason, policy approval, and recovery/retention
-  decision.
-- `decommission`: retire a service-owned secret set with dependency impact,
-  generated configuration impact, audit, tombstone, and recovery metadata.
+- `POST /v1/management/secrets/decommission/dry-run`
+- `POST /v1/management/secrets/decommission/apply`
+- `POST /v1/management/secrets/decommission/restore`
 
-Destructive dry-runs must be metadata-only and must report dependency, policy,
-audit, lockout, stale-plan, unsupported-provider, and recovery blockers before
-any apply route can mutate state. Apply requests must be idempotent through a
-server-issued plan or must return an explicit non-retry-safe result.
+The dry-run requires a caller-supplied authoritative dependency result:
+`dependencyStatus: "clear"`, no dependency ids, and a `sha256:` dependency
+graph snapshot. The Broker binds that snapshot, ref, current secret version,
+operation id, and five-minute expiry into an HMAC-signed plan. Apply requires
+the unmodified plan, explicit confirmation, and an audit reason. A changed
+active version, expired/tampered plan, or different operation id returns
+`stale_plan` without changing state. Unknown or non-clear dependencies return
+`dependency_blocked` and no plan.
+
+Successful apply moves the encrypted local entry out of the active secret map
+and into a durable encrypted tombstone. The response exposes only safe
+tombstone metadata; it never includes plaintext or encrypted payload fields.
+Retrying the same signed operation is idempotent. Restore requires explicit
+confirmation, audit reason, a new operation id, and the exact tombstone version;
+it reactivates the encrypted entry and is also retry-idempotent. Tombstone state
+survives Broker restart and is included in encrypted-store backup/restore.
+
+Dry-run, apply, and restore require the local API token and fail closed when the
+Broker is locked or audit/event evidence cannot be persisted. Remote/provider
+refs return `unsupported`; provider-specific destructive execution remains a
+later capability. Hard delete will require an explicit retention expiry and
+separate non-recoverable confirmation contract before it can be advertised.
 
 ## Typed outcomes
 

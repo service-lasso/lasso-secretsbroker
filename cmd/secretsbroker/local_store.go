@@ -53,19 +53,21 @@ type localBackend struct {
 	launchIdentitySigningKey string
 	launchLeaseMu            sync.Mutex
 	seenLaunchLeaseJTI       map[string]time.Time
+	decommissionMu           sync.Mutex
 }
 
 type localStoreFile struct {
-	Version      int                        `json:"version"`
-	ServiceID    string                     `json:"serviceId"`
-	VaultID      string                     `json:"vaultId,omitempty"`
-	KeyID        string                     `json:"keyId,omitempty"`
-	KeyVersion   string                     `json:"keyVersion,omitempty"`
-	RootIdentity *vaultRootIdentityMetadata `json:"rootIdentity,omitempty"`
-	CreatedAt    time.Time                  `json:"createdAt"`
-	UpdatedAt    time.Time                  `json:"updatedAt"`
-	Secrets      map[string]secretEntry     `json:"secrets"`
-	Recovery     *recoveryPolicyMetadata    `json:"recoveryPolicy,omitempty"`
+	Version      int                             `json:"version"`
+	ServiceID    string                          `json:"serviceId"`
+	VaultID      string                          `json:"vaultId,omitempty"`
+	KeyID        string                          `json:"keyId,omitempty"`
+	KeyVersion   string                          `json:"keyVersion,omitempty"`
+	RootIdentity *vaultRootIdentityMetadata      `json:"rootIdentity,omitempty"`
+	CreatedAt    time.Time                       `json:"createdAt"`
+	UpdatedAt    time.Time                       `json:"updatedAt"`
+	Secrets      map[string]secretEntry          `json:"secrets"`
+	Tombstones   map[string]localSecretTombstone `json:"tombstones,omitempty"`
+	Recovery     *recoveryPolicyMetadata         `json:"recoveryPolicy,omitempty"`
 }
 
 type secretEntry struct {
@@ -869,7 +871,7 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 
 func (b *localBackend) loadStore() (localStoreFile, error) {
 	now := b.now()
-	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}}
+	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}}
 	bytes, err := os.ReadFile(b.storePath)
 	if errors.Is(err, os.ErrNotExist) {
 		return store, nil
@@ -885,6 +887,9 @@ func (b *localBackend) loadStore() (localStoreFile, error) {
 	}
 	if store.Secrets == nil {
 		store.Secrets = map[string]secretEntry{}
+	}
+	if store.Tombstones == nil {
+		store.Tombstones = map[string]localSecretTombstone{}
 	}
 	return store, nil
 }

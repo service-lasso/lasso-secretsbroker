@@ -154,6 +154,9 @@ func defaultOperationManifest() []OperationCapability {
 		manifestOperation(http.MethodPost, "/v1/management/secrets/edit/apply", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "local_store_only"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/reset/dry-run", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "no_secret_mutation"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/reset/apply", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "local_store_only"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/decommission/dry-run", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "signed_expected_version_dependency_plan"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/decommission/apply", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "encrypted_recoverable_tombstone"),
+		manifestOperation(http.MethodPost, "/v1/management/secrets/decommission/restore", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "encrypted_tombstone_restore"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/rotation/dry-run", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, localAndAWS, "no_rotation_apply_route"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/campaigns/create", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "plan_state_only"),
 		manifestOperation(http.MethodPost, "/v1/management/secrets/campaigns/revalidate", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "plan_state_only"),
@@ -195,6 +198,9 @@ func providerOperationCapabilities(kind string, lifecycle SourceLifecycle, audit
 		{http.MethodPost, "/v1/management/secrets/edit/apply"},
 		{http.MethodPost, "/v1/management/secrets/reset/dry-run"},
 		{http.MethodPost, "/v1/management/secrets/reset/apply"},
+		{http.MethodPost, "/v1/management/secrets/decommission/dry-run"},
+		{http.MethodPost, "/v1/management/secrets/decommission/apply"},
+		{http.MethodPost, "/v1/management/secrets/decommission/restore"},
 		{http.MethodPost, "/v1/management/secrets/rotation/dry-run"},
 		{http.MethodPost, "/v1/providers/migration/dry-run"},
 		{http.MethodPost, "/v1/providers/migration/apply"},
@@ -254,11 +260,11 @@ func providerOperationMaturity(kind, path string) OperationMaturity {
 		if local || has(AdapterCapabilityValueSearch) {
 			return OperationMaturityValidated
 		}
-	case "/v1/secrets", "/v1/writeback", "/v1/provisioning/operations/apply", "/v1/management/secrets/edit/apply", "/v1/management/secrets/reset/apply":
+	case "/v1/secrets", "/v1/writeback", "/v1/provisioning/operations/apply", "/v1/management/secrets/edit/apply", "/v1/management/secrets/reset/apply", "/v1/management/secrets/decommission/apply", "/v1/management/secrets/decommission/restore":
 		if local {
 			return OperationMaturityValidated
 		}
-	case "/v1/management/secrets/edit/dry-run":
+	case "/v1/management/secrets/edit/dry-run", "/v1/management/secrets/decommission/dry-run":
 		if local || has(AdapterCapabilityWrite) {
 			return OperationMaturityDryRun
 		}

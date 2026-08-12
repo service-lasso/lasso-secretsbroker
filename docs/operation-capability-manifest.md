@@ -61,6 +61,12 @@ Connection lifecycle wins over family capability. `source_auth_required`,
 states downgrade affected connection operations to `unavailable` with a safe
 recovery action.
 
+Local decommission is advertised as three synchronous operations: signed
+dependency/version dry-run, recoverable encrypted-tombstone apply, and exact-
+version restore. Provider-scoped matrices keep these operations unavailable
+unless the selected provider is the local encrypted store. Hard delete and
+disable are not advertised.
+
 ## Current provider operation matrix
 
 This table summarises the connection-ready baseline. The runtime arrays are the

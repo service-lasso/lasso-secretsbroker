@@ -776,6 +776,227 @@
         ],
         "type": "object"
       },
+      "decommissionPlan": {
+        "additionalProperties": true,
+        "properties": {
+          "dependencySnapshot": {
+            "type": "string"
+          },
+          "dependencyStatus": {
+            "type": "string"
+          },
+          "expectedVersion": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dependencySnapshot",
+          "dependencyStatus",
+          "expectedVersion",
+          "expiresAt",
+          "operationId",
+          "ref",
+          "signature"
+        ],
+        "type": "object"
+      },
+      "decommissionRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "dependencies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "dependencySnapshot": {
+            "type": "string"
+          },
+          "dependencyStatus": {
+            "type": "string"
+          },
+          "expectedVersion": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/decommissionPlan"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "dependencies",
+          "dependencySnapshot",
+          "dependencyStatus",
+          "expectedVersion",
+          "operationId",
+          "reason",
+          "ref",
+          "requestId",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "decommissionResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "affectedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "affectedServices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "dependencies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "dependencySnapshot": {
+            "type": "string"
+          },
+          "dependencyStatus": {
+            "type": "string"
+          },
+          "expectedVersion": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/decommissionPlan"
+          },
+          "policyResult": {
+            "type": "string"
+          },
+          "recoverable": {
+            "type": "boolean"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "tombstone": {
+            "$ref": "#/components/schemas/decommissionTombstoneMetadata"
+          }
+        },
+        "required": [
+          "affectedRefs",
+          "affectedServices",
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "dependencies",
+          "dependencyStatus",
+          "mode",
+          "operation",
+          "outcome",
+          "policyResult",
+          "recoverable",
+          "ref",
+          "requiresConfirmation",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "decommissionTombstoneMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "decommissionOperationId": {
+            "type": "string"
+          },
+          "decommissionedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "restoreOperationId": {
+            "type": "string"
+          },
+          "restoredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "decommissionOperationId",
+          "decommissionedAt",
+          "state",
+          "version"
+        ],
+        "type": "object"
+      },
       "eventSafety": {
         "additionalProperties": true,
         "properties": {
@@ -4597,6 +4818,219 @@
           "limitationCode": "in_memory_campaign_metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
+        }
+      }
+    },
+    "/v1/management/secrets/decommission/apply": {
+      "post": {
+        "operationId": "postv1_management_secrets_decommission_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/decommissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/decommissionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/decommissionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Decommission a local secret into an encrypted tombstone",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_decommission_apply",
+          "method": "POST",
+          "path": "/v1/management/secrets/decommission/apply",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "encrypted_recoverable_tombstone",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/management/secrets/decommission/dry-run": {
+      "post": {
+        "operationId": "postv1_management_secrets_decommission_dry_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/decommissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/decommissionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/decommissionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Plan a local secret decommission",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_decommission_dry_run",
+          "method": "POST",
+          "path": "/v1/management/secrets/decommission/dry-run",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "signed_expected_version_dependency_plan",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/management/secrets/decommission/restore": {
+      "post": {
+        "operationId": "postv1_management_secrets_decommission_restore",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/decommissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/decommissionResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/decommissionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Restore a local secret from an encrypted tombstone",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_decommission_restore",
+          "method": "POST",
+          "path": "/v1/management/secrets/decommission/restore",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "encrypted_tombstone_restore",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
         }
       }
     },
