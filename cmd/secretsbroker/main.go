@@ -51,6 +51,8 @@ var typedOutcomes = []string{
 	"stale",
 	"unsupported",
 	"audit_unavailable",
+	"dependency_blocked",
+	"stale_plan",
 	"failed",
 }
 
@@ -257,6 +259,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/management/secrets/reveal",
 			"POST /v1/management/secrets/edit/dry-run|apply",
 			"POST /v1/management/secrets/reset/dry-run|apply",
+			"POST /v1/management/secrets/decommission/dry-run|apply|restore",
 			"POST /v1/management/secrets/rotation/dry-run",
 			"POST /v1/management/secrets/campaigns/create|revalidate|apply|status",
 			"POST /v1/management/secrets/sync/dry-run",
@@ -293,6 +296,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"secrets-management-value-search-metadata-only",
 			"secrets-management-controlled-reveal",
 			"secrets-management-dry-run-apply",
+			"local-secret-decommission-tombstone-restore",
 			"credential-rotation-dry-run",
 			"bulk-secret-operation-campaigns",
 			"metadata-only-secrets-sync-dry-run",
@@ -468,6 +472,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		registerLocalStoreHandlers(mux, backend, security)
 		registerSourceRegistryHandlers(mux, backend)
 		registerSecretsManagementHandlers(mux, backend, security)
+		registerDecommissionHandlers(mux, backend, security)
 		registerRotationHandlers(mux, backend, security)
 		registerBulkCampaignHandlers(mux, backend, security)
 		registerSyncDryRunHandlers(mux, backend, security)

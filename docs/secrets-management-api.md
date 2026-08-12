@@ -466,6 +466,55 @@ Campaign apply is retry-safe by `idempotencyKey` and `operationItemId`. The firs
 
 Preview/apply policy changes. This first contract records the requested policy handle/status and returns metadata-only outcomes; provider-specific enforcement can be expanded behind the same response shape.
 
+## Operation lifecycle and status
+
+The current management endpoints are synchronous request/response operations.
+`GET /capabilities` is the machine-readable authority: every management
+operation record currently has `"completionMode": "synchronous"` and no
+`statusPath`.
+
+Service Admin must not invent or poll a secret-operation status endpoint unless
+the selected operation advertises `"completionMode": "asynchronous"` with a
+non-empty `statusPath`. A future asynchronous operation must return an operation
+id, correlation id, terminal state, retry safety, and metadata-only status
+response before it can be advertised as executable.
+
+## Delete, disable and decommission
+
+Delete, disable and decommission remain separate capabilities. Hard delete and
+disable are not implemented or advertised in this release. Admin must hide
+those actions or show them as unavailable instead of mapping them to the local
+decommission route.
+
+The local encrypted store implements a recoverable decommission lifecycle:
+
+- `POST /v1/management/secrets/decommission/dry-run`
+- `POST /v1/management/secrets/decommission/apply`
+- `POST /v1/management/secrets/decommission/restore`
+
+The dry-run requires a caller-supplied authoritative dependency result:
+`dependencyStatus: "clear"`, no dependency ids, and a `sha256:` dependency
+graph snapshot. The Broker binds that snapshot, ref, current secret version,
+operation id, and five-minute expiry into an HMAC-signed plan. Apply requires
+the unmodified plan, explicit confirmation, and an audit reason. A changed
+active version, expired/tampered plan, or different operation id returns
+`stale_plan` without changing state. Unknown or non-clear dependencies return
+`dependency_blocked` and no plan.
+
+Successful apply moves the encrypted local entry out of the active secret map
+and into a durable encrypted tombstone. The response exposes only safe
+tombstone metadata; it never includes plaintext or encrypted payload fields.
+Retrying the same signed operation is idempotent. Restore requires explicit
+confirmation, audit reason, a new operation id, and the exact tombstone version;
+it reactivates the encrypted entry and is also retry-idempotent. Tombstone state
+survives Broker restart and is included in encrypted-store backup/restore.
+
+Dry-run, apply, and restore require the local API token and fail closed when the
+Broker is locked or audit/event evidence cannot be persisted. Remote/provider
+refs return `unsupported`; provider-specific destructive execution remains a
+later capability. Hard delete will require an explicit retention expiry and
+separate non-recoverable confirmation contract before it can be advertised.
+
 ## Typed outcomes
 
 Common outcomes: `ready`, `dry_run_ready`, `applied`, `migrated`, `partial_failure`, `missing_ref`, `invalid_ref`, `locked`, `policy_denied`, `source_auth_required`, `source_unavailable`, `unsupported`, `degraded`, `audit_unavailable`, `stale`, `stale_plan`, `skipped`, `failed`.

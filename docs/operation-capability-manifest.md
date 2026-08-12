@@ -27,6 +27,9 @@ Every operation record contains:
 - `authenticationRequired`, `policyRequired`, and `auditRequired`;
 - `scope`: `broker-local`, `provider-remote`, `source-boundary`, or `mixed`;
 - explicit `providerKinds`;
+- `completionMode`: `synchronous` or `asynchronous`;
+- `statusPath`, only when an asynchronous operation status route is actually
+  implemented and advertised;
 - safe `limitationCode`, `reasonCode`, and `nextAction` values.
 
 `validated` is an executable implementation covered by contract/provider tests.
@@ -46,10 +49,23 @@ For reads, the selected connection must report `read-only`, `executable`, or
 `validated` for the exact operation. Every invocation still re-evaluates its
 declared auth, policy, audit, confirmation, lockout, and identity controls.
 
+Current management routes complete synchronously. Service Admin must treat an
+empty `statusPath` as authoritative and must not poll a secret-operation status
+endpoint that is not present in this manifest. When the broker adds durable
+asynchronous delete, decommission, or provider mutation work, it must first add
+the implemented status route to the OpenAPI contract, advertised endpoint list,
+and operation manifest.
+
 Connection lifecycle wins over family capability. `source_auth_required`,
 `policy_denied`, `audit_unavailable`, locked, disabled, invalid, and degraded
 states downgrade affected connection operations to `unavailable` with a safe
 recovery action.
+
+Local decommission is advertised as three synchronous operations: signed
+dependency/version dry-run, recoverable encrypted-tombstone apply, and exact-
+version restore. Provider-scoped matrices keep these operations unavailable
+unless the selected provider is the local encrypted store. Hard delete and
+disable are not advertised.
 
 ## Current provider operation matrix
 
