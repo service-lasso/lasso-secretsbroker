@@ -25,6 +25,8 @@ func managementLifecycleBackend(t *testing.T) *localBackend {
 	}
 	backend := newLocalBackend(filepath.Join(dir, "store.json"), filepath.Join(dir, "audit.jsonl"), key)
 	backend.wrapperProvider = testKeyWrapperProvider{}
+	ctx := testWrapperContext()
+	backend.wrapperContextOverride = &ctx
 	backend.wrapperPath = filepath.Join(dir, "wrapper.json")
 	backend.backupRoot = filepath.Join(dir, "backups")
 	clock := time.Date(2026, 8, 14, 3, 0, 0, 0, time.UTC)
@@ -35,7 +37,7 @@ func managementLifecycleBackend(t *testing.T) *localBackend {
 	if _, err := backend.writeSecret(writeSecretRequest{Ref: "services/api/runtime/TOKEN", Value: lifecycleSecret}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := wrapMasterKeyWithProvider(backend.wrapperPath, key, wrapperContextFor(""), backend.now(), backend.lifecycleWrapperProvider()); err != nil {
+	if _, err := wrapMasterKeyWithProvider(backend.wrapperPath, key, backend.lifecycleWrapperContext(), backend.now(), backend.lifecycleWrapperProvider()); err != nil {
 		t.Fatal(err)
 	}
 	return backend
@@ -215,7 +217,7 @@ func TestLifecycleManagedRotationRecoversStoreWrapperCrashWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	pending := rotationPendingWrapperPath(backend.wrapperPath)
-	if _, err := wrapMasterKeyWithProvider(pending, newKey, wrapperContextFor(""), backend.now(), backend.lifecycleWrapperProvider()); err != nil {
+	if _, err := wrapMasterKeyWithProvider(pending, newKey, backend.lifecycleWrapperContext(), backend.now(), backend.lifecycleWrapperProvider()); err != nil {
 		t.Fatal(err)
 	}
 	receipt := lifecycleOperationReceipt{Kind: "rotate", OperationID: "op-crash", ExpectedKeyID: masterKeyID(oldKey), OldKeyID: masterKeyID(oldKey), NewKeyID: masterKeyID(newKey), KeyVersion: masterKeyVersion, SecretCount: 1, AppliedAt: backend.now()}
@@ -226,7 +228,7 @@ func TestLifecycleManagedRotationRecoversStoreWrapperCrashWindow(t *testing.T) {
 	if err != nil || canonical.KeyID != masterKeyID(oldKey) {
 		t.Fatalf("canonical wrapper unexpectedly changed before recovery: %#v err=%v", canonical, err)
 	}
-	recovered, err := loadKeyMaterialForStoreWithProvider("", "", backend.wrapperPath, backend.storePath, backend.lifecycleWrapperProvider())
+	recovered, err := loadKeyMaterialForStoreWithProvider("", "", backend.wrapperPath, backend.storePath, backend.lifecycleWrapperProvider(), backend.lifecycleWrapperContext())
 	if err != nil || recovered.Value != newKey || recovered.Source != "os-wrapper-rotation-recovery" {
 		t.Fatalf("recovered=%#v err=%v", recovered, err)
 	}

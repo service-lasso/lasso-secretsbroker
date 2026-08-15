@@ -84,10 +84,10 @@ func cleanupPrivateWrapperTemps(path string, provider keyWrapperProvider) error 
 }
 
 func loadKeyMaterialWithWrapper(flagValue, filePath, wrapperPath string) (keyMaterial, error) {
-	return loadKeyMaterialWithWrapperWithProvider(flagValue, filePath, wrapperPath, platformKeyWrapperProvider())
+	return loadKeyMaterialWithWrapperWithProvider(flagValue, filePath, wrapperPath, platformKeyWrapperProvider(), wrapperContextFor(""))
 }
 
-func loadKeyMaterialWithWrapperWithProvider(flagValue, filePath, wrapperPath string, provider keyWrapperProvider) (keyMaterial, error) {
+func loadKeyMaterialWithWrapperWithProvider(flagValue, filePath, wrapperPath string, provider keyWrapperProvider, ctx wrapperContext) (keyMaterial, error) {
 	material, err := loadKeyMaterial(flagValue, filePath)
 	if err == nil || !errors.Is(err, errLocked) || wrapperPath == "" {
 		return material, err
@@ -97,7 +97,7 @@ func loadKeyMaterialWithWrapperWithProvider(flagValue, filePath, wrapperPath str
 	} else if statErr != nil {
 		return keyMaterial{Source: "os-wrapper"}, statErr
 	}
-	plaintext, unwrapErr := unwrapMasterKeyWithProvider(wrapperPath, wrapperContextFor(""), provider)
+	plaintext, unwrapErr := unwrapMasterKeyWithProvider(wrapperPath, ctx, provider)
 	if unwrapErr != nil {
 		if errors.Is(unwrapErr, os.ErrNotExist) {
 			return material, errLocked
@@ -116,11 +116,11 @@ func rotationPendingWrapperPath(wrapperPath string) string {
 // rotation. The pending wrapper contains only OS-protected key bytes. It is
 // promoted only when its key ID agrees with the atomically published store.
 func loadKeyMaterialForStore(flagValue, filePath, wrapperPath, storePath string) (keyMaterial, error) {
-	return loadKeyMaterialForStoreWithProvider(flagValue, filePath, wrapperPath, storePath, platformKeyWrapperProvider())
+	return loadKeyMaterialForStoreWithProvider(flagValue, filePath, wrapperPath, storePath, platformKeyWrapperProvider(), wrapperContextFor(""))
 }
 
-func loadKeyMaterialForStoreWithProvider(flagValue, filePath, wrapperPath, storePath string, provider keyWrapperProvider) (keyMaterial, error) {
-	material, materialErr := loadKeyMaterialWithWrapperWithProvider(flagValue, filePath, wrapperPath, provider)
+func loadKeyMaterialForStoreWithProvider(flagValue, filePath, wrapperPath, storePath string, provider keyWrapperProvider, ctx wrapperContext) (keyMaterial, error) {
+	material, materialErr := loadKeyMaterialWithWrapperWithProvider(flagValue, filePath, wrapperPath, provider, ctx)
 	storeKeyID, storeErr := readStoreKeyID(storePath)
 	if errors.Is(storeErr, os.ErrNotExist) {
 		return material, materialErr
@@ -149,7 +149,7 @@ func loadKeyMaterialForStoreWithProvider(flagValue, filePath, wrapperPath, store
 		}
 		return keyMaterial{}, errInvalidWrapper
 	}
-	pending, err := unwrapMasterKeyWithProvider(pendingPath, wrapperContextFor(""), provider)
+	pending, err := unwrapMasterKeyWithProvider(pendingPath, ctx, provider)
 	if err != nil {
 		if materialErr != nil {
 			return material, materialErr
@@ -177,6 +177,13 @@ func (b *localBackend) lifecycleWrapperProvider() keyWrapperProvider {
 		return b.wrapperProvider
 	}
 	return platformKeyWrapperProvider()
+}
+
+func (b *localBackend) lifecycleWrapperContext() wrapperContext {
+	if b.wrapperContextOverride != nil {
+		return *b.wrapperContextOverride
+	}
+	return wrapperContextFor("")
 }
 
 func readStoreKeyID(path string) (string, error) {
