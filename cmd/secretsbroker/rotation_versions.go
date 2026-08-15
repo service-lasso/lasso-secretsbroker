@@ -126,10 +126,18 @@ func (b *localBackend) rotationStatus(req rotationVersionRequest) (rotationVersi
 func (b *localBackend) stageRotationVersion(req rotationVersionRequest) (rotationVersionResponse, error) {
 	b.rotationMu.Lock()
 	defer b.rotationMu.Unlock()
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 
 	ref := strings.TrimSpace(req.Ref)
 	res := baseRotationVersionResponse(req, "rotation_stage", "stage")
 	res.RequiresConfirmation = true
+	if !req.Confirm {
+		res.Outcome = "policy_denied"
+		res.NextAction = "confirm_with_audit_reason_and_candidate_value"
+		_ = b.audit("rotation_stage", ref, res.Outcome, req.ServiceID, req.RequestID)
+		return res, errPolicyDenied
+	}
 	if err := validateRotationSecretBearingRequest(req, true); err != nil {
 		res.Outcome = outcomeForError(err)
 		res.NextAction = nextActionForManagedOutcome(res.Outcome)
@@ -211,6 +219,8 @@ func (b *localBackend) stageRotationVersion(req rotationVersionRequest) (rotatio
 func (b *localBackend) activateRotationVersion(req rotationVersionRequest) (rotationVersionResponse, error) {
 	b.rotationMu.Lock()
 	defer b.rotationMu.Unlock()
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 
 	ref := strings.TrimSpace(req.Ref)
 	res := baseRotationVersionResponse(req, "rotation_activate", "activate")
@@ -289,6 +299,8 @@ func (b *localBackend) activateRotationVersion(req rotationVersionRequest) (rota
 func (b *localBackend) rollbackRotationVersion(req rotationVersionRequest) (rotationVersionResponse, error) {
 	b.rotationMu.Lock()
 	defer b.rotationMu.Unlock()
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 
 	ref := strings.TrimSpace(req.Ref)
 	res := baseRotationVersionResponse(req, "rotation_rollback", "rollback")
@@ -374,6 +386,8 @@ func (b *localBackend) rollbackRotationVersion(req rotationVersionRequest) (rota
 func (b *localBackend) retireRotationVersion(req rotationVersionRequest) (rotationVersionResponse, error) {
 	b.rotationMu.Lock()
 	defer b.rotationMu.Unlock()
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 
 	ref := strings.TrimSpace(req.Ref)
 	res := baseRotationVersionResponse(req, "rotation_retire", "retire")

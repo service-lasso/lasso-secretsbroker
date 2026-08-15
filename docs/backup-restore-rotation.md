@@ -9,6 +9,38 @@ The local-first Secrets Broker can now create encrypted backup artifacts, restor
 
 The backup flow never exports plaintext secret values. Backup artifacts contain the encrypted local store plus metadata needed for diagnostics and recovery planning.
 
+## Authenticated lifecycle management API
+
+Service Admin and other authenticated local operators use the Broker lifecycle
+API rather than the path- and key-bearing break-glass CLI:
+
+- `GET /v1/management/lifecycle/status` returns key fingerprint/version,
+  wrapper state, recovery-policy metadata and the safe backup inventory.
+- `GET|POST /v1/management/lifecycle/backups` lists or creates an encrypted
+  backup in the Broker-owned backup root.
+- `POST /v1/management/lifecycle/backups/verify` rechecks the selected artifact.
+- `POST /v1/management/lifecycle/restore/dry-run` binds a five-minute plan to
+  the exact backup, key fingerprint and current store digest.
+- `POST /v1/management/lifecycle/restore/apply` requires that exact plan and
+  explicit confirmation before atomically replacing the store.
+- `POST /v1/management/lifecycle/key/rotate` generates new key material inside
+  the Broker, re-encrypts the store and refreshes the local OS wrapper. Key
+  bytes are never accepted or returned by this HTTP route.
+
+Backup files are addressed by opaque `backupId` values. The API never accepts
+or returns filesystem paths, portable key bytes, recovery shares, passphrases,
+encrypted payload bodies or plaintext secret values. Backup artifacts are
+authenticated with the matching portable key in addition to encrypting each
+secret payload. Files are size-bounded, regular-file checked, confined to the
+configured backup root and published without overwriting an existing ID.
+
+Mutating requests require a bounded operation id and audit reason. Restore and
+rotation additionally require explicit confirmation and expected-state
+evidence. An unavailable audit sink rejects authorization before any local
+mutation. The recovery-share ceremony remains CLI-only: Service Admin may show
+policy/share fingerprints and next actions, but must never collect or render
+share contents.
+
 ## Backup artifact format
 
 `secretsbroker backup create` writes a JSON artifact:

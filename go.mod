@@ -1,6 +1,6 @@
 module github.com/service-lasso/lasso-secretsbroker
 
-go 1.24.0
+go 1.26.6
 
 require (
 	filippo.io/age v1.3.1

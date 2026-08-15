@@ -89,6 +89,8 @@ func (b *localBackend) recoveryPolicyStatus() (recoveryPolicyStatusResponse, err
 }
 
 func (b *localBackend) upsertRecoveryPolicy(req recoveryPolicyRequest) (recoveryPolicyStatusResponse, error) {
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 	res := recoveryPolicyStatusResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "degraded", NextAction: "repair_recovery_policy_metadata"}
 	store, err := b.loadStore()
 	if err != nil {
@@ -121,6 +123,8 @@ func (b *localBackend) upsertRecoveryPolicy(req recoveryPolicyRequest) (recovery
 }
 
 func (b *localBackend) revokeRecoveryPolicy(policyID, serviceIDValue, requestID string) (recoveryPolicyStatusResponse, error) {
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 	store, err := b.loadStore()
 	if err != nil {
 		_ = b.auditRecoveryPolicy("recovery_policy_revoke", nil, "degraded", serviceIDValue, requestID)

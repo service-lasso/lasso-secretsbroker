@@ -118,9 +118,10 @@ func runKeyRecovery(args []string) error {
 func runKeyRecoveryGenerate(args []string) error {
 	fs := flag.NewFlagSet("key recovery generate", flag.ContinueOnError)
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
-	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	audit := addAuditCommandOptions(fs)
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "portable master key")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
+	wrapperPath := fs.String("wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path used when explicit master-key input is absent")
 	policyID := fs.String("policy-id", "", "recovery policy id")
 	threshold := fs.Int("threshold", 0, "threshold required to recover")
 	requestID := fs.String("request-id", "", "request id")
@@ -134,11 +135,11 @@ func runKeyRecoveryGenerate(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	material, err := loadKeyMaterial(*masterKey, *masterKeyFile)
+	material, err := loadKeyMaterialWithWrapper(*masterKey, *masterKeyFile, *wrapperPath)
 	if err != nil {
 		return err
 	}
-	backend := newLocalBackend(*storePath, *auditPath, material.Value)
+	backend := audit.newBackend(*storePath, material.Value)
 	res, err := backend.generateRecoveryShares(recoveryShareGenerateRequest{PolicyID: *policyID, Threshold: *threshold, Outputs: []string(outputs), AgeRecipients: []string(ageRecipients), AgeRecipientFiles: []string(ageRecipientFiles), ServiceID: *service, RequestID: *requestID})
 	if err != nil {
 		_ = encodeIndented(os.Stdout, res)
@@ -150,7 +151,7 @@ func runKeyRecoveryGenerate(args []string) error {
 func runKeyRecoveryImport(args []string) error {
 	fs := flag.NewFlagSet("key recovery import", flag.ContinueOnError)
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
-	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	audit := addAuditCommandOptions(fs)
 	wrapperPath := fs.String("wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path")
 	osName := fs.String("os", runtime.GOOS, "wrapper OS override for validation/testing")
 	requestID := fs.String("request-id", "", "request id")
@@ -164,7 +165,7 @@ func runKeyRecoveryImport(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	backend := newLocalBackend(*storePath, *auditPath, "")
+	backend := audit.newBackend(*storePath, "")
 	res, err := backend.importRecoveryShares(recoveryShareImportRequest{Inputs: []string(inputs), AgeIdentities: []string(ageIdentities), AgeIdentityFiles: []string(ageIdentityFiles), WrapperPath: *wrapperPath, OS: *osName, ServiceID: *service, RequestID: *requestID})
 	if err != nil {
 		_ = encodeIndented(os.Stdout, res)
@@ -283,6 +284,10 @@ func (b *localBackend) generateRecoveryShares(req recoveryShareGenerateRequest) 
 }
 
 func (b *localBackend) importRecoveryShares(req recoveryShareImportRequest) (recoveryShareOperationResponse, error) {
+	return b.importRecoverySharesWithProvider(req, wrapperContextFor(req.OS), platformKeyWrapperProvider())
+}
+
+func (b *localBackend) importRecoverySharesWithProvider(req recoveryShareImportRequest, ctx wrapperContext, provider keyWrapperProvider) (recoveryShareOperationResponse, error) {
 	res := recoveryShareOperationResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "locked", StorePath: b.storePath, WrapperPath: req.WrapperPath, NextAction: "provide_threshold_recovery_shares", AuditStatus: "audit_recorded"}
 	inputs := safeList(req.Inputs)
 	if len(inputs) == 0 {
@@ -345,7 +350,6 @@ func (b *localBackend) importRecoveryShares(req recoveryShareImportRequest) (rec
 		res.NextAction = "provide_recovery_shares_for_matching_key"
 		return res, errRecoveryKeyMismatch
 	}
-	ctx := wrapperContextFor(req.OS)
 	if !ctx.Supported {
 		_ = b.auditRecoveryShares("recovery_share_import", header.PolicyID, "degraded", req.ServiceID, req.RequestID)
 		res.Outcome = "degraded"
@@ -361,7 +365,7 @@ func (b *localBackend) importRecoveryShares(req recoveryShareImportRequest) (rec
 		res.NextAction = "inspect_store_before_wrapper_refresh"
 		return res, err
 	}
-	wrapper, err := wrapMasterKey(req.WrapperPath, recoveredKey, ctx, b.now())
+	wrapper, err := wrapMasterKeyWithProvider(req.WrapperPath, recoveredKey, ctx, b.now(), provider)
 	if err != nil {
 		_ = b.auditRecoveryShares("recovery_share_import", header.PolicyID, "degraded", req.ServiceID, req.RequestID)
 		res.Outcome = "degraded"

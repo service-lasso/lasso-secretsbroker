@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,25 @@ import (
 	"testing"
 	"time"
 )
+
+type testKeyWrapperProvider struct{}
+
+func (testKeyWrapperProvider) Algorithm() string { return "test-protected-wrapper" }
+func (testKeyWrapperProvider) Protect(value []byte) ([]byte, error) {
+	return append([]byte("protected:"), value...), nil
+}
+func (testKeyWrapperProvider) Unprotect(value []byte) ([]byte, error) {
+	if !bytes.HasPrefix(value, []byte("protected:")) {
+		return nil, errWrapperUnavailable
+	}
+	return append([]byte(nil), value[len("protected:"):]...), nil
+}
+func (testKeyWrapperProvider) SecurePath(string, bool) error   { return nil }
+func (testKeyWrapperProvider) ValidatePath(string, bool) error { return nil }
+
+func testWrapperContext() wrapperContext {
+	return wrapperContext{OS: "test", User: "test-user", Machine: "test-machine", Kind: "test-user-scope", Supported: true}
+}
 
 func lifecycleTestKey(seed byte) string {
 	bytes := make([]byte, 32)
@@ -53,11 +73,13 @@ func TestInitializeUnlockImportAndRewrapMasterKeyLifecycle(t *testing.T) {
 	}
 
 	wrapperPath := filepath.Join(t.TempDir(), "wrapper.json")
-	imported, err := backend.importOrRewrapMasterKey(wrapperPath, key, wrapperContextFor("linux"), "key_import")
+	ctx := testWrapperContext()
+	provider := testKeyWrapperProvider{}
+	imported, err := backend.importOrRewrapMasterKeyWithProvider(wrapperPath, key, ctx, "key_import", provider)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if imported.Wrapper == nil || !imported.Wrapper.Available || imported.Wrapper.KeyID != masterKeyID(key) || imported.Wrapper.OS != "linux" {
+	if imported.Wrapper == nil || !imported.Wrapper.Available || imported.Wrapper.KeyID != masterKeyID(key) || imported.Wrapper.OS != "test" {
 		t.Fatalf("import response = %#v", imported)
 	}
 	wrapperBytes, err := os.ReadFile(wrapperPath)
@@ -68,7 +90,7 @@ func TestInitializeUnlockImportAndRewrapMasterKeyLifecycle(t *testing.T) {
 		t.Fatalf("wrapper leaked portable key: %s", string(wrapperBytes))
 	}
 
-	rewrapped, err := backend.importOrRewrapMasterKey(wrapperPath, key, wrapperContextFor("linux"), "key_rewrap")
+	rewrapped, err := backend.importOrRewrapMasterKeyWithProvider(wrapperPath, key, ctx, "key_rewrap", provider)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,14 +261,16 @@ func TestImportUnsupportedWrapperAndInvalidKeyFailClosed(t *testing.T) {
 	if _, err := os.Stat(wrapperPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("unsupported wrapper should not write file, stat err = %v", err)
 	}
-	if _, err := backend.importOrRewrapMasterKey(wrapperPath, "not-a-valid-portable-key", wrapperContextFor("linux"), "key_import"); !errors.Is(err, errInvalidMasterKey) {
+	if _, err := backend.importOrRewrapMasterKeyWithProvider(wrapperPath, "not-a-valid-portable-key", testWrapperContext(), "key_import", testKeyWrapperProvider{}); !errors.Is(err, errInvalidMasterKey) {
 		t.Fatalf("invalid key err = %v", err)
 	}
 }
 
 func TestWrapperStatusReportsRecoveryGuidanceWithoutKeyMaterial(t *testing.T) {
 	missingPath := filepath.Join(t.TempDir(), "missing-wrapper.json")
-	missing := wrapperStatusResponse(missingPath, wrapperContextFor("linux"))
+	ctx := testWrapperContext()
+	detail := wrapperStatusWithProvider(missingPath, ctx, testKeyWrapperProvider{})
+	missing := keyLifecycleResponse{Outcome: detail.State, Wrapper: &detail, RecoveryGuidance: recoveryGuidanceForWrapper(detail)}
 	if missing.Outcome != "locked" || missing.Wrapper == nil || missing.Wrapper.NextAction != "import_portable_key" || !strings.Contains(missing.RecoveryGuidance, "Import") {
 		t.Fatalf("missing wrapper status = %#v", missing)
 	}

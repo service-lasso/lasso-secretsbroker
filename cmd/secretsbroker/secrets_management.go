@@ -13,20 +13,21 @@ import (
 const revealTTLSeconds = 60
 
 type managedSecretRecord struct {
-	Ref            string         `json:"ref"`
-	Name           string         `json:"name"`
-	SourceID       string         `json:"sourceId"`
-	ProviderKind   string         `json:"providerKind"`
-	OwnerServiceID string         `json:"ownerServiceId"`
-	WorkspaceID    string         `json:"workspaceId"`
-	State          string         `json:"state"`
-	Outcome        string         `json:"outcome"`
-	Capabilities   []string       `json:"capabilities"`
-	Policy         string         `json:"policy"`
-	AuditStatus    string         `json:"auditStatus"`
-	ValueSearch    string         `json:"valueSearch"`
-	UpdatedAt      *time.Time     `json:"updatedAt,omitempty"`
-	Metadata       SecretMetadata `json:"metadata,omitempty"`
+	Ref            string                         `json:"ref"`
+	Name           string                         `json:"name"`
+	SourceID       string                         `json:"sourceId"`
+	ProviderKind   string                         `json:"providerKind"`
+	OwnerServiceID string                         `json:"ownerServiceId"`
+	WorkspaceID    string                         `json:"workspaceId"`
+	State          string                         `json:"state"`
+	Outcome        string                         `json:"outcome"`
+	Capabilities   []string                       `json:"capabilities"`
+	Policy         string                         `json:"policy"`
+	AuditStatus    string                         `json:"auditStatus"`
+	ValueSearch    string                         `json:"valueSearch"`
+	UpdatedAt      *time.Time                     `json:"updatedAt,omitempty"`
+	Metadata       SecretMetadata                 `json:"metadata,omitempty"`
+	Tombstone      *decommissionTombstoneMetadata `json:"tombstone,omitempty"`
 }
 
 type managedSecretsResponse struct {
@@ -156,7 +157,7 @@ func (b *localBackend) listManagedSecrets(query string, valueSearch bool) (manag
 	if err != nil {
 		return managedSecretsResponse{ServiceID: serviceID, APIVersion: apiVersion, Query: query, ValueSearch: valueSearch, Outcome: "degraded", Results: []managedSecretRecord{}}, errBackendDegraded
 	}
-	records := make([]managedSecretRecord, 0, len(store.Secrets)+configuredSourceRefCount(b.sources))
+	records := make([]managedSecretRecord, 0, len(store.Secrets)+len(store.Tombstones)+configuredSourceRefCount(b.sources))
 	for ref, entry := range store.Secrets {
 		record := managedRecordFromLocalEntry(ref, entry)
 		matches := managedRecordMatches(record, query)
@@ -165,6 +166,17 @@ func (b *localBackend) listManagedSecrets(query string, valueSearch bool) (manag
 		}
 		if matches {
 			records = append(records, record)
+		}
+	}
+	if !valueSearch {
+		for ref, tombstone := range store.Tombstones {
+			if tombstone.State != "decommissioned" {
+				continue
+			}
+			record := managedRecordFromTombstone(ref, tombstone)
+			if managedRecordMatches(record, query) {
+				records = append(records, record)
+			}
 		}
 	}
 	for _, source := range b.sources.enabledSources() {
@@ -393,12 +405,24 @@ func managedRecordFromLocalEntry(ref string, entry secretEntry) managedSecretRec
 		WorkspaceID:    workspaceFromRef(ref),
 		State:          "present",
 		Outcome:        "ready",
-		Capabilities:   []string{"metadata", "reveal", "edit", "reset", "policy", "value_search"},
+		Capabilities:   []string{"metadata", "reveal", "edit", "reset", "rotation", "decommission", "policy", "value_search"},
 		Policy:         "local-writeback-policy",
 		AuditStatus:    "audit_available",
 		ValueSearch:    "supported",
 		UpdatedAt:      &updated,
 		Metadata:       entry.Metadata,
+	}
+}
+
+func managedRecordFromTombstone(ref string, tombstone localSecretTombstone) managedSecretRecord {
+	updated := tombstone.DecommissionedAt
+	metadata := tombstoneMetadata(tombstone)
+	return managedSecretRecord{
+		Ref: ref, Name: refName(ref), SourceID: firstNonEmpty(tombstone.Entry.Metadata.SourceID, localStoreSource),
+		ProviderKind: "local-encrypted-store", OwnerServiceID: ownerFromRef(ref), WorkspaceID: workspaceFromRef(ref),
+		State: "decommissioned", Outcome: "decommissioned", Capabilities: []string{"metadata", "restore"},
+		Policy: "local-writeback-policy", AuditStatus: "audit_available", ValueSearch: "unavailable",
+		UpdatedAt: &updated, Metadata: tombstone.Entry.Metadata, Tombstone: &metadata,
 	}
 }
 
@@ -774,7 +798,27 @@ func (b *localBackend) managedResetDryRun(req managedSecretActionRequest) (manag
 }
 
 func (b *localBackend) managedPolicyPreview(req managedSecretActionRequest) (managedSecretActionResponse, error) {
-	return b.managedDryRun(req, "policy")
+	res := baseManagedActionResponse(req, "policy", "preview")
+	if err := validateManagedAction(req, false); err != nil {
+		res.Outcome = "invalid_ref"
+		res.NextAction = "provide_valid_ref"
+		_ = b.audit("management_policy_preview", req.Ref, res.Outcome, req.ServiceID, req.RequestID)
+		return res, err
+	}
+	record, err := b.managedRecord(req.Ref)
+	if err != nil {
+		res.Outcome = outcomeForError(err)
+		res.NextAction = nextActionForManagedOutcome(res.Outcome)
+		_ = b.audit("management_policy_preview", req.Ref, res.Outcome, req.ServiceID, req.RequestID)
+		return res, err
+	}
+	res.Outcome = "unsupported"
+	res.Record = &record
+	res.AuditStatus = "audit_recorded"
+	res.NextAction = "wait_for_policy_binding_persistence"
+	res.UnsupportedCapability = "policy_binding_persistence"
+	_ = b.audit("management_policy_preview", req.Ref, res.Outcome, req.ServiceID, req.RequestID)
+	return res, nil
 }
 
 func (b *localBackend) managedDryRun(req managedSecretActionRequest, operation string) (managedSecretActionResponse, error) {
@@ -810,6 +854,9 @@ func (b *localBackend) managedResetApply(req managedSecretActionRequest) (manage
 }
 
 func (b *localBackend) managedWriteApply(req managedSecretActionRequest, operation string) (managedSecretActionResponse, error) {
+	b.managementMu.Lock()
+	defer b.managementMu.Unlock()
+
 	res := baseManagedActionResponse(req, operation, "apply")
 	if b.managementLockoutActive(req, operation, &res) {
 		return res, errLockoutActive
@@ -843,33 +890,26 @@ func (b *localBackend) managedWriteApply(req managedSecretActionRequest, operati
 
 func (b *localBackend) managedPolicyApply(req managedSecretActionRequest) (managedSecretActionResponse, error) {
 	res := baseManagedActionResponse(req, "policy", "apply")
-	if b.managementLockoutActive(req, "policy", &res) {
-		return res, errLockoutActive
-	}
-	if err := validateManagedAction(req, true); err != nil || !req.Confirm || strings.TrimSpace(req.Policy) == "" {
-		res.Outcome = "policy_denied"
-		res.NextAction = "preview_confirm_reason_and_policy"
-		b.recordManagementPolicyDenied(req, "policy", &res)
+	if err := validateManagedAction(req, false); err != nil {
+		res.Outcome = "invalid_ref"
+		res.NextAction = "provide_valid_ref"
 		_ = b.audit("management_policy_apply", req.Ref, res.Outcome, req.ServiceID, req.RequestID)
-		if res.LockoutActive {
-			return res, errLockoutActive
-		}
-		return res, errPolicyDenied
+		return res, err
 	}
 	record, err := b.managedRecord(req.Ref)
 	if err != nil {
 		res.Outcome = outcomeForError(err)
 		res.NextAction = nextActionForManagedOutcome(res.Outcome)
+		_ = b.audit("management_policy_apply", req.Ref, res.Outcome, req.ServiceID, req.RequestID)
 		return res, err
 	}
-	record.Policy = req.Policy
-	res.Outcome = "applied"
-	res.Applied = true
+	res.Outcome = "unsupported"
 	res.AuditStatus = "audit_recorded"
 	res.Record = &record
-	b.recordManagementSuccess(req, "policy")
-	_ = b.audit("management_policy_apply", req.Ref, "applied", req.ServiceID, req.RequestID)
-	return res, nil
+	res.NextAction = "wait_for_policy_binding_persistence"
+	res.UnsupportedCapability = "policy_binding_persistence"
+	_ = b.audit("management_policy_apply", req.Ref, res.Outcome, req.ServiceID, req.RequestID)
+	return res, errUnsupportedProvider
 }
 
 func (b *localBackend) managedRecord(ref string) (managedSecretRecord, error) {
@@ -1030,6 +1070,7 @@ func nextActionForManagedOutcome(outcome string) string {
 }
 
 func registerSecretsManagementHandlers(mux *http.ServeMux, backend *localBackend, security localAPISecurity) {
+	registerManagedCreateHandlers(mux, backend, security)
 	mux.HandleFunc("/v1/provisioning/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Use GET /v1/provisioning/status.", "invalid_ref", "")
@@ -1194,6 +1235,8 @@ func writeManagementActionError(w http.ResponseWriter, err error, res managedSec
 		status = http.StatusLocked
 	case errors.Is(err, errSourceAuthRequired):
 		status = http.StatusFailedDependency
+	case errors.Is(err, errUnsupportedProvider):
+		status = http.StatusNotImplemented
 	}
 	writeJSON(w, status, res)
 }

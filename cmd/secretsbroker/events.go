@@ -84,6 +84,8 @@ func (b *localBackend) writeOperationalEvent(audit auditEvent) error {
 	if strings.TrimSpace(b.eventPath) == "" {
 		return nil
 	}
+	b.eventMu.Lock()
+	defer b.eventMu.Unlock()
 	event := operationalEventFromAudit(audit)
 	events, err := loadOperationalEvents(b.eventPath)
 	if err != nil {
@@ -177,6 +179,11 @@ func safeRefPrefix(ref string) string {
 	if ref == "" {
 		return ""
 	}
+	for _, lockoutPrefix := range []string{"local_api:", "management:", "writeback:"} {
+		if strings.HasPrefix(ref, lockoutPrefix) {
+			return strings.TrimSuffix(lockoutPrefix, ":")
+		}
+	}
 	parts := strings.Split(ref, "/")
 	if len(parts) <= 2 {
 		return strings.Join(parts, "/")
@@ -219,7 +226,7 @@ func saveOperationalEvents(path string, events []operationalEvent) error {
 			return err
 		}
 	}
-	return os.WriteFile(path, []byte(builder.String()), 0o600)
+	return writePrivateFileAtomically(path, []byte(builder.String()))
 }
 
 func normalizeOperationalEvent(event operationalEvent) operationalEvent {
@@ -334,6 +341,12 @@ func buildEventsResponse(path string, filters eventFilters) (eventsResponse, err
 	return res, nil
 }
 
+func (b *localBackend) buildEventsResponse(filters eventFilters) (eventsResponse, error) {
+	b.eventMu.RLock()
+	defer b.eventMu.RUnlock()
+	return buildEventsResponse(b.eventPath, filters)
+}
+
 func eventMatchesFilters(event operationalEvent, filters eventFilters) bool {
 	if filters.Since != nil && event.TS.Before(*filters.Since) {
 		return false
@@ -382,7 +395,7 @@ func registerEventsHandlers(mux *http.ServeMux, backend *localBackend) {
 			writeAPIError(w, http.StatusBadRequest, "invalid_event_filter", err.Error(), "invalid_ref", "adjust_event_filter")
 			return
 		}
-		res, err := buildEventsResponse(backend.eventPath, filters)
+		res, err := backend.buildEventsResponse(filters)
 		if err != nil {
 			writeJSON(w, http.StatusServiceUnavailable, res)
 			return

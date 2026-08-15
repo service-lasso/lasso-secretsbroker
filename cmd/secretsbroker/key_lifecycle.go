@@ -1,9 +1,6 @@
 package main
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -20,8 +17,8 @@ import (
 )
 
 const (
-	localWrapperVersion = 1
-	localWrapperAlg     = "AES-256-GCM"
+	localWrapperVersion = 2
+	localWrapperMaxSize = 1 << 20
 )
 
 var (
@@ -29,6 +26,9 @@ var (
 	errStoreAlreadyExists   = errors.New("local encrypted store already exists")
 	errUnsupportedOSWrapper = errors.New("os wrapper provider is unsupported")
 	errInvalidWrapper       = errors.New("local key wrapper is invalid")
+	errLegacyWrapper        = errors.New("legacy local key wrapper is insecure and must be re-enrolled")
+	errWrapperUnavailable   = errors.New("local key wrapper is unavailable for the current user")
+	errWrapperAccess        = errors.New("local key wrapper permissions are not private")
 	errOneTimeRevealMissing = errors.New("generated bootstrap requires explicit one-time reveal")
 )
 
@@ -83,7 +83,6 @@ type localKeyWrapper struct {
 	User        string    `json:"user"`
 	Machine     string    `json:"machine"`
 	Alg         string    `json:"alg"`
-	Nonce       string    `json:"nonce"`
 	Ciphertext  string    `json:"ciphertext"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
@@ -134,7 +133,7 @@ type wrapperContext struct {
 func runKeyInitialize(args []string) error {
 	fs := flag.NewFlagSet("key initialize", flag.ContinueOnError)
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
-	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	audit := addAuditCommandOptions(fs)
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "portable master key")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
 	generate := fs.Bool("generate", false, "generate a portable master key when no key is supplied")
@@ -155,7 +154,7 @@ func runKeyInitialize(args []string) error {
 	if material.Source == "generated" && !*oneTimeReveal {
 		return errOneTimeRevealMissing
 	}
-	backend := newLocalBackend(*storePath, *auditPath, material.Value)
+	backend := audit.newBackend(*storePath, material.Value)
 	res, err := backend.initializeStoreWithSource(material.Value, material.Source, *oneTimeReveal)
 	if err != nil {
 		return err
@@ -166,17 +165,18 @@ func runKeyInitialize(args []string) error {
 func runKeyUnlock(args []string) error {
 	fs := flag.NewFlagSet("key unlock", flag.ContinueOnError)
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
-	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	audit := addAuditCommandOptions(fs)
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "portable master key")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
+	wrapperPath := fs.String("wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	material, err := loadKeyMaterial(*masterKey, *masterKeyFile)
+	material, err := loadKeyMaterialWithWrapper(*masterKey, *masterKeyFile, *wrapperPath)
 	if err != nil {
 		return err
 	}
-	backend := newLocalBackend(*storePath, *auditPath, material.Value)
+	backend := audit.newBackend(*storePath, material.Value)
 	res, err := backend.unlockWithMasterKey(material.Value)
 	if err != nil {
 		return err
@@ -195,7 +195,7 @@ func runKeyRewrap(args []string) error {
 func runKeyWrapOperation(name string, args []string, operation string) error {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
-	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	audit := addAuditCommandOptions(fs)
 	wrapperPath := fs.String("wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path")
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "portable master key")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
@@ -207,7 +207,7 @@ func runKeyWrapOperation(name string, args []string, operation string) error {
 	if err != nil {
 		return err
 	}
-	backend := newLocalBackend(*storePath, *auditPath, material.Value)
+	backend := audit.newBackend(*storePath, material.Value)
 	res, err := backend.importOrRewrapMasterKey(*wrapperPath, material.Value, wrapperContextFor(*osName), operation)
 	if err != nil {
 		return err
@@ -217,13 +217,13 @@ func runKeyWrapOperation(name string, args []string, operation string) error {
 
 func runKeyWrapperStatus(args []string) error {
 	fs := flag.NewFlagSet("key wrapper-status", flag.ContinueOnError)
-	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	audit := addAuditCommandOptions(fs)
 	wrapperPath := fs.String("wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path")
 	osName := fs.String("os", runtime.GOOS, "wrapper OS override for validation/testing")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	backend := newLocalBackend(defaultStorePath(), *auditPath, "")
+	backend := audit.newBackend(defaultStorePath(), "")
 	res := wrapperStatusResponse(*wrapperPath, wrapperContextFor(*osName))
 	_ = backend.audit("key_wrapper_status", "", res.Outcome, "", "")
 	return encodeIndented(os.Stdout, res)
@@ -234,6 +234,8 @@ func (b *localBackend) initializeStore(masterKey string) (keyLifecycleResponse, 
 }
 
 func (b *localBackend) initializeStoreWithSource(masterKey, keySourceType string, revealGenerated bool) (keyLifecycleResponse, error) {
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 	keySourceType = normalizeBootstrapKeySource(keySourceType)
 	if err := validatePortableMasterKey(masterKey); err != nil {
 		_ = b.audit("key_initialize", "", "locked", "", "")
@@ -353,6 +355,10 @@ func defaultVaultLossSemantics() vaultLossSemantics {
 }
 
 func (b *localBackend) importOrRewrapMasterKey(wrapperPath, masterKey string, ctx wrapperContext, operation string) (keyLifecycleResponse, error) {
+	return b.importOrRewrapMasterKeyWithProvider(wrapperPath, masterKey, ctx, operation, platformKeyWrapperProvider())
+}
+
+func (b *localBackend) importOrRewrapMasterKeyWithProvider(wrapperPath, masterKey string, ctx wrapperContext, operation string, provider keyWrapperProvider) (keyLifecycleResponse, error) {
 	if !ctx.Supported {
 		_ = b.audit(operation, "", "degraded", "", "")
 		return keyLifecycleResponse{}, errUnsupportedOSWrapper
@@ -367,7 +373,7 @@ func (b *localBackend) importOrRewrapMasterKey(wrapperPath, masterKey string, ct
 		_ = b.audit(operation, "", state, "", "")
 		return keyLifecycleResponse{}, err
 	}
-	wrapper, err := wrapMasterKey(wrapperPath, masterKey, ctx, b.now())
+	wrapper, err := wrapMasterKeyWithProvider(wrapperPath, masterKey, ctx, b.now(), provider)
 	if err != nil {
 		_ = b.audit(operation, "", "degraded", "", "")
 		return keyLifecycleResponse{}, err
@@ -424,17 +430,13 @@ func wrapperContextFor(osName string) wrapperContext {
 	if ctx.OS == "" {
 		ctx.OS = runtime.GOOS
 	}
-	switch ctx.OS {
-	case "windows":
+	switch {
+	case ctx.OS == "windows" && runtime.GOOS == "windows":
 		ctx.Kind = "dpapi-user-scope"
-	case "darwin":
-		ctx.Kind = "keychain-service-item"
-	case "linux":
-		ctx.Kind = "protected-file-user-scope"
 	default:
 		ctx.Kind = "unsupported"
 		ctx.Supported = false
-		ctx.Unsupported = "No supported local wrapper provider for this OS. Use explicit portable-key unlock/import until provider support exists."
+		ctx.Unsupported = "No implemented OS keystore wrapper is available on this host. Use explicit portable-key unlock/import until provider support exists."
 	}
 	if current, err := user.Current(); err == nil && current != nil {
 		ctx.User = firstNonEmpty(current.Username, current.Uid)
@@ -458,6 +460,10 @@ func wrapperStatusResponse(path string, ctx wrapperContext) keyLifecycleResponse
 }
 
 func wrapperStatus(path string, ctx wrapperContext) wrapperStatusDetail {
+	return wrapperStatusWithProvider(path, ctx, platformKeyWrapperProvider())
+}
+
+func wrapperStatusWithProvider(path string, ctx wrapperContext, provider keyWrapperProvider) wrapperStatusDetail {
 	if !ctx.Supported {
 		return wrapperStatusDetail{Available: false, Supported: false, WrapperKind: ctx.Kind, OS: ctx.OS, State: "degraded", NextAction: "use_portable_key_unlock", FailureReason: ctx.Unsupported}
 	}
@@ -468,6 +474,11 @@ func wrapperStatus(path string, ctx wrapperContext) wrapperStatusDetail {
 	if err != nil {
 		return wrapperStatusDetail{Available: true, Supported: true, WrapperKind: ctx.Kind, OS: ctx.OS, User: ctx.User, Machine: ctx.Machine, State: "degraded", NextAction: "import_portable_key", FailureReason: "wrapper metadata could not be read"}
 	}
+	key, err := unwrapMasterKeyWithProvider(path, ctx, provider)
+	if err != nil {
+		return wrapperStatusDetail{Available: true, Supported: true, WrapperKind: ctx.Kind, OS: ctx.OS, User: ctx.User, Machine: ctx.Machine, KeyID: wrapper.KeyID, KeyVersion: wrapper.KeyVersion, State: "degraded", NextAction: "import_portable_key", FailureReason: wrapperFailureReason(err)}
+	}
+	zeroBytes(key)
 	return wrapper.detail(true, "ready", "")
 }
 
@@ -493,55 +504,126 @@ func recoveryGuidanceForWrapper(detail wrapperStatusDetail) string {
 }
 
 func wrapMasterKey(path, masterKey string, ctx wrapperContext, now time.Time) (localKeyWrapper, error) {
+	return wrapMasterKeyWithProvider(path, masterKey, ctx, now, platformKeyWrapperProvider())
+}
+
+func wrapMasterKeyWithProvider(path, masterKey string, ctx wrapperContext, now time.Time, provider keyWrapperProvider) (localKeyWrapper, error) {
 	if !ctx.Supported {
 		return localKeyWrapper{}, errUnsupportedOSWrapper
 	}
-	block, err := aes.NewCipher(localWrapperKey(ctx))
-	if err != nil {
+	if err := validatePortableMasterKey(masterKey); err != nil {
 		return localKeyWrapper{}, err
 	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return localKeyWrapper{}, err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return localKeyWrapper{}, err
-	}
-	createdAt := now
-	if existing, err := readLocalKeyWrapper(path); err == nil && !existing.CreatedAt.IsZero() {
-		createdAt = existing.CreatedAt
-	}
-	wrapper := localKeyWrapper{Version: localWrapperVersion, ServiceID: serviceID, APIVersion: apiVersion, KeyID: masterKeyID(masterKey), KeyVersion: masterKeyVersion, WrapperKind: ctx.Kind, OS: ctx.OS, User: ctx.User, Machine: ctx.Machine, Alg: localWrapperAlg, Nonce: base64.StdEncoding.EncodeToString(nonce), Ciphertext: base64.StdEncoding.EncodeToString(gcm.Seal(nil, nonce, []byte(strings.TrimSpace(masterKey)), nil)), CreatedAt: createdAt, UpdatedAt: now}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return localKeyWrapper{}, err
 	}
+	if err := provider.SecurePath(filepath.Dir(path), true); err != nil {
+		return localKeyWrapper{}, errWrapperAccess
+	}
+	plaintext := []byte(strings.TrimSpace(masterKey))
+	defer zeroBytes(plaintext)
+	protected, err := provider.Protect(plaintext)
+	if err != nil {
+		return localKeyWrapper{}, errWrapperUnavailable
+	}
+	defer zeroBytes(protected)
+	createdAt := now
+	if _, statErr := os.Stat(path); statErr == nil {
+		if err := provider.ValidatePath(path, false); err != nil {
+			return localKeyWrapper{}, errWrapperAccess
+		}
+		if existing, readErr := readLocalKeyWrapper(path); readErr == nil && !existing.CreatedAt.IsZero() {
+			createdAt = existing.CreatedAt
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return localKeyWrapper{}, statErr
+	}
+	wrapper := localKeyWrapper{Version: localWrapperVersion, ServiceID: serviceID, APIVersion: apiVersion, KeyID: masterKeyID(masterKey), KeyVersion: masterKeyVersion, WrapperKind: ctx.Kind, OS: ctx.OS, User: ctx.User, Machine: ctx.Machine, Alg: provider.Algorithm(), Ciphertext: base64.StdEncoding.EncodeToString(protected), CreatedAt: createdAt, UpdatedAt: now}
 	bytes, err := json.MarshalIndent(wrapper, "", "  ")
 	if err != nil {
 		return localKeyWrapper{}, err
 	}
-	if err := os.WriteFile(path, bytes, 0o600); err != nil {
+	if err := writePrivateWrapperAtomically(path, bytes, provider); err != nil {
 		return localKeyWrapper{}, err
 	}
 	return wrapper, nil
 }
 
+func unwrapMasterKey(path string, ctx wrapperContext) ([]byte, error) {
+	return unwrapMasterKeyWithProvider(path, ctx, platformKeyWrapperProvider())
+}
+
+func unwrapMasterKeyWithProvider(path string, ctx wrapperContext, provider keyWrapperProvider) ([]byte, error) {
+	if !ctx.Supported {
+		return nil, errUnsupportedOSWrapper
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	if err := provider.ValidatePath(filepath.Dir(path), true); err != nil {
+		return nil, errWrapperAccess
+	}
+	if err := provider.ValidatePath(path, false); err != nil {
+		return nil, errWrapperAccess
+	}
+	wrapper, err := readLocalKeyWrapper(path)
+	if err != nil {
+		return nil, err
+	}
+	if wrapper.OS != ctx.OS || wrapper.WrapperKind != ctx.Kind || wrapper.User != ctx.User || wrapper.Machine != ctx.Machine || wrapper.Alg != provider.Algorithm() {
+		return nil, errInvalidWrapper
+	}
+	protected, err := base64.StdEncoding.DecodeString(wrapper.Ciphertext)
+	if err != nil || len(protected) == 0 {
+		return nil, errInvalidWrapper
+	}
+	defer zeroBytes(protected)
+	plaintext, err := provider.Unprotect(protected)
+	if err != nil {
+		return nil, errWrapperUnavailable
+	}
+	if err := validatePortableMasterKey(string(plaintext)); err != nil || wrapper.KeyID != masterKeyID(string(plaintext)) || wrapper.KeyVersion != masterKeyVersion {
+		zeroBytes(plaintext)
+		return nil, errInvalidWrapper
+	}
+	return plaintext, nil
+}
+
 func readLocalKeyWrapper(path string) (localKeyWrapper, error) {
-	bytes, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return localKeyWrapper{}, err
+	}
+	defer file.Close()
+	bytes, err := io.ReadAll(io.LimitReader(file, localWrapperMaxSize+1))
+	if err != nil {
+		return localKeyWrapper{}, err
+	}
+	if len(bytes) > localWrapperMaxSize {
+		return localKeyWrapper{}, errInvalidWrapper
 	}
 	var wrapper localKeyWrapper
 	if err := json.Unmarshal(bytes, &wrapper); err != nil {
 		return localKeyWrapper{}, errInvalidWrapper
 	}
-	if wrapper.Version != localWrapperVersion || wrapper.ServiceID != serviceID || wrapper.APIVersion != apiVersion || wrapper.Alg != localWrapperAlg || wrapper.Ciphertext == "" || wrapper.Nonce == "" || wrapper.KeyID == "" {
+	if wrapper.Version == 1 {
+		return localKeyWrapper{}, errLegacyWrapper
+	}
+	if wrapper.Version != localWrapperVersion || wrapper.ServiceID != serviceID || wrapper.APIVersion != apiVersion || wrapper.Ciphertext == "" || wrapper.KeyID == "" || wrapper.Alg == "" {
 		return localKeyWrapper{}, errInvalidWrapper
 	}
 	return wrapper, nil
 }
 
-func localWrapperKey(ctx wrapperContext) []byte {
-	sum := sha256.Sum256([]byte("service-lasso:@secretsbroker:local-wrapper:" + ctx.OS + ":" + ctx.Kind + ":" + ctx.User + ":" + ctx.Machine))
-	return sum[:]
+func wrapperFailureReason(err error) string {
+	switch {
+	case errors.Is(err, errLegacyWrapper):
+		return "legacy wrapper must be re-enrolled"
+	case errors.Is(err, errWrapperAccess):
+		return "wrapper permissions are not private"
+	case errors.Is(err, errWrapperUnavailable):
+		return "wrapper cannot be decrypted by the current user"
+	default:
+		return "wrapper metadata or protected payload is invalid"
+	}
 }

@@ -76,7 +76,7 @@ func TestRecoveryShareGenerateAndImportRefreshesWrapper(t *testing.T) {
 	wrapperPath := filepath.Join(t.TempDir(), "wrapper.json")
 	recovered := newLocalBackend(backend.storePath, filepath.Join(t.TempDir(), "recovery-audit.jsonl"), "")
 	recovered.now = backend.now
-	imported, err := recovered.importRecoveryShares(recoveryShareImportRequest{Inputs: outputs[:2], WrapperPath: wrapperPath, OS: "linux", ServiceID: "@operator", RequestID: "req-import"})
+	imported, err := recovered.importRecoverySharesWithProvider(recoveryShareImportRequest{Inputs: outputs[:2], WrapperPath: wrapperPath, OS: "test", ServiceID: "@operator", RequestID: "req-import"}, testWrapperContext(), testKeyWrapperProvider{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestRecoveryShareImportFailuresFailClosed(t *testing.T) {
 
 	wrapperPath := filepath.Join(t.TempDir(), "too-few-wrapper.json")
 	recovered := newLocalBackend(backend.storePath, filepath.Join(t.TempDir(), "too-few-audit.jsonl"), "")
-	if _, err := recovered.importRecoveryShares(recoveryShareImportRequest{Inputs: outputs[:1], WrapperPath: wrapperPath, OS: "linux"}); !errors.Is(err, errInsufficientRecoveryShares) {
+	if _, err := recovered.importRecoverySharesWithProvider(recoveryShareImportRequest{Inputs: outputs[:1], WrapperPath: wrapperPath, OS: "test"}, testWrapperContext(), testKeyWrapperProvider{}); !errors.Is(err, errInsufficientRecoveryShares) {
 		t.Fatalf("too few shares err = %v", err)
 	}
 	if _, err := os.Stat(wrapperPath); !errors.Is(err, os.ErrNotExist) {
@@ -135,7 +135,7 @@ func TestRecoveryShareImportFailuresFailClosed(t *testing.T) {
 	if err := os.WriteFile(tamperedPath, tamperedBytes, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := recovered.importRecoveryShares(recoveryShareImportRequest{Inputs: []string{tamperedPath, outputs[1]}, WrapperPath: filepath.Join(t.TempDir(), "tampered-wrapper.json"), OS: "linux"}); !errors.Is(err, errInvalidRecoveryShare) {
+	if _, err := recovered.importRecoverySharesWithProvider(recoveryShareImportRequest{Inputs: []string{tamperedPath, outputs[1]}, WrapperPath: filepath.Join(t.TempDir(), "tampered-wrapper.json"), OS: "test"}, testWrapperContext(), testKeyWrapperProvider{}); !errors.Is(err, errInvalidRecoveryShare) {
 		t.Fatalf("tampered share err = %v", err)
 	}
 
@@ -153,7 +153,7 @@ func TestRecoveryShareImportFailuresFailClosed(t *testing.T) {
 	}
 	corrupted := newLocalBackend(corruptedStorePath, filepath.Join(t.TempDir(), "corrupted-audit.jsonl"), "")
 	corruptedWrapper := filepath.Join(t.TempDir(), "corrupted-wrapper.json")
-	if _, err := corrupted.importRecoveryShares(recoveryShareImportRequest{Inputs: outputs[:2], WrapperPath: corruptedWrapper, OS: "linux"}); !errors.Is(err, errBackendDegraded) {
+	if _, err := corrupted.importRecoverySharesWithProvider(recoveryShareImportRequest{Inputs: outputs[:2], WrapperPath: corruptedWrapper, OS: "test"}, testWrapperContext(), testKeyWrapperProvider{}); !errors.Is(err, errBackendDegraded) {
 		t.Fatalf("corrupted store err = %v", err)
 	}
 	if _, err := os.Stat(corruptedWrapper); !errors.Is(err, os.ErrNotExist) {
@@ -235,7 +235,7 @@ func TestRecoveryShareAgeEnvelopeGenerateAndImport(t *testing.T) {
 	wrapperPath := filepath.Join(t.TempDir(), "wrapper.json")
 	recovered := newLocalBackend(backend.storePath, filepath.Join(t.TempDir(), "recovery-audit.jsonl"), "")
 	recovered.now = backend.now
-	imported, err := recovered.importRecoveryShares(recoveryShareImportRequest{Inputs: outputs[:2], AgeIdentities: identityStrings[:2], WrapperPath: wrapperPath, OS: "linux", ServiceID: "@operator", RequestID: "req-age-import"})
+	imported, err := recovered.importRecoverySharesWithProvider(recoveryShareImportRequest{Inputs: outputs[:2], AgeIdentities: identityStrings[:2], WrapperPath: wrapperPath, OS: "test", ServiceID: "@operator", RequestID: "req-age-import"}, testWrapperContext(), testKeyWrapperProvider{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -169,6 +169,8 @@ func safeDecommissionDependencies(values []string) []string {
 func (b *localBackend) decommissionApply(req decommissionRequest) (decommissionResponse, error) {
 	b.decommissionMu.Lock()
 	defer b.decommissionMu.Unlock()
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 
 	res := baseDecommissionResponse(req, "decommission", "apply")
 	fail := func(outcome, nextAction string, operationErr error) (decommissionResponse, error) {
@@ -227,6 +229,8 @@ func (b *localBackend) decommissionApply(req decommissionRequest) (decommissionR
 func (b *localBackend) decommissionRestore(req decommissionRequest) (decommissionResponse, error) {
 	b.decommissionMu.Lock()
 	defer b.decommissionMu.Unlock()
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 
 	res := baseDecommissionResponse(req, "decommission_restore", "apply")
 	fail := func(outcome, nextAction string, operationErr error) (decommissionResponse, error) {

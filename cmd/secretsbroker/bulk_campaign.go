@@ -300,6 +300,8 @@ func (b *localBackend) loadBulkCampaign(planToken string) (bulkCampaignResponse,
 }
 
 func (b *localBackend) persistBulkCampaign(campaign bulkCampaignResponse) error {
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 	if strings.TrimSpace(campaign.PlanToken) == "" {
 		return errInvalidRef
 	}

@@ -113,6 +113,25 @@ func (s *lockoutStore) clear(scope string) bool {
 	return existed
 }
 
+func (s *lockoutStore) clearAfterAudit(scope string, audit func(bool) error) (bool, error) {
+	if s == nil {
+		if audit != nil {
+			return false, audit(false)
+		}
+		return false, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, existed := s.entries[scope]
+	if audit != nil {
+		if err := audit(existed); err != nil {
+			return false, err
+		}
+	}
+	delete(s.entries, scope)
+	return existed, nil
+}
+
 func (s *lockoutStore) activeCount() int {
 	if s == nil {
 		return 0

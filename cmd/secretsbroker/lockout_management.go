@@ -42,19 +42,42 @@ func clearLockout(backend *localBackend, security localAPISecurity, req lockoutC
 		res.Outcome = "policy_denied"
 		res.NextAction = "provide_scope_and_audit_reason"
 		if backend != nil {
-			_ = backend.audit("lockout_clear", scope, res.Outcome, service, req.RequestID)
+			if err := backend.audit("lockout_clear", scope, res.Outcome, service, req.RequestID); err != nil {
+				res.Outcome = "audit_unavailable"
+				res.AuditStatus = "audit_unavailable"
+				res.NextAction = "restore_audit_and_retry"
+				return res, err
+			}
 		}
+		res.AuditStatus = "audit_recorded"
 		return res, errPolicyDenied
 	}
 
-	cleared := false
+	var target *lockoutStore
 	switch {
 	case strings.HasPrefix(scope, "local_api:"):
-		cleared = security.lockouts.clear(scope)
+		target = security.lockouts
 	default:
 		if backend != nil && backend.lockouts != nil {
-			cleared = backend.lockouts.clear(scope)
+			target = backend.lockouts
 		}
+	}
+	auditResult := func(cleared bool) error {
+		if backend == nil {
+			return nil
+		}
+		outcome := "not_found"
+		if cleared {
+			outcome = "cleared"
+		}
+		return backend.audit("lockout_clear", scope, outcome, service, req.RequestID)
+	}
+	cleared, err := target.clearAfterAudit(scope, auditResult)
+	if err != nil {
+		res.Outcome = "audit_unavailable"
+		res.AuditStatus = "audit_unavailable"
+		res.NextAction = "restore_audit_and_retry"
+		return res, err
 	}
 	res.Cleared = cleared
 	res.AuditStatus = "audit_recorded"
@@ -64,9 +87,6 @@ func clearLockout(backend *localBackend, security localAPISecurity, req lockoutC
 	} else {
 		res.Outcome = "not_found"
 		res.NextAction = "check_lockout_scope"
-	}
-	if backend != nil {
-		_ = backend.audit("lockout_clear", scope, res.Outcome, service, req.RequestID)
 	}
 	return res, nil
 }

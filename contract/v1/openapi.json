@@ -1323,6 +1323,280 @@
         ],
         "type": "object"
       },
+      "lifecycleBackupResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "backup": {
+            "$ref": "#/components/schemas/managedBackupMetadata"
+          },
+          "backups": {
+            "items": {
+              "$ref": "#/components/schemas/managedBackupMetadata"
+            },
+            "type": "array"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "nextAction",
+          "outcome",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "lifecycleKeyStatus": {
+        "additionalProperties": true,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "keyId": {
+            "type": "string"
+          },
+          "keyVersion": {
+            "type": "string"
+          },
+          "secretCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "available",
+          "secretCount"
+        ],
+        "type": "object"
+      },
+      "lifecycleOperationRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/lifecycleRequestActor"
+          },
+          "backupId": {
+            "type": "string"
+          },
+          "confirm": {
+            "type": "boolean"
+          },
+          "expectedKeyId": {
+            "type": "string"
+          },
+          "expectedStoreHash": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "planToken": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "operationId",
+          "reason",
+          "requestId",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "lifecycleRequestActor": {
+        "additionalProperties": true,
+        "properties": {
+          "actorId": {
+            "type": "string"
+          },
+          "actorKind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "actorId",
+          "actorKind"
+        ],
+        "type": "object"
+      },
+      "lifecycleRestoreResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "backup": {
+            "$ref": "#/components/schemas/managedBackupMetadata"
+          },
+          "expectedKeyId": {
+            "type": "string"
+          },
+          "expectedStoreHash": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "planExpiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "planToken": {
+            "type": "string"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "nextAction",
+          "outcome",
+          "requiresConfirmation",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "lifecycleRotateResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "keyVersion": {
+            "type": "string"
+          },
+          "newKeyId": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "oldKeyId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "rotatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "secretCount": {
+            "type": "integer"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "nextAction",
+          "outcome",
+          "requiresConfirmation",
+          "secretCount",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "lifecycleStatusResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "backups": {
+            "items": {
+              "$ref": "#/components/schemas/managedBackupMetadata"
+            },
+            "type": "array"
+          },
+          "key": {
+            "$ref": "#/components/schemas/lifecycleKeyStatus"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "recovery": {
+            "$ref": "#/components/schemas/recoveryPolicyStatusResponse"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "wrapper": {
+            "$ref": "#/components/schemas/wrapperStatusDetail"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "auditStatus",
+          "backups",
+          "key",
+          "nextAction",
+          "outcome",
+          "recovery",
+          "serviceId",
+          "wrapper"
+        ],
+        "type": "object"
+      },
       "lockoutClearRequest": {
         "additionalProperties": true,
         "properties": {
@@ -1385,6 +1659,208 @@
           "lockoutScope",
           "operation",
           "outcome",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "managedBackupMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "artifactHash": {
+            "type": "string"
+          },
+          "backupId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "schema": {
+            "type": "string"
+          },
+          "secretCount": {
+            "type": "integer"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "storeKeyId": {
+            "type": "string"
+          },
+          "storeKeyVersion": {
+            "type": "string"
+          },
+          "verification": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactHash",
+          "backupId",
+          "createdAt",
+          "schema",
+          "secretCount",
+          "sizeBytes",
+          "storeKeyId",
+          "storeKeyVersion",
+          "verification"
+        ],
+        "type": "object"
+      },
+      "managedCreatePlan": {
+        "additionalProperties": true,
+        "properties": {
+          "expectedState": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "generationMode": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedState",
+          "expiresAt",
+          "generationMode",
+          "operationId",
+          "ref",
+          "signature"
+        ],
+        "type": "object"
+      },
+      "managedCreateRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "generationMode": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/managedCreatePlan"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "generationMode",
+          "operationId",
+          "reason",
+          "ref",
+          "requestId",
+          "serviceId"
+        ],
+        "type": "object"
+      },
+      "managedCreateResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "affectedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "affectedServices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "apiVersion": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "auditStatus": {
+            "type": "string"
+          },
+          "generationMode": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/SecretMetadata"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/managedCreatePlan"
+          },
+          "policyResult": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "affectedRefs",
+          "affectedServices",
+          "apiVersion",
+          "applied",
+          "auditStatus",
+          "generationMode",
+          "mode",
+          "operation",
+          "operationId",
+          "outcome",
+          "policyResult",
+          "ref",
+          "requiresConfirmation",
           "serviceId"
         ],
         "type": "object"
@@ -1551,6 +2027,9 @@
           },
           "state": {
             "type": "string"
+          },
+          "tombstone": {
+            "$ref": "#/components/schemas/decommissionTombstoneMetadata"
           },
           "updatedAt": {
             "format": "date-time",
@@ -4065,6 +4544,53 @@
         ],
         "type": "object"
       },
+      "wrapperStatusDetail": {
+        "additionalProperties": true,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "failureReason": {
+            "type": "string"
+          },
+          "keyId": {
+            "type": "string"
+          },
+          "keyVersion": {
+            "type": "string"
+          },
+          "machine": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "os": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "supported": {
+            "type": "boolean"
+          },
+          "user": {
+            "type": "string"
+          },
+          "wrapperKind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "nextAction",
+          "os",
+          "state",
+          "supported",
+          "wrapperKind"
+        ],
+        "type": "object"
+      },
       "writeSecretRequest": {
         "additionalProperties": true,
         "properties": {
@@ -4596,6 +5122,481 @@
         }
       }
     },
+    "/v1/management/lifecycle/backups": {
+      "get": {
+        "operationId": "getv1_management_lifecycle_backups",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/lifecycleBackupResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/lifecycleBackupResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "List broker-owned encrypted backups",
+        "x-capability": {
+          "operationId": "getv1_management_lifecycle_backups",
+          "method": "GET",
+          "path": "/v1/management/lifecycle/backups",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": false,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "broker_owned_backup_inventory",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
+      },
+      "post": {
+        "operationId": "postv1_management_lifecycle_backups",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/lifecycleOperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/lifecycleBackupResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/lifecycleBackupResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Create a broker-owned encrypted backup",
+        "x-capability": {
+          "operationId": "postv1_management_lifecycle_backups",
+          "method": "POST",
+          "path": "/v1/management/lifecycle/backups",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "broker_owned_encrypted_backup",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/management/lifecycle/backups/verify": {
+      "post": {
+        "operationId": "postv1_management_lifecycle_backups_verify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/lifecycleOperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/lifecycleBackupResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/lifecycleBackupResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Verify an encrypted backup",
+        "x-capability": {
+          "operationId": "postv1_management_lifecycle_backups_verify",
+          "method": "POST",
+          "path": "/v1/management/lifecycle/backups/verify",
+          "maturity": "validated",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": false,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "authenticated_backup_integrity",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/management/lifecycle/key/rotate": {
+      "post": {
+        "operationId": "postv1_management_lifecycle_key_rotate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/lifecycleOperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/lifecycleRotateResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/lifecycleRotateResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Rotate the broker master key and local wrapper",
+        "x-capability": {
+          "operationId": "postv1_management_lifecycle_key_rotate",
+          "method": "POST",
+          "path": "/v1/management/lifecycle/key/rotate",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "broker_generated_key_and_wrapper_refresh",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/management/lifecycle/restore/apply": {
+      "post": {
+        "operationId": "postv1_management_lifecycle_restore_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/lifecycleOperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/lifecycleRestoreResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/lifecycleRestoreResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Apply an exact backup restore",
+        "x-capability": {
+          "operationId": "postv1_management_lifecycle_restore_apply",
+          "method": "POST",
+          "path": "/v1/management/lifecycle/restore/apply",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "confirmed_exact_backup_restore",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/management/lifecycle/restore/dry-run": {
+      "post": {
+        "operationId": "postv1_management_lifecycle_restore_dry_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/lifecycleOperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/lifecycleRestoreResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/lifecycleRestoreResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Plan an exact backup restore",
+        "x-capability": {
+          "operationId": "postv1_management_lifecycle_restore_dry_run",
+          "method": "POST",
+          "path": "/v1/management/lifecycle/restore/dry-run",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "fresh_signed_store_revision_plan",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
+        }
+      }
+    },
+    "/v1/management/lifecycle/status": {
+      "get": {
+        "operationId": "getv1_management_lifecycle_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/lifecycleStatusResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/lifecycleStatusResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Read key, wrapper, recovery and backup metadata",
+        "x-capability": {
+          "operationId": "getv1_management_lifecycle_status",
+          "method": "GET",
+          "path": "/v1/management/lifecycle/status",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": false,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
+        }
+      }
+    },
     "/v1/management/lockouts/clear": {
       "post": {
         "operationId": "postv1_management_lockouts_clear",
@@ -5047,6 +6048,148 @@
           "limitationCode": "durable_campaign_metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
+        }
+      }
+    },
+    "/v1/management/secrets/create/apply": {
+      "post": {
+        "operationId": "postv1_management_secrets_create_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/managedCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/managedCreateResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/managedCreateResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Create a local secret from an exact signed plan",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_create_apply",
+          "method": "POST",
+          "path": "/v1/management/secrets/create/apply",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "confirmed_no_overwrite_local_create",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/management/secrets/create/dry-run": {
+      "post": {
+        "operationId": "postv1_management_secrets_create_dry_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/managedCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/managedCreateResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/managedCreateResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Plan a no-overwrite local secret create",
+        "x-capability": {
+          "operationId": "postv1_management_secrets_create_dry_run",
+          "method": "POST",
+          "path": "/v1/management/secrets/create/dry-run",
+          "maturity": "dry-run",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "signed_missing_ref_plan",
+          "reasonCode": "implemented_dry_run",
+          "nextAction": "review_plan_before_apply"
         }
       }
     },

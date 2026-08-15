@@ -353,14 +353,63 @@ func TestManagedDryRunApplyAndPolicyContractsDoNotReturnRawValues(t *testing.T) 
 	}
 
 	preview, err := backend.managedPolicyPreview(managedSecretActionRequest{RequestID: "req-policy-preview", ServiceID: "@serviceadmin", Ref: ref})
-	if err != nil || preview.Mode != "preview" || preview.Outcome != "dry_run_ready" {
+	if err != nil || preview.Mode != "preview" || preview.Outcome != "unsupported" || preview.Applied || preview.RequiresConfirmation || preview.UnsupportedCapability != "policy_binding_persistence" {
 		t.Fatalf("policy preview = %#v err=%v", preview, err)
 	}
 
+	storeBefore, err := os.ReadFile(backend.storePath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	policy, err := backend.managedPolicyApply(managedSecretActionRequest{RequestID: "req-policy-apply", ServiceID: "@serviceadmin", Ref: ref, Reason: "approved", Confirm: true, Policy: "policy/serviceadmin/reveal"})
-	if err != nil || !policy.Applied || policy.Value != "" || policy.Record.Policy != "policy/serviceadmin/reveal" {
+	if !errors.Is(err, errUnsupportedProvider) || policy.Applied || policy.Value != "" || policy.Outcome != "unsupported" || policy.UnsupportedCapability != "policy_binding_persistence" || policy.Record == nil || policy.Record.Policy == "policy/serviceadmin/reveal" {
 		t.Fatalf("policy apply = %#v err=%v", policy, err)
 	}
+	storeAfter, err := os.ReadFile(backend.storePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(storeBefore, storeAfter) {
+		t.Fatal("unsupported policy apply changed encrypted store bytes")
+	}
+	assertNoSecretMaterial(t, mustManagedJSON(t, policy), managedSecretValue, "policy/serviceadmin/reveal")
+}
+
+func TestManagedPolicyApplyHTTPFailsClosedAsUnsupported(t *testing.T) {
+	backend := managedTestBackend(t)
+	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	writeManagedTestSecret(t, backend, ref, managedSecretValue)
+	storeBefore, err := os.ReadFile(backend.storePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	body := []byte(`{"requestId":"req-policy-http","serviceId":"@serviceadmin","ref":"` + ref + `","reason":"approved","confirm":true,"policy":"policy/serviceadmin/reveal"}`)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/management/secrets/policy/apply", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-token")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := readClose(t, res.Body)
+	if res.StatusCode != http.StatusNotImplemented || !bytes.Contains(got, []byte(`"outcome":"unsupported"`)) || !bytes.Contains(got, []byte(`"applied":false`)) || !bytes.Contains(got, []byte(`"unsupportedCapability":"policy_binding_persistence"`)) {
+		t.Fatalf("policy apply status=%d body=%s", res.StatusCode, got)
+	}
+	storeAfter, err := os.ReadFile(backend.storePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(storeBefore, storeAfter) {
+		t.Fatal("HTTP unsupported policy apply changed encrypted store bytes")
+	}
+	assertNoSecretMaterial(t, got, managedSecretValue, "policy/serviceadmin/reveal", "test-token")
 }
 
 func TestManagedPolicyDeniedAttemptsStartScopedLockout(t *testing.T) {

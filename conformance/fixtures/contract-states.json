@@ -44,11 +44,17 @@
           "POST /v1/telemetry/export",
           "GET /v1/events",
           "GET|POST /v1/recovery/policy",
+          "GET /v1/management/lifecycle/status",
+          "GET|POST /v1/management/lifecycle/backups",
+          "POST /v1/management/lifecycle/backups/verify",
+          "POST /v1/management/lifecycle/restore/dry-run|apply",
+          "POST /v1/management/lifecycle/key/rotate",
           "POST /v1/management/lockouts/clear",
           "POST /v1/providers/config/validate|apply",
           "POST /v1/providers/migration/dry-run|apply",
           "GET /v1/management/secrets",
           "GET /v1/management/secrets/value-search",
+          "POST /v1/management/secrets/create/dry-run|apply",
           "POST /v1/management/secrets/reveal",
           "POST /v1/management/secrets/edit/dry-run|apply",
           "POST /v1/management/secrets/reset/dry-run|apply",
@@ -432,6 +438,132 @@
             "nextAction": "invoke_with_required_controls"
           },
           {
+            "operationId": "getv1_management_lifecycle_status",
+            "method": "GET",
+            "path": "/v1/management/lifecycle/status",
+            "maturity": "read-only",
+            "classification": "read",
+            "authenticationRequired": true,
+            "policyRequired": false,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "metadata_only",
+            "reasonCode": "implemented_read_only",
+            "nextAction": "read_when_authorized"
+          },
+          {
+            "operationId": "getv1_management_lifecycle_backups",
+            "method": "GET",
+            "path": "/v1/management/lifecycle/backups",
+            "maturity": "read-only",
+            "classification": "read",
+            "authenticationRequired": true,
+            "policyRequired": false,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "broker_owned_backup_inventory",
+            "reasonCode": "implemented_read_only",
+            "nextAction": "read_when_authorized"
+          },
+          {
+            "operationId": "postv1_management_lifecycle_backups",
+            "method": "POST",
+            "path": "/v1/management/lifecycle/backups",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "broker_owned_encrypted_backup",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_lifecycle_backups_verify",
+            "method": "POST",
+            "path": "/v1/management/lifecycle/backups/verify",
+            "maturity": "validated",
+            "classification": "read",
+            "authenticationRequired": true,
+            "policyRequired": false,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "authenticated_backup_integrity",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_lifecycle_restore_dry_run",
+            "method": "POST",
+            "path": "/v1/management/lifecycle/restore/dry-run",
+            "maturity": "dry-run",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "fresh_signed_store_revision_plan",
+            "reasonCode": "implemented_dry_run",
+            "nextAction": "review_plan_before_apply"
+          },
+          {
+            "operationId": "postv1_management_lifecycle_restore_apply",
+            "method": "POST",
+            "path": "/v1/management/lifecycle/restore/apply",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "confirmed_exact_backup_restore",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_lifecycle_key_rotate",
+            "method": "POST",
+            "path": "/v1/management/lifecycle/key/rotate",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "broker_generated_key_and_wrapper_refresh",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
             "operationId": "postv1_management_lockouts_clear",
             "method": "POST",
             "path": "/v1/management/lockouts/clear",
@@ -593,6 +725,42 @@
             ],
             "completionMode": "synchronous",
             "limitationCode": "values_never_returned",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_management_secrets_create_dry_run",
+            "method": "POST",
+            "path": "/v1/management/secrets/create/dry-run",
+            "maturity": "dry-run",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "signed_missing_ref_plan",
+            "reasonCode": "implemented_dry_run",
+            "nextAction": "review_plan_before_apply"
+          },
+          {
+            "operationId": "postv1_management_secrets_create_apply",
+            "method": "POST",
+            "path": "/v1/management/secrets/create/apply",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "confirmed_no_overwrite_local_create",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
           },
@@ -1091,6 +1259,7 @@
           "master-key-initialize-unlock-import-rewrap",
           "os-wrapper-status",
           "master-key-rotation",
+          "authenticated-lifecycle-management-api",
           "recovery-policy-metadata",
           "recovery-policy-status",
           "threshold-recovery-shares",

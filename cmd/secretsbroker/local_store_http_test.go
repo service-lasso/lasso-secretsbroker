@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -155,6 +157,45 @@ func TestHTTPLocalAPILockoutClearAcceptsValidTokenDuringLockout(t *testing.T) {
 	res, payload = postJSON(t, server.URL+"/v1/secrets", "test-token", writeBody)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("post-clear write status=%d body=%s", res.StatusCode, payload)
+	}
+}
+
+func TestLockoutClearFailsClosedUntilAuditAndEventPersistenceSucceed(t *testing.T) {
+	backend := testBackend(t)
+	scope := `local_api:\\.\pipe\service-lasso-secretsbroker-test`
+	lockouts := newLockoutStore(nil)
+	for attempt := 0; attempt < localAPILockoutThreshold; attempt++ {
+		lockouts.recordFailure(scope)
+	}
+	security := localAPISecurity{token: "test-token", lockouts: lockouts}
+	dir := t.TempDir()
+	badAuditPath := filepath.Join(dir, "audit-directory")
+	if err := os.Mkdir(badAuditPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	backend.auditPath = badAuditPath
+	backend.eventPath = filepath.Join(dir, "events.jsonl")
+	req := lockoutClearRequest{RequestID: "req-lockout-audit", ServiceID: "@operator", Scope: scope, Reason: "verified local recovery"}
+
+	failed, err := clearLockout(backend, security, req)
+	if err == nil || failed.Cleared || failed.Outcome != "audit_unavailable" || failed.AuditStatus != "audit_unavailable" {
+		t.Fatalf("audit failure response = %#v, err=%v", failed, err)
+	}
+	if !lockouts.active(scope).Active {
+		t.Fatal("lockout was cleared despite unavailable audit persistence")
+	}
+
+	backend.auditPath = filepath.Join(dir, "audit.jsonl")
+	cleared, err := clearLockout(backend, security, req)
+	if err != nil || !cleared.Cleared || cleared.Outcome != "cleared" || cleared.AuditStatus != "audit_recorded" {
+		t.Fatalf("recovered clear response = %#v, err=%v", cleared, err)
+	}
+	if lockouts.active(scope).Active {
+		t.Fatal("lockout remained active after audited clear")
+	}
+	events, err := buildEventsResponse(backend.eventPath, eventFilters{Limit: 10, Family: "lockout_cleared"})
+	if err != nil || len(events.Events) != 1 || events.Events[0].Operation != "lockout_clear" || events.Events[0].Outcome != "cleared" {
+		t.Fatalf("lockout clear event = %#v, err=%v", events, err)
 	}
 }
 
