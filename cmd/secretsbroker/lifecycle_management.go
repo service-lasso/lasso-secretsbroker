@@ -127,7 +127,7 @@ func (b *localBackend) lifecycleStatus() (lifecycleStatusResponse, error) {
 		return res, errBackendDegraded
 	}
 	res.Key = lifecycleKeyStatus{Available: !b.locked(), KeyID: store.KeyID, KeyVersion: store.KeyVersion, SecretCount: len(store.Secrets)}
-	res.Wrapper = wrapperStatus(b.wrapperPath, wrapperContextFor(""))
+	res.Wrapper = wrapperStatusWithProvider(b.wrapperPath, wrapperContextFor(""), b.lifecycleWrapperProvider())
 	res.Wrapper.User = ""
 	res.Wrapper.Machine = ""
 	if res.Recovery, err = b.recoveryPolicyStatus(); err != nil {
@@ -328,7 +328,8 @@ func (b *localBackend) rotateManagedMasterKey(req lifecycleOperationRequest) (li
 	}
 	b.lifecycleMu.Lock()
 	defer b.lifecycleMu.Unlock()
-	material, recoveryErr := loadKeyMaterialForStore("", "", b.wrapperPath, b.storePath)
+	provider := b.lifecycleWrapperProvider()
+	material, recoveryErr := loadKeyMaterialForStoreWithProvider("", "", b.wrapperPath, b.storePath, provider)
 	if recoveryErr != nil {
 		return res, errLifecycleConflict
 	}
@@ -359,7 +360,7 @@ func (b *localBackend) rotateManagedMasterKey(req lifecycleOperationRequest) (li
 	}
 	oldKey := b.masterKey
 	pendingWrapper := rotationPendingWrapperPath(b.wrapperPath)
-	if _, err := wrapMasterKey(pendingWrapper, newKey, wrapperContextFor(""), b.now()); err != nil {
+	if _, err := wrapMasterKeyWithProvider(pendingWrapper, newKey, wrapperContextFor(""), b.now(), provider); err != nil {
 		return res, err
 	}
 	receipt := lifecycleOperationReceipt{Kind: "rotate", OperationID: req.OperationID, ExpectedKeyID: req.ExpectedKeyID, OldKeyID: masterKeyID(oldKey), NewKeyID: masterKeyID(newKey), KeyVersion: masterKeyVersion, SecretCount: len(store.Secrets), AppliedAt: b.now().UTC()}
@@ -371,7 +372,6 @@ func (b *localBackend) rotateManagedMasterKey(req lifecycleOperationRequest) (li
 	if err := atomicReplacePrivateFile(pendingWrapper, b.wrapperPath); err != nil {
 		return res, errLifecycleConflict
 	}
-	provider := platformKeyWrapperProvider()
 	if err := provider.SecurePath(b.wrapperPath, false); err != nil {
 		return res, errLifecycleConflict
 	}

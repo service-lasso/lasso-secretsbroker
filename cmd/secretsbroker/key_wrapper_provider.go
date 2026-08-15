@@ -84,6 +84,10 @@ func cleanupPrivateWrapperTemps(path string, provider keyWrapperProvider) error 
 }
 
 func loadKeyMaterialWithWrapper(flagValue, filePath, wrapperPath string) (keyMaterial, error) {
+	return loadKeyMaterialWithWrapperWithProvider(flagValue, filePath, wrapperPath, platformKeyWrapperProvider())
+}
+
+func loadKeyMaterialWithWrapperWithProvider(flagValue, filePath, wrapperPath string, provider keyWrapperProvider) (keyMaterial, error) {
 	material, err := loadKeyMaterial(flagValue, filePath)
 	if err == nil || !errors.Is(err, errLocked) || wrapperPath == "" {
 		return material, err
@@ -93,7 +97,7 @@ func loadKeyMaterialWithWrapper(flagValue, filePath, wrapperPath string) (keyMat
 	} else if statErr != nil {
 		return keyMaterial{Source: "os-wrapper"}, statErr
 	}
-	plaintext, unwrapErr := unwrapMasterKey(wrapperPath, wrapperContextFor(""))
+	plaintext, unwrapErr := unwrapMasterKeyWithProvider(wrapperPath, wrapperContextFor(""), provider)
 	if unwrapErr != nil {
 		if errors.Is(unwrapErr, os.ErrNotExist) {
 			return material, errLocked
@@ -112,7 +116,11 @@ func rotationPendingWrapperPath(wrapperPath string) string {
 // rotation. The pending wrapper contains only OS-protected key bytes. It is
 // promoted only when its key ID agrees with the atomically published store.
 func loadKeyMaterialForStore(flagValue, filePath, wrapperPath, storePath string) (keyMaterial, error) {
-	material, materialErr := loadKeyMaterialWithWrapper(flagValue, filePath, wrapperPath)
+	return loadKeyMaterialForStoreWithProvider(flagValue, filePath, wrapperPath, storePath, platformKeyWrapperProvider())
+}
+
+func loadKeyMaterialForStoreWithProvider(flagValue, filePath, wrapperPath, storePath string, provider keyWrapperProvider) (keyMaterial, error) {
+	material, materialErr := loadKeyMaterialWithWrapperWithProvider(flagValue, filePath, wrapperPath, provider)
 	storeKeyID, storeErr := readStoreKeyID(storePath)
 	if errors.Is(storeErr, os.ErrNotExist) {
 		return material, materialErr
@@ -126,7 +134,6 @@ func loadKeyMaterialForStore(flagValue, filePath, wrapperPath, storePath string)
 	pendingPath := rotationPendingWrapperPath(wrapperPath)
 	if materialErr == nil && masterKeyID(material.Value) == storeKeyID {
 		if _, err := os.Lstat(pendingPath); err == nil {
-			provider := platformKeyWrapperProvider()
 			if err := provider.ValidatePath(pendingPath, false); err != nil {
 				return keyMaterial{}, errWrapperAccess
 			}
@@ -142,7 +149,7 @@ func loadKeyMaterialForStore(flagValue, filePath, wrapperPath, storePath string)
 		}
 		return keyMaterial{}, errInvalidWrapper
 	}
-	pending, err := unwrapMasterKey(pendingPath, wrapperContextFor(""))
+	pending, err := unwrapMasterKeyWithProvider(pendingPath, wrapperContextFor(""), provider)
 	if err != nil {
 		if materialErr != nil {
 			return material, materialErr
@@ -156,7 +163,6 @@ func loadKeyMaterialForStore(flagValue, filePath, wrapperPath, storePath string)
 	if err := atomicReplacePrivateFile(pendingPath, wrapperPath); err != nil {
 		return keyMaterial{}, err
 	}
-	provider := platformKeyWrapperProvider()
 	if err := provider.SecurePath(wrapperPath, false); err != nil {
 		return keyMaterial{}, errWrapperAccess
 	}
@@ -164,6 +170,13 @@ func loadKeyMaterialForStore(flagValue, filePath, wrapperPath, storePath string)
 		return keyMaterial{}, errWrapperAccess
 	}
 	return keyMaterial{Value: string(pending), Source: "os-wrapper-rotation-recovery"}, nil
+}
+
+func (b *localBackend) lifecycleWrapperProvider() keyWrapperProvider {
+	if b.wrapperProvider != nil {
+		return b.wrapperProvider
+	}
+	return platformKeyWrapperProvider()
 }
 
 func readStoreKeyID(path string) (string, error) {

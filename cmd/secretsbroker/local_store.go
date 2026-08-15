@@ -63,6 +63,7 @@ type localBackend struct {
 	providerMigrationMu      sync.Mutex
 	providerExecutorMu       sync.RWMutex
 	providerExecutors        map[string]providerMigrationExecutor
+	wrapperProvider          keyWrapperProvider
 	eventMu                  sync.RWMutex
 	storeMutationMu          sync.Mutex
 	lifecycleMu              sync.Mutex
