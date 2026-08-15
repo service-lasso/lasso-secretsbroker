@@ -179,6 +179,13 @@ jobs:
           set -euo pipefail
           cp service.json release-assets/service.json
 
+      - name: Generate and verify release checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run ./cmd/releasechecksums write release-assets
+          go run ./cmd/releasechecksums verify release-assets
+
       - name: Compute release version
         id: version
         shell: bash
@@ -198,4 +205,5 @@ jobs:
             release-assets/secretsbroker-linux.tar.gz
             release-assets/secretsbroker-darwin.tar.gz
             release-assets/service.json
+            release-assets/SHA256SUMS.txt
           generate_release_notes: true

@@ -12,6 +12,13 @@ Secrets Broker is a security boundary. Its release artifacts must use a currentl
 
 ## Required release sequence
 
+Every release also publishes `SHA256SUMS.txt` for the exact Windows, Linux,
+and macOS archives plus `service.json`. The release job generates and verifies
+that manifest before creating the GitHub release. Consumers must use the
+checksum contract inside every `artifact.platforms` entry in `service.json`;
+a missing, duplicate, unexpected, malformed, or mismatched entry fails before
+extraction or start.
+
 1. Run the complete repository test suite on Windows, Linux, and macOS.
 2. Run `govulncheck ./...` before packaging on every host.
 3. Build the platform-native broker and resolver artifacts.
