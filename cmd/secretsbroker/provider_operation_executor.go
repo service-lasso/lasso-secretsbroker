@@ -111,6 +111,8 @@ func (b *localBackend) providerMigrationPlanConflicts(req migrationPlanRequest) 
 func (b *localBackend) executeProviderMigration(req migrationPlanRequest, target providerConfigStatus, executor providerMigrationExecutor, res migrationPlanResponse) (migrationPlanResponse, error) {
 	b.providerMigrationMu.Lock()
 	defer b.providerMigrationMu.Unlock()
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 
 	refs := safeList(req.Refs)
 	sort.Strings(refs)

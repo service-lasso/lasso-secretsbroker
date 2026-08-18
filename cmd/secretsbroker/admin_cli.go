@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -19,6 +18,7 @@ type adminCommonOptions struct {
 	AuditPath      string
 	MasterKey      string
 	MasterKeyFile  string
+	WrapperPath    string
 	SourcesPath    string
 	EventsPath     string
 	AuditHashChain bool
@@ -630,6 +630,7 @@ func newAdminFlagSet(name string) (*flag.FlagSet, *adminCommonOptions) {
 	fs.StringVar(&opts.EventsPath, "events", getenvDefault("SECRETSBROKER_EVENTS_PATH", defaultEventsPath(opts.AuditPath)), "operational events JSONL path")
 	fs.StringVar(&opts.MasterKey, "master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "portable master key")
 	fs.StringVar(&opts.MasterKeyFile, "master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
+	fs.StringVar(&opts.WrapperPath, "wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path used when explicit master-key input is absent")
 	fs.StringVar(&opts.SourcesPath, "sources", getenvDefault("SECRETSBROKER_SOURCES_PATH", ""), "source adapter config path")
 	fs.BoolVar(&opts.AuditHashChain, "audit-hash-chain", envBoolDefault("SECRETSBROKER_AUDIT_HASH_CHAIN", false), "append tamper-evident audit hash-chain metadata")
 	return fs, opts
@@ -637,7 +638,7 @@ func newAdminFlagSet(name string) (*flag.FlagSet, *adminCommonOptions) {
 
 func backendFromAdminOptions(opts *adminCommonOptions) (*localBackend, keyMaterial, error) {
 	finalizeAdminEventPath(opts)
-	material, err := loadKeyMaterial(opts.MasterKey, opts.MasterKeyFile)
+	material, err := loadKeyMaterialForStore(opts.MasterKey, opts.MasterKeyFile, opts.WrapperPath, opts.StorePath)
 	if err != nil && !errors.Is(err, errLocked) {
 		return nil, material, err
 	}
@@ -671,38 +672,23 @@ func normalizeAdminState(state string, backend *localBackend, material keyMateri
 
 func exportAuditEvents(path, operation, ref string, refHashOnly bool) (adminAuditExportResponse, error) {
 	res := adminAuditExportResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "ready", Operation: strings.TrimSpace(operation), Ref: strings.TrimSpace(ref), RefHashOnly: refHashOnly, Chain: auditChainVerification{Status: "not_enabled"}, Events: []auditEvent{}}
-	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return res, nil
-	}
+	events, err := readAuditEvents(path)
 	if err != nil {
 		res.Outcome = "degraded"
 		return res, errBackendDegraded
 	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		var event auditEvent
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			res.Outcome = "degraded"
-			return res, errBackendDegraded
-		}
+	res.Chain, events = verifyAuditChain(events)
+	if res.Chain.Status == "invalid" || res.Chain.Status == "partial" {
+		res.Outcome = "degraded"
+	}
+	for _, event := range events {
 		if res.Operation != "" && event.Operation != res.Operation {
 			continue
 		}
 		if res.Ref != "" && event.Ref != res.Ref {
 			continue
 		}
-		event = normalizeAuditEvent(event)
 		res.Events = append(res.Events, event)
-	}
-	if err := scanner.Err(); err != nil {
-		res.Outcome = "degraded"
-		return res, errBackendDegraded
-	}
-	res.Chain, res.Events = verifyAuditChain(res.Events)
-	if res.Chain.Status == "invalid" {
-		res.Outcome = "degraded"
 	}
 	if refHashOnly {
 		for i := range res.Events {

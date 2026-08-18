@@ -44,11 +44,14 @@ type localBackend struct {
 	storePath                string
 	auditPath                string
 	eventPath                string
+	wrapperPath              string
+	backupRoot               string
 	masterKey                string
 	auditHashChain           bool
 	sources                  sourceConfigFile
 	now                      func() time.Time
 	lockouts                 *lockoutStore
+	localAPILockouts         *lockoutStore
 	campaigns                map[string]bulkCampaignResponse
 	telemetry                *telemetryRequestRecorder
 	launchIdentitySigningKey string
@@ -60,23 +63,44 @@ type localBackend struct {
 	providerMigrationMu      sync.Mutex
 	providerExecutorMu       sync.RWMutex
 	providerExecutors        map[string]providerMigrationExecutor
+	wrapperProvider          keyWrapperProvider
+	wrapperContextOverride   *wrapperContext
+	eventMu                  sync.RWMutex
+	storeMutationMu          sync.Mutex
+	lifecycleMu              sync.Mutex
+	managementMu             sync.Mutex
 }
 
 type localStoreFile struct {
-	Version      int                                   `json:"version"`
-	ServiceID    string                                `json:"serviceId"`
-	VaultID      string                                `json:"vaultId,omitempty"`
-	KeyID        string                                `json:"keyId,omitempty"`
-	KeyVersion   string                                `json:"keyVersion,omitempty"`
-	RootIdentity *vaultRootIdentityMetadata            `json:"rootIdentity,omitempty"`
-	CreatedAt    time.Time                             `json:"createdAt"`
-	UpdatedAt    time.Time                             `json:"updatedAt"`
-	Secrets      map[string]secretEntry                `json:"secrets"`
-	Tombstones   map[string]localSecretTombstone       `json:"tombstones,omitempty"`
-	Rotations    map[string]rotationLedger             `json:"rotations,omitempty"`
-	Migrations   map[string]providerMigrationOperation `json:"migrations,omitempty"`
-	Campaigns    map[string]bulkCampaignResponse       `json:"campaigns,omitempty"`
-	Recovery     *recoveryPolicyMetadata               `json:"recoveryPolicy,omitempty"`
+	Version       int                                   `json:"version"`
+	ServiceID     string                                `json:"serviceId"`
+	VaultID       string                                `json:"vaultId,omitempty"`
+	KeyID         string                                `json:"keyId,omitempty"`
+	KeyVersion    string                                `json:"keyVersion,omitempty"`
+	RootIdentity  *vaultRootIdentityMetadata            `json:"rootIdentity,omitempty"`
+	CreatedAt     time.Time                             `json:"createdAt"`
+	UpdatedAt     time.Time                             `json:"updatedAt"`
+	Secrets       map[string]secretEntry                `json:"secrets"`
+	Tombstones    map[string]localSecretTombstone       `json:"tombstones,omitempty"`
+	Rotations     map[string]rotationLedger             `json:"rotations,omitempty"`
+	Migrations    map[string]providerMigrationOperation `json:"migrations,omitempty"`
+	Campaigns     map[string]bulkCampaignResponse       `json:"campaigns,omitempty"`
+	Recovery      *recoveryPolicyMetadata               `json:"recoveryPolicy,omitempty"`
+	LifecycleOps  map[string]lifecycleOperationReceipt  `json:"lifecycleOperations,omitempty"`
+	ManagementOps map[string]managedCreateReceipt       `json:"managementOperations,omitempty"`
+}
+
+type lifecycleOperationReceipt struct {
+	Kind              string    `json:"kind"`
+	OperationID       string    `json:"operationId"`
+	BackupID          string    `json:"backupId,omitempty"`
+	ExpectedKeyID     string    `json:"expectedKeyId,omitempty"`
+	ExpectedStoreHash string    `json:"expectedStoreHash,omitempty"`
+	OldKeyID          string    `json:"oldKeyId,omitempty"`
+	NewKeyID          string    `json:"newKeyId,omitempty"`
+	KeyVersion        string    `json:"keyVersion,omitempty"`
+	SecretCount       int       `json:"secretCount"`
+	AppliedAt         time.Time `json:"appliedAt"`
 }
 
 type secretEntry struct {
@@ -241,7 +265,8 @@ type auditEvent struct {
 }
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
-	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}, telemetry: newTelemetryRequestRecorder(50), seenLaunchLeaseJTI: map[string]time.Time{}, providerExecutors: map[string]providerMigrationExecutor{}}
+	stateRoot := filepath.Dir(storePath)
+	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), wrapperPath: filepath.Join(stateRoot, "secretsbroker-wrapper.json"), backupRoot: filepath.Join(stateRoot, "backups"), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}, telemetry: newTelemetryRequestRecorder(50), seenLaunchLeaseJTI: map[string]time.Time{}, providerExecutors: map[string]providerMigrationExecutor{}}
 	backend.lockouts = newLockoutStore(func() time.Time {
 		if backend.now == nil {
 			return time.Now().UTC()
@@ -297,6 +322,8 @@ func (b *localBackend) writeSecret(req writeSecretRequest) (writeSecretResponse,
 		_ = b.audit("write", ref, "locked", "", "")
 		return writeSecretResponse{}, errLocked
 	}
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 
 	store, err := b.loadStore()
 	if err != nil {
@@ -736,6 +763,8 @@ func (b *localBackend) captureGeneratedSecret(req generatedSecretCaptureRequest)
 		return response, errLocked
 	}
 	if operation == "delete" {
+		b.storeMutationMu.Lock()
+		defer b.storeMutationMu.Unlock()
 		store, err := b.loadStore()
 		if err != nil {
 			_ = b.audit("writeback_capture", fullRef, "degraded", service, req.RequestID)
@@ -880,7 +909,7 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 
 func (b *localBackend) loadStore() (localStoreFile, error) {
 	now := b.now()
-	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}, Rotations: map[string]rotationLedger{}, Migrations: map[string]providerMigrationOperation{}, Campaigns: map[string]bulkCampaignResponse{}}
+	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}, Rotations: map[string]rotationLedger{}, Migrations: map[string]providerMigrationOperation{}, Campaigns: map[string]bulkCampaignResponse{}, ManagementOps: map[string]managedCreateReceipt{}}
 	bytes, err := os.ReadFile(b.storePath)
 	if errors.Is(err, os.ErrNotExist) {
 		return store, nil
@@ -909,18 +938,21 @@ func (b *localBackend) loadStore() (localStoreFile, error) {
 	if store.Campaigns == nil {
 		store.Campaigns = map[string]bulkCampaignResponse{}
 	}
+	if store.LifecycleOps == nil {
+		store.LifecycleOps = map[string]lifecycleOperationReceipt{}
+	}
+	if store.ManagementOps == nil {
+		store.ManagementOps = map[string]managedCreateReceipt{}
+	}
 	return store, nil
 }
 
 func (b *localBackend) saveStore(store localStoreFile) error {
-	if err := os.MkdirAll(filepath.Dir(b.storePath), 0o700); err != nil {
-		return err
-	}
 	bytes, err := json.MarshalIndent(store, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(b.storePath, bytes, 0o600)
+	return writePrivateFileAtomically(b.storePath, bytes)
 }
 
 func (b *localBackend) audit(operation, ref, outcome, requestServiceID, requestID string) error {
@@ -940,21 +972,40 @@ func (b *localBackend) writeAuditEvent(event auditEvent) error {
 		return nil
 	}
 	event = normalizeAuditEvent(event)
-	if b.auditHashChain {
-		event = b.prepareChainedAuditEvent(event)
-	}
-	if err := os.MkdirAll(filepath.Dir(b.auditPath), 0o700); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(b.auditPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	if err := json.NewEncoder(file).Encode(event); err != nil {
-		return err
-	}
-	return b.writeOperationalEvent(event)
+	err := withAuditFileLock(b.auditPath, func() error {
+		existing, err := readAuditEvents(b.auditPath)
+		if err != nil {
+			return err
+		}
+		chain, verified := verifyAuditChain(existing)
+		if chain.Status == "invalid" {
+			return errAuditChainInvalid
+		}
+		if b.auditHashChain || chain.Verified > 0 {
+			previousHash := ""
+			if chain.Verified > 0 {
+				previousHash = verified[len(verified)-1].EventHash
+			}
+			event = prepareChainedAuditEvent(event, previousHash)
+		}
+		file, err := os.OpenFile(b.auditPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		if err != nil {
+			return err
+		}
+		if err := json.NewEncoder(file).Encode(event); err != nil {
+			_ = file.Close()
+			return err
+		}
+		if err := file.Sync(); err != nil {
+			_ = file.Close()
+			return err
+		}
+		if err := file.Close(); err != nil {
+			return err
+		}
+		return b.writeOperationalEvent(event)
+	})
+	return err
 }
 
 func normalizeAuditEvent(event auditEvent) auditEvent {

@@ -72,10 +72,11 @@ func printKeyStatus(args []string) error {
 	fs := flag.NewFlagSet("key status", flag.ContinueOnError)
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "local development master key")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
+	wrapperPath := fs.String("wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	material, err := loadKeyMaterial(*masterKey, *masterKeyFile)
+	material, err := loadKeyMaterialWithWrapper(*masterKey, *masterKeyFile, *wrapperPath)
 	if err != nil && !errors.Is(err, errLocked) {
 		return err
 	}

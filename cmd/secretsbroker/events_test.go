@@ -3,15 +3,111 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
 const operationalEventSecretValue = "fixture-operational-event-secret-value"
+
+func TestOperationalEventsConcurrentWritesRetainEveryAuditProjection(t *testing.T) {
+	backend := testBackend(t)
+	const count = 32
+	var wg sync.WaitGroup
+	errs := make(chan error, count)
+	readerDone := make(chan struct{})
+	readerErr := make(chan error, 1)
+	go func() {
+		for {
+			select {
+			case <-readerDone:
+				readerErr <- nil
+				return
+			default:
+				if _, err := backend.buildEventsResponse(eventFilters{Limit: count}); err != nil {
+					readerErr <- err
+					return
+				}
+			}
+		}
+	}()
+	for index := 0; index < count; index++ {
+		index := index
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- backend.writeOperationalEvent(auditEvent{
+				TS:        backend.now().Add(time.Duration(index) * time.Millisecond),
+				Operation: "lockout_clear",
+				Outcome:   "cleared",
+				ServiceID: "@operator",
+				RequestID: fmt.Sprintf("req-concurrent-%d", index),
+			})
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	close(readerDone)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := <-readerErr; err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := backend.buildEventsResponse(eventFilters{Limit: count, Family: "lockout_cleared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Events) != count {
+		t.Fatalf("event count = %d, want %d", len(res.Events), count)
+	}
+	seen := map[string]bool{}
+	for _, event := range res.Events {
+		seen[event.RequestID] = true
+	}
+	for index := 0; index < count; index++ {
+		if !seen[fmt.Sprintf("req-concurrent-%d", index)] {
+			t.Fatalf("missing concurrent event %d", index)
+		}
+	}
+}
+
+func TestOperationalEventLockoutScopeUsesStablePrefixAndHashOnly(t *testing.T) {
+	backend := testBackend(t)
+	scope := `local_api:\\.\pipe\service-lasso-secretsbroker-sensitive-workspace`
+	if err := backend.writeAuditEvent(auditEvent{
+		TS:        backend.now(),
+		Operation: "lockout_clear",
+		Outcome:   "cleared",
+		ServiceID: "@operator",
+		Ref:       scope,
+		RequestID: "req-lockout-safe-prefix",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := backend.buildEventsResponse(eventFilters{Limit: 10, Family: "lockout_cleared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Events) != 1 || res.Events[0].RefPrefix != "local_api" || res.Events[0].RefHash != hashAuditRef(scope) {
+		t.Fatalf("lockout event metadata = %#v", res.Events)
+	}
+	encoded, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), scope) || strings.Contains(string(encoded), `\\.\pipe`) {
+		t.Fatalf("lockout event exposed raw IPC scope: %s", string(encoded))
+	}
+}
 
 func TestOperationalEventsRetainFilterAndStayMetadataOnly(t *testing.T) {
 	backend := testBackend(t)

@@ -93,10 +93,19 @@ jobs:
         shell: pwsh
         run: .\scripts\test.ps1
 
+      - name: Prove strict named-pipe denial for another Windows principal
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\scripts\verify-windows-named-pipe-cross-user-ci.ps1
+
       - name: Validate Secrets Broker (POSIX)
         if: runner.os != 'Windows'
         shell: bash
         run: bash ./scripts/test.sh
+
+      - name: Scan Go source vulnerabilities
+        shell: bash
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
       - name: Package artifact (Windows)
         if: runner.os == 'Windows'
@@ -107,6 +116,16 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: bash ./scripts/package.sh
+
+      - name: Scan packaged Go binaries (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\scripts\verify-go-binaries.ps1 -BrokerPath .\dist\secretsbroker-win32\secretsbroker.exe -ResolverPath .\dist\secretsbroker-win32\secretsbroker-resolve.exe -OutputPath .\output\verify\go-vulnerability-binaries.json
+
+      - name: Scan packaged Go binaries (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash ./scripts/verify-go-binaries.sh ./output/verify/go-vulnerability-binaries.json ./dist/secretsbroker-${{ matrix.platform }}/secretsbroker ./dist/secretsbroker-${{ matrix.platform }}/secretsbroker-resolve
 
       - name: Verify via released harness (Windows)
         if: runner.os == 'Windows'
@@ -160,6 +179,13 @@ jobs:
           set -euo pipefail
           cp service.json release-assets/service.json
 
+      - name: Generate and verify release checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run ./cmd/releasechecksums write release-assets
+          go run ./cmd/releasechecksums verify release-assets
+
       - name: Compute release version
         id: version
         shell: bash
@@ -179,4 +205,5 @@ jobs:
             release-assets/secretsbroker-linux.tar.gz
             release-assets/secretsbroker-darwin.tar.gz
             release-assets/service.json
+            release-assets/SHA256SUMS.txt
           generate_release_notes: true

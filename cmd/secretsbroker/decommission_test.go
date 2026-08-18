@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -66,6 +67,20 @@ func TestLocalDecommissionSignedPlanApplyRetryRestartAndRestore(t *testing.T) {
 	restarted := newLocalBackend(backend.storePath, backend.auditPath, backend.masterKey)
 	restarted.eventPath = backend.eventPath
 	assertDecommissioned(t, restarted, ref, version)
+	inventory, err := restarted.listManagedSecrets("", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tombstoneRecord *managedSecretRecord
+	for index := range inventory.Results {
+		if inventory.Results[index].Ref == ref {
+			tombstoneRecord = &inventory.Results[index]
+			break
+		}
+	}
+	if tombstoneRecord == nil || tombstoneRecord.State != "decommissioned" || tombstoneRecord.Outcome != "decommissioned" || tombstoneRecord.Tombstone == nil || tombstoneRecord.Tombstone.Version != version || !reflect.DeepEqual(tombstoneRecord.Capabilities, []string{"metadata", "restore"}) {
+		t.Fatalf("restart tombstone inventory = %#v", tombstoneRecord)
+	}
 	restoreRequest := decommissionRequest{RequestID: "req-decommission-restore", ServiceID: "@serviceadmin", Ref: ref, OperationID: "restore-serviceadmin-session", ExpectedVersion: version, Reason: "rollback after consumer validation failure", Confirm: true}
 	restored, err := restarted.decommissionRestore(restoreRequest)
 	if err != nil || !restored.Applied || restored.Tombstone == nil || restored.Tombstone.State != "restored" || restored.Recoverable {

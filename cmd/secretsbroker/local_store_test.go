@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -39,6 +41,54 @@ func TestLocalBackendWriteSeparatesMetadataAndEncryptedPayload(t *testing.T) {
 	}
 	if entry.Payload.KeyID != masterKeyID("test-master-key") || entry.Payload.KeyVersion != masterKeyVersion {
 		t.Fatalf("key metadata missing: %#v", entry.Payload)
+	}
+}
+
+func TestConcurrentStoreMutationsPreserveEveryEncryptedWrite(t *testing.T) {
+	backend := testBackend(t)
+	const writes = 64
+	start := make(chan struct{})
+	errorsByWrite := make(chan error, writes)
+	var group sync.WaitGroup
+	for index := 0; index < writes; index++ {
+		index := index
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			<-start
+			_, err := backend.writeSecret(writeSecretRequest{
+				Ref:   fmt.Sprintf("services/concurrent/runtime/TOKEN_%02d", index),
+				Value: fmt.Sprintf("concurrent-secret-%02d", index),
+			})
+			errorsByWrite <- err
+		}()
+	}
+	close(start)
+	group.Wait()
+	close(errorsByWrite)
+	for err := range errorsByWrite {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	store, err := backend.loadStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.Secrets) != writes {
+		t.Fatalf("secret count = %d, want %d", len(store.Secrets), writes)
+	}
+	for index := 0; index < writes; index++ {
+		ref := fmt.Sprintf("services/concurrent/runtime/TOKEN_%02d", index)
+		entry, exists := store.Secrets[ref]
+		if !exists {
+			t.Fatalf("missing concurrent write %q", ref)
+		}
+		value, err := backend.decrypt(entry.Payload)
+		if err != nil || value != fmt.Sprintf("concurrent-secret-%02d", index) {
+			t.Fatalf("concurrent write %q was not decryptable", ref)
+		}
 	}
 }
 

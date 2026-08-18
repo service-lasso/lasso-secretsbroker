@@ -90,6 +90,27 @@ func TestTelemetryCountsActiveLockoutsWithoutScopeMaterial(t *testing.T) {
 	if !hasLockoutActiveSignal(res.Signals, 1) {
 		t.Fatalf("missing active lockout signal count: %#v", res.Signals)
 	}
+	localAPILockouts := newLockoutStore(func() time.Time { return backend.now() })
+	backend.localAPILockouts = localAPILockouts
+	for attempt := 0; attempt < localAPILockoutThreshold; attempt++ {
+		localAPILockouts.recordFailure(`local_api:\\.\pipe\service-lasso-secretsbroker-test`)
+	}
+	res, err = buildTelemetryResponse(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Counters.ActiveLockouts != 2 || !hasLockoutActiveSignal(res.Signals, 2) {
+		t.Fatalf("combined active lockouts = %#v", res.Counters)
+	}
+	backend.localAPILockouts = backend.lockouts
+	res, err = buildTelemetryResponse(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Counters.ActiveLockouts != 1 {
+		t.Fatalf("aliased lockout stores were double counted: %#v", res.Counters)
+	}
+	backend.localAPILockouts = localAPILockouts
 
 	now = now.Add(localAPILockoutCooldown + time.Second)
 	res, err = buildTelemetryResponse(backend)

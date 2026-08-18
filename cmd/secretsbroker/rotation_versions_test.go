@@ -31,6 +31,7 @@ func TestLocalRotationStageActivateRollbackIsMetadataOnly(t *testing.T) {
 		OperationID:            "rotate-a",
 		ExpectedCurrentVersion: currentVersion,
 		Reason:                 "operator approved",
+		Confirm:                true,
 		Value:                  "candidate-secret-value",
 	})
 	if err != nil {
@@ -106,11 +107,31 @@ func TestLocalRotationStageActivateRollbackIsMetadataOnly(t *testing.T) {
 	}
 }
 
+func TestRotationStageRequiresExplicitConfirmationWithoutStoreMutation(t *testing.T) {
+	backend, ref, currentVersion := rotationAuditTestBackend(t)
+	before := readRotationStore(t, backend)
+
+	denied, err := backend.stageRotationVersion(rotationVersionRequest{
+		RequestID:              "req-stage-without-confirmation",
+		ServiceID:              "@serviceadmin",
+		Ref:                    ref,
+		OperationID:            "rotate-without-confirmation",
+		ExpectedCurrentVersion: currentVersion,
+		Reason:                 "operator approved",
+		Value:                  "candidate-secret-value",
+	})
+	if !errors.Is(err, errPolicyDenied) || denied.Outcome != "policy_denied" || denied.Applied || !denied.RequiresConfirmation {
+		t.Fatalf("denied=%#v err=%v", denied, err)
+	}
+	assertRotationStoreUnchanged(t, backend, before)
+	assertNoSecretMaterial(t, mustManagedJSON(t, denied), "candidate-secret-value")
+}
+
 func TestRotationActivateRequiresExpectedCurrentVersion(t *testing.T) {
 	backend := testBackend(t)
 	ref := "services/@serviceadmin/runtime/API_KEY"
 	writeManagedTestSecret(t, backend, ref, "original-secret-value")
-	_, err := backend.stageRotationVersion(rotationVersionRequest{RequestID: "req-stage-conflict", ServiceID: "@serviceadmin", Ref: ref, OperationID: "rotate-conflict", Reason: "operator approved", Value: "candidate-secret-value"})
+	_, err := backend.stageRotationVersion(rotationVersionRequest{RequestID: "req-stage-conflict", ServiceID: "@serviceadmin", Ref: ref, OperationID: "rotate-conflict", Reason: "operator approved", Confirm: true, Value: "candidate-secret-value"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,6 +166,7 @@ func TestRotationExactStageRetryConvergesWithoutStoreMutation(t *testing.T) {
 		OperationID:            "rotate-stage-retry",
 		ExpectedCurrentVersion: currentVersion,
 		Reason:                 "operator approved",
+		Confirm:                true,
 		Value:                  "candidate-secret-value",
 	}
 	first, err := backend.stageRotationVersion(req)
@@ -165,7 +187,7 @@ func TestRotationExactStageRetryConvergesWithoutStoreMutation(t *testing.T) {
 
 func TestRotationExactActivateRetryReturnsStableConflict(t *testing.T) {
 	backend, ref, currentVersion := rotationAuditTestBackend(t)
-	stageReq := rotationVersionRequest{RequestID: "req-stage-activate-retry", ServiceID: "@serviceadmin", Ref: ref, OperationID: "rotate-activate-retry", ExpectedCurrentVersion: currentVersion, Reason: "operator approved", Value: "candidate-secret-value"}
+	stageReq := rotationVersionRequest{RequestID: "req-stage-activate-retry", ServiceID: "@serviceadmin", Ref: ref, OperationID: "rotate-activate-retry", ExpectedCurrentVersion: currentVersion, Reason: "operator approved", Confirm: true, Value: "candidate-secret-value"}
 	if _, err := backend.stageRotationVersion(stageReq); err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +272,7 @@ func TestRotationRetentionPruningIsBoundedAndPersistent(t *testing.T) {
 	for index, value := range values {
 		operationID := fmt.Sprintf("retain-%d", index+1)
 		backend.now = func() time.Time { return time.Date(2026, 5, 9, 0, index*2+1, 0, 0, time.UTC) }
-		if _, err := backend.stageRotationVersion(rotationVersionRequest{RequestID: "req-stage-" + operationID, ServiceID: "@serviceadmin", Ref: ref, OperationID: operationID, ExpectedCurrentVersion: currentVersion, Reason: "operator approved", Value: value}); err != nil {
+		if _, err := backend.stageRotationVersion(rotationVersionRequest{RequestID: "req-stage-" + operationID, ServiceID: "@serviceadmin", Ref: ref, OperationID: operationID, ExpectedCurrentVersion: currentVersion, Reason: "operator approved", Confirm: true, Value: value}); err != nil {
 			t.Fatal(err)
 		}
 		backend.now = func() time.Time { return time.Date(2026, 5, 9, 0, index*2+2, 0, 0, time.UTC) }
@@ -307,7 +329,7 @@ func TestRotationHTTPStageStatusActivateContract(t *testing.T) {
 	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
 	defer server.Close()
 
-	stageBody := []byte(`{"requestId":"req-http-stage","serviceId":"@serviceadmin","ref":"` + ref + `","operationId":"rotate-http","expectedCurrentVersion":"` + currentVersion + `","reason":"operator approved","value":"candidate-secret-value"}`)
+	stageBody := []byte(`{"requestId":"req-http-stage","serviceId":"@serviceadmin","ref":"` + ref + `","operationId":"rotate-http","expectedCurrentVersion":"` + currentVersion + `","reason":"operator approved","confirm":true,"value":"candidate-secret-value"}`)
 	stage := postRotationTestRequest(t, server.URL+"/v1/management/secrets/rotation/stage", stageBody)
 	if stage.StatusCode != http.StatusOK {
 		t.Fatalf("stage status=%d body=%s", stage.StatusCode, stage.Body)
@@ -330,6 +352,25 @@ func TestRotationHTTPStageStatusActivateContract(t *testing.T) {
 	assertNoSecretMaterial(t, activate.Body, "original-secret-value", "candidate-secret-value", "test-token")
 }
 
+func TestRotationHTTPStageWithoutConfirmationFailsClosed(t *testing.T) {
+	backend := testBackend(t)
+	ref := "services/@serviceadmin/runtime/SESSION_SIGNING_KEY"
+	writeManagedTestSecret(t, backend, ref, "original-secret-value")
+	currentVersion := currentSecretVersion(t, backend, ref)
+	before := readRotationStore(t, backend)
+	state := "ready"
+	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
+	defer server.Close()
+
+	body := []byte(`{"requestId":"req-http-no-confirm","serviceId":"@serviceadmin","ref":"` + ref + `","operationId":"rotate-http-no-confirm","expectedCurrentVersion":"` + currentVersion + `","reason":"operator approved","value":"candidate-secret-value"}`)
+	result := postRotationTestRequest(t, server.URL+"/v1/management/secrets/rotation/stage", body)
+	if result.StatusCode != http.StatusForbidden || !bytes.Contains(result.Body, []byte(`"outcome":"policy_denied"`)) {
+		t.Fatalf("status=%d body=%s", result.StatusCode, result.Body)
+	}
+	assertNoSecretMaterial(t, result.Body, "candidate-secret-value", "test-token")
+	assertRotationStoreUnchanged(t, backend, before)
+}
+
 func TestRotationHTTPAuditUnavailableFailsClosedWithoutLeakingCandidate(t *testing.T) {
 	backend, ref, currentVersion := rotationAuditTestBackend(t)
 	makeRotationAuditUnavailable(t, backend)
@@ -338,7 +379,7 @@ func TestRotationHTTPAuditUnavailableFailsClosedWithoutLeakingCandidate(t *testi
 	server := httptest.NewServer(newHandler(runtimeState{state: &state}, backend, localAPISecurity{token: "test-token"}))
 	defer server.Close()
 
-	body := []byte(`{"requestId":"req-http-audit-down","serviceId":"@serviceadmin","ref":"` + ref + `","operationId":"rotate-http-audit-down","expectedCurrentVersion":"` + currentVersion + `","reason":"operator approved","value":"candidate-secret-value"}`)
+	body := []byte(`{"requestId":"req-http-audit-down","serviceId":"@serviceadmin","ref":"` + ref + `","operationId":"rotate-http-audit-down","expectedCurrentVersion":"` + currentVersion + `","reason":"operator approved","confirm":true,"value":"candidate-secret-value"}`)
 	result := postRotationTestRequest(t, server.URL+"/v1/management/secrets/rotation/stage", body)
 	if result.StatusCode != http.StatusServiceUnavailable || !bytes.Contains(result.Body, []byte(`"outcome":"audit_unavailable"`)) {
 		t.Fatalf("status=%d body=%s", result.StatusCode, result.Body)
@@ -409,6 +450,7 @@ func TestRotationMutationsFailClosedWhenAuditUnavailable(t *testing.T) {
 			OperationID:            "rotate-audit-down",
 			ExpectedCurrentVersion: currentVersion,
 			Reason:                 "operator approved",
+			Confirm:                true,
 			Value:                  "candidate-secret-value",
 		})
 		assertRotationAuditUnavailable(t, res, err)
@@ -424,6 +466,7 @@ func TestRotationMutationsFailClosedWhenAuditUnavailable(t *testing.T) {
 			OperationID:            "rotate-before-audit-down",
 			ExpectedCurrentVersion: currentVersion,
 			Reason:                 "operator approved",
+			Confirm:                true,
 			Value:                  "candidate-secret-value",
 		})
 		if err != nil {
@@ -499,7 +542,7 @@ func TestRotationStateSurvivesBrokerProcessRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stage := postRotationProcessRequest(t, address, "/v1/management/secrets/rotation/stage", `{"requestId":"req-process-stage","serviceId":"@serviceadmin","ref":"`+ref+`","operationId":"rotate-process","expectedCurrentVersion":"`+written.Metadata.Version+`","reason":"operator approved","value":"candidate-secret-value"}`)
+	stage := postRotationProcessRequest(t, address, "/v1/management/secrets/rotation/stage", `{"requestId":"req-process-stage","serviceId":"@serviceadmin","ref":"`+ref+`","operationId":"rotate-process","expectedCurrentVersion":"`+written.Metadata.Version+`","reason":"operator approved","confirm":true,"value":"candidate-secret-value"}`)
 	if stage.StatusCode != http.StatusOK {
 		t.Fatalf("stage status=%d body=%s", stage.StatusCode, stage.Body)
 	}
@@ -568,7 +611,7 @@ func rotationAuditTestBackend(t *testing.T) (*localBackend, string, string) {
 func activatedRotationAuditTestBackend(t *testing.T) (*localBackend, string, string) {
 	t.Helper()
 	backend, ref, currentVersion := rotationAuditTestBackend(t)
-	_, err := backend.stageRotationVersion(rotationVersionRequest{RequestID: "req-stage-setup", ServiceID: "@serviceadmin", Ref: ref, OperationID: "rotate-setup", ExpectedCurrentVersion: currentVersion, Reason: "operator approved", Value: "candidate-secret-value"})
+	_, err := backend.stageRotationVersion(rotationVersionRequest{RequestID: "req-stage-setup", ServiceID: "@serviceadmin", Ref: ref, OperationID: "rotate-setup", ExpectedCurrentVersion: currentVersion, Reason: "operator approved", Confirm: true, Value: "candidate-secret-value"})
 	if err != nil {
 		t.Fatal(err)
 	}

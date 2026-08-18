@@ -49,6 +49,9 @@ func contractRoutes() []contractRoute {
 	decommissionAction := func(path, summary string) contractRoute {
 		return contractRoute{Method: http.MethodPost, Path: path, Summary: summary, Auth: true, Request: decommissionRequest{}, Response: decommissionResponse{}}
 	}
+	createAction := func(path, summary string) contractRoute {
+		return contractRoute{Method: http.MethodPost, Path: path, Summary: summary, Auth: true, Request: managedCreateRequest{}, Response: managedCreateResponse{}}
+	}
 
 	return []contractRoute{
 		{Method: http.MethodGet, Path: "/health", Summary: "Broker liveness", Response: HealthResponse{}},
@@ -70,6 +73,13 @@ func contractRoutes() []contractRoute {
 		{Method: http.MethodGet, Path: "/v1/events", Summary: "List bounded operational events", Response: eventsResponse{}, Query: eventContractQueryParameters()},
 		{Method: http.MethodGet, Path: "/v1/recovery/policy", Summary: "Read recovery policy metadata", Response: recoveryPolicyStatusResponse{}},
 		{Method: http.MethodPost, Path: "/v1/recovery/policy", Summary: "Create or update recovery policy metadata", Auth: true, Request: recoveryPolicyRequest{}, Response: recoveryPolicyStatusResponse{}},
+		{Method: http.MethodGet, Path: "/v1/management/lifecycle/status", Summary: "Read key, wrapper, recovery and backup metadata", Auth: true, Response: lifecycleStatusResponse{}},
+		{Method: http.MethodGet, Path: "/v1/management/lifecycle/backups", Summary: "List broker-owned encrypted backups", Auth: true, Response: lifecycleBackupResponse{}},
+		{Method: http.MethodPost, Path: "/v1/management/lifecycle/backups", Summary: "Create a broker-owned encrypted backup", Auth: true, Request: lifecycleOperationRequest{}, Response: lifecycleBackupResponse{}},
+		{Method: http.MethodPost, Path: "/v1/management/lifecycle/backups/verify", Summary: "Verify an encrypted backup", Auth: true, Request: lifecycleOperationRequest{}, Response: lifecycleBackupResponse{}},
+		{Method: http.MethodPost, Path: "/v1/management/lifecycle/restore/dry-run", Summary: "Plan an exact backup restore", Auth: true, Request: lifecycleOperationRequest{}, Response: lifecycleRestoreResponse{}},
+		{Method: http.MethodPost, Path: "/v1/management/lifecycle/restore/apply", Summary: "Apply an exact backup restore", Auth: true, Request: lifecycleOperationRequest{}, Response: lifecycleRestoreResponse{}},
+		{Method: http.MethodPost, Path: "/v1/management/lifecycle/key/rotate", Summary: "Rotate the broker master key and local wrapper", Auth: true, Request: lifecycleOperationRequest{}, Response: lifecycleRotateResponse{}},
 		{Method: http.MethodPost, Path: "/v1/management/lockouts/clear", Summary: "Clear a scoped local API lockout", Auth: true, Request: lockoutClearRequest{}, Response: lockoutClearResponse{}},
 		providerAction("/v1/providers/config/validate", "Validate provider configuration"),
 		providerAction("/v1/providers/config/apply", "Apply provider configuration"),
@@ -77,6 +87,8 @@ func contractRoutes() []contractRoute {
 		migrationAction("/v1/providers/migration/apply", "Apply provider migration"),
 		{Method: http.MethodGet, Path: "/v1/management/secrets", Summary: "List managed secret metadata", Auth: true, Response: managedSecretsResponse{}, Query: []contractQueryParameter{{Name: "search", Type: "string"}}},
 		{Method: http.MethodGet, Path: "/v1/management/secrets/value-search", Summary: "Search secret values without returning them", Auth: true, Response: managedSecretsResponse{}, Query: []contractQueryParameter{{Name: "query", Type: "string"}}},
+		createAction("/v1/management/secrets/create/dry-run", "Plan a no-overwrite local secret create"),
+		createAction("/v1/management/secrets/create/apply", "Create a local secret from an exact signed plan"),
 		managedAction("/v1/management/secrets/reveal", "Reveal one managed secret under policy"),
 		managedAction("/v1/management/secrets/edit/dry-run", "Preview a managed secret edit"),
 		managedAction("/v1/management/secrets/edit/apply", "Apply a managed secret edit"),

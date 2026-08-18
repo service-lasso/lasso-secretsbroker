@@ -125,7 +125,7 @@ func TestRecoveryPolicyHTTPAndCLIStatusExposeSafeLifecycle(t *testing.T) {
 	assertNoSecretMaterial(t, payload, "test-token", "portable-master-key-bytes")
 
 	var cli bytes.Buffer
-	if err := executeAdmin([]string{"recovery", "status", "--store", backend.storePath, "--audit", backend.auditPath}, &cli); err != nil {
+	if err := executeAdmin([]string{"recovery", "status", "--store", backend.storePath, "--audit", backend.auditPath, "--wrapper", backend.wrapperPath}, &cli); err != nil {
 		t.Fatal(err)
 	}
 	assertNoSecretMaterial(t, cli.Bytes(), "test-token", "portable-master-key-bytes")

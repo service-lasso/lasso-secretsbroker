@@ -1,17 +1,21 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
-const backupArtifactVersion = 1
+const backupArtifactVersion = 2
 
 var (
 	errInvalidBackupArtifact = errors.New("invalid backup artifact")
@@ -29,6 +33,7 @@ type backupArtifact struct {
 	StoreKeyVersion string         `json:"storeKeyVersion"`
 	SecretCount     int            `json:"secretCount"`
 	Store           localStoreFile `json:"store"`
+	Integrity       string         `json:"integrity"`
 }
 
 type backupCreateResponse struct {
@@ -82,18 +87,19 @@ func runBackup(args []string) error {
 func runBackupCreate(args []string) error {
 	fs := flag.NewFlagSet("backup create", flag.ContinueOnError)
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
-	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	audit := addAuditCommandOptions(fs)
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "portable master key")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
+	wrapperPath := fs.String("wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path used when explicit master-key input is absent")
 	outPath := fs.String("out", getenvDefault("SECRETSBROKER_BACKUP_PATH", ""), "backup artifact output path")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	material, err := loadKeyMaterial(*masterKey, *masterKeyFile)
+	material, err := loadKeyMaterialForStore(*masterKey, *masterKeyFile, *wrapperPath, *storePath)
 	if err != nil {
 		return err
 	}
-	res, err := newLocalBackend(*storePath, *auditPath, material.Value).createBackup(*outPath)
+	res, err := audit.newBackend(*storePath, material.Value).createBackup(*outPath)
 	if err != nil {
 		return err
 	}
@@ -103,18 +109,19 @@ func runBackupCreate(args []string) error {
 func runBackupRestore(args []string) error {
 	fs := flag.NewFlagSet("backup restore", flag.ContinueOnError)
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
-	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	audit := addAuditCommandOptions(fs)
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "portable master key")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
+	wrapperPath := fs.String("wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path used when explicit master-key input is absent")
 	inPath := fs.String("in", getenvDefault("SECRETSBROKER_BACKUP_PATH", ""), "backup artifact input path")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	material, err := loadKeyMaterial(*masterKey, *masterKeyFile)
+	material, err := loadKeyMaterialForStore(*masterKey, *masterKeyFile, *wrapperPath, *storePath)
 	if err != nil {
 		return err
 	}
-	res, err := newLocalBackend(*storePath, *auditPath, material.Value).restoreBackup(*inPath)
+	res, err := audit.newBackend(*storePath, material.Value).restoreBackup(*inPath)
 	if err != nil {
 		return err
 	}
@@ -124,15 +131,16 @@ func runBackupRestore(args []string) error {
 func runKeyRotate(args []string) error {
 	fs := flag.NewFlagSet("key rotate", flag.ContinueOnError)
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
-	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
+	audit := addAuditCommandOptions(fs)
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "current portable master key")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing current portable master key")
+	wrapperPath := fs.String("wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path used when explicit current master-key input is absent")
 	newMasterKey := fs.String("new-master-key", getenvDefault("SECRETSBROKER_NEW_MASTER_KEY", ""), "new portable master key")
 	newMasterKeyFile := fs.String("new-master-key-file", getenvDefault("SECRETSBROKER_NEW_MASTER_KEY_FILE", ""), "file containing new portable master key")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	current, err := loadKeyMaterial(*masterKey, *masterKeyFile)
+	current, err := loadKeyMaterialForStore(*masterKey, *masterKeyFile, *wrapperPath, *storePath)
 	if err != nil {
 		return err
 	}
@@ -143,7 +151,7 @@ func runKeyRotate(args []string) error {
 	if err != nil {
 		return err
 	}
-	res, err := newLocalBackend(*storePath, *auditPath, current.Value).rotateMasterKey(next.Value)
+	res, err := audit.newBackend(*storePath, current.Value).rotateMasterKey(next.Value)
 	if err != nil {
 		return err
 	}
@@ -179,6 +187,11 @@ func (b *localBackend) createBackup(path string) (backupCreateResponse, error) {
 		SecretCount:     len(store.Secrets),
 		Store:           store,
 	}
+	artifact.Integrity, err = signBackupArtifact(artifact, b.masterKey)
+	if err != nil {
+		_ = b.audit("backup_create", "", "degraded", "", "")
+		return backupCreateResponse{}, err
+	}
 	if err := writeBackupArtifact(path, artifact); err != nil {
 		_ = b.audit("backup_create", "", "degraded", "", "")
 		return backupCreateResponse{}, err
@@ -196,6 +209,8 @@ func (b *localBackend) restoreBackup(path string) (backupRestoreResponse, error)
 		_ = b.audit("backup_restore", "", "locked", "", "")
 		return backupRestoreResponse{}, errLocked
 	}
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 	artifact, err := readBackupArtifact(path)
 	if err != nil {
 		_ = b.audit("backup_restore", "", "invalid_ref", "", "")
@@ -204,6 +219,10 @@ func (b *localBackend) restoreBackup(path string) (backupRestoreResponse, error)
 	if artifact.StoreKeyID != "" && artifact.StoreKeyID != masterKeyID(b.masterKey) {
 		_ = b.audit("backup_restore", "", "locked", "", "")
 		return backupRestoreResponse{}, errInvalidBackupKey
+	}
+	if err := verifyBackupArtifactIntegrity(artifact, b.masterKey); err != nil {
+		_ = b.audit("backup_restore", "", "invalid_ref", "", "")
+		return backupRestoreResponse{}, errInvalidBackupArtifact
 	}
 	if err := b.verifyStoreDecryptable(artifact.Store); err != nil {
 		_ = b.audit("backup_restore", "", "locked", "", "")
@@ -220,6 +239,12 @@ func (b *localBackend) restoreBackup(path string) (backupRestoreResponse, error)
 }
 
 func (b *localBackend) rotateMasterKey(newMasterKey string) (keyRotateResponse, error) {
+	return b.rotateMasterKeyWithReceipt(newMasterKey, nil)
+}
+
+func (b *localBackend) rotateMasterKeyWithReceipt(newMasterKey string, receipt *lifecycleOperationReceipt) (keyRotateResponse, error) {
+	b.storeMutationMu.Lock()
+	defer b.storeMutationMu.Unlock()
 	newMasterKey = strings.TrimSpace(newMasterKey)
 	if newMasterKey == "" {
 		return keyRotateResponse{}, errMissingNewMasterKey
@@ -278,6 +303,12 @@ func (b *localBackend) rotateMasterKey(newMasterKey string) (keyRotateResponse, 
 	store.KeyID = masterKeyID(newMasterKey)
 	store.KeyVersion = masterKeyVersion
 	store.UpdatedAt = b.now()
+	if receipt != nil {
+		if store.LifecycleOps == nil {
+			store.LifecycleOps = map[string]lifecycleOperationReceipt{}
+		}
+		store.LifecycleOps[receipt.OperationID] = *receipt
+	}
 	if err := b.saveStore(store); err != nil {
 		_ = b.audit("key_rotate", "", "degraded", "", "")
 		return keyRotateResponse{}, errBackendDegraded
@@ -312,21 +343,53 @@ func writeBackupArtifact(path string, artifact backupArtifact) error {
 }
 
 func readBackupArtifact(path string) (backupArtifact, error) {
-	bytes, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return backupArtifact{}, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > maxManagedBackupSize {
+		return backupArtifact{}, errInvalidBackupArtifact
+	}
+	bytes, err := io.ReadAll(io.LimitReader(file, maxManagedBackupSize+1))
+	if err != nil || int64(len(bytes)) > maxManagedBackupSize {
+		return backupArtifact{}, errInvalidBackupArtifact
 	}
 	var artifact backupArtifact
 	if err := json.Unmarshal(bytes, &artifact); err != nil {
 		return backupArtifact{}, errInvalidBackupArtifact
 	}
-	if artifact.Version != backupArtifactVersion || artifact.ServiceID != serviceID || artifact.APIVersion != apiVersion || artifact.Store.Version != localStoreVersion || artifact.Store.Secrets == nil {
+	if artifact.Version != backupArtifactVersion || artifact.ServiceID != serviceID || artifact.APIVersion != apiVersion || artifact.Store.Version != localStoreVersion || artifact.Store.Secrets == nil || artifact.Integrity == "" {
 		return backupArtifact{}, errInvalidBackupArtifact
 	}
 	if artifact.SecretCount != len(artifact.Store.Secrets) {
 		return backupArtifact{}, errInvalidBackupArtifact
 	}
 	return artifact, nil
+}
+
+func signBackupArtifact(artifact backupArtifact, masterKey string) (string, error) {
+	artifact.Integrity = ""
+	canonical, err := json.Marshal(artifact)
+	if err != nil {
+		return "", err
+	}
+	key := sha256.Sum256([]byte("service-lasso:@secretsbroker:backup:v2:" + strings.TrimSpace(masterKey)))
+	mac := hmac.New(sha256.New, key[:])
+	_, _ = mac.Write(canonical)
+	return "hmac-sha256:" + hex.EncodeToString(mac.Sum(nil)), nil
+}
+
+func verifyBackupArtifactIntegrity(artifact backupArtifact, masterKey string) error {
+	expected, err := signBackupArtifact(artifact, masterKey)
+	if err != nil {
+		return err
+	}
+	if !hmac.Equal([]byte(expected), []byte(strings.TrimSpace(artifact.Integrity))) {
+		return errInvalidBackupArtifact
+	}
+	return nil
 }
 
 func encodeIndented(out *os.File, value any) error {

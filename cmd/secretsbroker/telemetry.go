@@ -259,7 +259,7 @@ func buildTelemetryResponse(backend *localBackend) (telemetryResponse, error) {
 	res.Counters.Operations = auditOperationCounters(audit.Events)
 	res.Counters.PolicyDecisions = policyDecisionCounters(audit.Events)
 	res.Counters.LocalAPIAuthFailures = localAPIAuthFailureCount(audit.Events)
-	res.Counters.ActiveLockouts = backend.lockouts.activeCount()
+	res.Counters.ActiveLockouts = activeLockoutCount(backend)
 	res.Counters.AuditRecords = auditRecordCounters(audit.Events)
 	res.Counters.SourceStates = sourceStateCounters(defaultSourceRegistry(backend).Sources)
 	res.Counters.ProviderStates = providerStateCounters(backend.providerConfigStatusResponse().Providers)
@@ -272,6 +272,17 @@ func buildTelemetryResponse(backend *localBackend) (telemetryResponse, error) {
 	res.Signals = append(res.Signals, buildRequestDurationSignals(requests)...)
 	res.ExportPreview = telemetryExportPreviewFromEnv(res.Exporter, len(res.Signals), res.Redaction)
 	return res, nil
+}
+
+func activeLockoutCount(backend *localBackend) int {
+	if backend == nil {
+		return 0
+	}
+	count := backend.lockouts.activeCount()
+	if backend.localAPILockouts != nil && backend.localAPILockouts != backend.lockouts {
+		count += backend.localAPILockouts.activeCount()
+	}
+	return count
 }
 
 func registerTelemetryHandlers(mux *http.ServeMux, backend *localBackend) {

@@ -258,11 +258,17 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/telemetry/export",
 			"GET /v1/events",
 			"GET|POST /v1/recovery/policy",
+			"GET /v1/management/lifecycle/status",
+			"GET|POST /v1/management/lifecycle/backups",
+			"POST /v1/management/lifecycle/backups/verify",
+			"POST /v1/management/lifecycle/restore/dry-run|apply",
+			"POST /v1/management/lifecycle/key/rotate",
 			"POST /v1/management/lockouts/clear",
 			"POST /v1/providers/config/validate|apply",
 			"POST /v1/providers/migration/dry-run|apply",
 			"GET /v1/management/secrets",
 			"GET /v1/management/secrets/value-search",
+			"POST /v1/management/secrets/create/dry-run|apply",
 			"POST /v1/management/secrets/reveal",
 			"POST /v1/management/secrets/edit/dry-run|apply",
 			"POST /v1/management/secrets/reset/dry-run|apply",
@@ -324,6 +330,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"master-key-initialize-unlock-import-rewrap",
 			"os-wrapper-status",
 			"master-key-rotation",
+			"authenticated-lifecycle-management-api",
 			"recovery-policy-metadata",
 			"recovery-policy-status",
 			"threshold-recovery-shares",
@@ -370,6 +377,8 @@ func serve(args []string) error {
 	auditHashChain := fs.Bool("audit-hash-chain", envBoolDefault("SECRETSBROKER_AUDIT_HASH_CHAIN", false), "append tamper-evident audit hash-chain metadata")
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "local development master key; empty means locked")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
+	wrapperPath := fs.String("wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path used for lifecycle status and broker-controlled key rotation")
+	backupRoot := fs.String("backup-root", getenvDefault("SECRETSBROKER_BACKUP_ROOT", ""), "broker-owned encrypted backup directory; defaults beside the store")
 	apiToken := fs.String("api-token", getenvDefault("SECRETSBROKER_API_TOKEN", ""), "local API token for secret-bearing endpoints")
 	launchIdentitySigningKey := fs.String("launch-identity-signing-key", getenvDefault("SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY", ""), "HMAC key for signed scoped launch identity leases; defaults to local API token in bootstrap mode")
 	sourcesPath := fs.String("sources", getenvDefault("SECRETSBROKER_SOURCES_PATH", ""), "source adapter config path")
@@ -395,13 +404,16 @@ func serve(args []string) error {
 	refs := []string(affectedRefs)
 	services := []string(affectedServices)
 	stateView := runtimeState{state: state, affectedRefs: &refs, affectedServices: &services}
-	material, err := loadKeyMaterial(*masterKey, *masterKeyFile)
+	material, err := loadKeyMaterialForStore(*masterKey, *masterKeyFile, *wrapperPath, *storePath)
 	if err != nil && !errors.Is(err, errLocked) {
 		return err
 	}
-	backend := newLocalBackend(*storePath, *auditPath, material.Value)
+	backend := newLocalBackendWithAudit(*storePath, *auditPath, material.Value, *auditHashChain)
+	backend.wrapperPath = *wrapperPath
+	if strings.TrimSpace(*backupRoot) != "" {
+		backend.backupRoot = *backupRoot
+	}
 	backend.eventPath = eventsPathValue
-	backend.auditHashChain = *auditHashChain
 	backend.launchIdentitySigningKey = strings.TrimSpace(*launchIdentitySigningKey)
 	sources, err := loadSourceConfig(*sourcesPath)
 	if err != nil {
@@ -476,6 +488,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		if security.lockouts == nil {
 			security.lockouts = newLockoutStore(nil)
 		}
+		backend.localAPILockouts = security.lockouts
 		if security.audit == nil {
 			security.audit = backend.audit
 		}
@@ -489,6 +502,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 		registerSyncDryRunHandlers(mux, backend, security)
 		registerProviderConfigMigrationHandlers(mux, backend, security)
 		registerRecoveryPolicyHandlers(mux, backend, security)
+		registerLifecycleManagementHandlers(mux, backend, security)
 		registerTelemetryHandlers(mux, backend)
 		registerEventsHandlers(mux, backend)
 		registerLockoutManagementHandlers(mux, backend, security)

@@ -6,11 +6,20 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"strings"
 )
 
 const auditChainGenesisHash = "genesis"
+
+const maxAuditEventBytes = 1 << 20
+
+var (
+	errAuditChainInvalid = errors.New("audit hash chain is invalid")
+	errAuditLockTimeout  = errors.New("timed out acquiring audit lock")
+)
 
 type auditChainVerification struct {
 	Status     string `json:"status"`
@@ -20,33 +29,61 @@ type auditChainVerification struct {
 	NextAction string `json:"nextAction,omitempty"`
 }
 
-func (b *localBackend) prepareChainedAuditEvent(event auditEvent) auditEvent {
-	event.PreviousHash = firstNonEmpty(lastAuditEventHash(b.auditPath), auditChainGenesisHash)
+func prepareChainedAuditEvent(event auditEvent, previousHash string) auditEvent {
+	event.PreviousHash = firstNonEmpty(previousHash, auditChainGenesisHash)
 	event.ChainStatus = "chained"
 	event.EventHash = auditEventHash(event)
 	return event
 }
 
-func lastAuditEventHash(path string) string {
+func readAuditEvents(path string) ([]auditEvent, error) {
 	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) || err != nil {
-		return ""
+	if errors.Is(err, os.ErrNotExist) {
+		return []auditEvent{}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	defer file.Close()
 
-	lastHash := ""
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > 0 {
+		if _, err := file.Seek(-1, io.SeekEnd); err != nil {
+			return nil, err
+		}
+		last := []byte{0}
+		if _, err := io.ReadFull(file, last); err != nil {
+			return nil, err
+		}
+		if last[0] != '\n' {
+			return nil, fmt.Errorf("%w: incomplete final record", errAuditChainInvalid)
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return nil, err
+		}
+	}
+
+	events := []auditEvent{}
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), maxAuditEventBytes)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
-			continue
+			return nil, fmt.Errorf("%w: empty record", errAuditChainInvalid)
 		}
 		var event auditEvent
-		if json.Unmarshal([]byte(line), &event) == nil && strings.TrimSpace(event.EventHash) != "" {
-			lastHash = strings.TrimSpace(event.EventHash)
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			return nil, fmt.Errorf("%w: malformed record", errAuditChainInvalid)
 		}
+		events = append(events, normalizeAuditEvent(event))
 	}
-	return lastHash
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("%w: audit read failed", errAuditChainInvalid)
+	}
+	return events, nil
 }
 
 func auditEventHash(event auditEvent) string {
@@ -61,13 +98,21 @@ func auditEventHash(event auditEvent) string {
 func verifyAuditChain(events []auditEvent) (auditChainVerification, []auditEvent) {
 	status := auditChainVerification{Status: "not_enabled"}
 	lastHash := ""
+	chainStarted := false
 	for i := range events {
 		event := normalizeAuditEvent(events[i])
 		if event.EventHash == "" {
-			status.Unchecked++
+			if chainStarted || event.PreviousHash != "" {
+				event.ChainStatus = "invalid"
+				status.Failed++
+			} else {
+				event.ChainStatus = "unchecked"
+				status.Unchecked++
+			}
 			events[i] = event
 			continue
 		}
+		chainStarted = true
 		expectedPrevious := firstNonEmpty(lastHash, auditChainGenesisHash)
 		expectedHash := auditEventHash(event)
 		if event.PreviousHash == expectedPrevious && event.EventHash == expectedHash {
@@ -86,7 +131,7 @@ func verifyAuditChain(events []auditEvent) (auditChainVerification, []auditEvent
 		status.NextAction = "inspect_audit_chain"
 	case status.Verified > 0 && status.Unchecked > 0:
 		status.Status = "partial"
-		status.NextAction = "keep_hash_chain_enabled_for_new_events"
+		status.NextAction = "archive_legacy_prefix_and_keep_hash_chain_enabled"
 	case status.Verified > 0:
 		status.Status = "verified"
 	default:
