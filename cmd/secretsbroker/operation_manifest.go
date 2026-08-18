@@ -121,6 +121,7 @@ func defaultOperationManifest() []OperationCapability {
 	providers := supportedProviderKinds()
 	local := []string{"local-encrypted-store"}
 	localAndAWS := []string{"local-encrypted-store", "aws-secrets-manager"}
+	localAndVault := []string{"local-encrypted-store", "vault", "openbao"}
 
 	return []OperationCapability{
 		manifestOperation(http.MethodGet, "/health", OperationMaturityReadOnly, OperationClassificationRead, false, false, false, OperationScopeBrokerLocal, nil, "liveness_only"),
@@ -131,6 +132,12 @@ func defaultOperationManifest() []OperationCapability {
 		manifestOperation(http.MethodPost, "/v1/secrets", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "local_store_only"),
 		manifestOperation(http.MethodPost, "/v1/writeback", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "local_store_only"),
 		manifestOperation(http.MethodPost, "/v1/resolve", OperationMaturityValidated, OperationClassificationRead, true, true, true, OperationScopeMixed, providers, "runtime_controls_revalidated"),
+		manifestOperation(http.MethodGet, "/v1/kv/data/{path}", OperationMaturityValidated, OperationClassificationRead, true, true, true, OperationScopeMixed, localAndVault, "openbao_kv_v2"),
+		manifestOperation(http.MethodPost, "/v1/kv/data/{path}", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeMixed, localAndVault, "openbao_kv_v2"),
+		manifestOperation(http.MethodPatch, "/v1/kv/data/{path}", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeMixed, localAndVault, "openbao_kv_v2"),
+		manifestOperation(http.MethodGet, "/v1/kv/metadata/{path}", OperationMaturityValidated, OperationClassificationRead, true, true, true, OperationScopeMixed, localAndVault, "openbao_kv_v2"),
+		manifestOperation(http.MethodPost, "/v1/kv/delete/{path}", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeMixed, localAndVault, "openbao_kv_v2"),
+		manifestOperation(http.MethodPost, "/v1/kv/undelete/{path}", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeMixed, localAndVault, "openbao_kv_v2"),
 		manifestOperation(http.MethodGet, "/v1/provisioning/status", OperationMaturityReadOnly, OperationClassificationRead, true, false, false, OperationScopeMixed, providers, "metadata_only"),
 		manifestOperation(http.MethodPost, "/v1/provisioning/operations/plan", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "no_secret_mutation"),
 		manifestOperation(http.MethodPost, "/v1/provisioning/operations/apply", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "broker_generated_local_values_only"),
@@ -203,6 +210,12 @@ func providerOperationCapabilities(kind string, lifecycle SourceLifecycle, audit
 	kind = strings.ToLower(strings.TrimSpace(kind))
 	routes := [][2]string{
 		{http.MethodPost, "/v1/resolve"},
+		{http.MethodGet, "/v1/kv/data/{path}"},
+		{http.MethodPost, "/v1/kv/data/{path}"},
+		{http.MethodPatch, "/v1/kv/data/{path}"},
+		{http.MethodGet, "/v1/kv/metadata/{path}"},
+		{http.MethodPost, "/v1/kv/delete/{path}"},
+		{http.MethodPost, "/v1/kv/undelete/{path}"},
 		{http.MethodGet, "/v1/management/secrets/value-search"},
 		{http.MethodPost, "/v1/management/secrets/reveal"},
 		{http.MethodPost, "/v1/secrets"},
@@ -269,6 +282,14 @@ func providerOperationMaturity(kind, path string) OperationMaturity {
 	switch path {
 	case "/v1/resolve":
 		if has(AdapterCapabilityRead) {
+			return OperationMaturityValidated
+		}
+	case "/v1/kv/data/{path}", "/v1/kv/metadata/{path}":
+		if local || kind == "vault" || kind == "openbao" {
+			return OperationMaturityValidated
+		}
+	case "/v1/kv/delete/{path}", "/v1/kv/undelete/{path}":
+		if local || kind == "vault" || kind == "openbao" {
 			return OperationMaturityValidated
 		}
 	case "/v1/management/secrets/reveal":

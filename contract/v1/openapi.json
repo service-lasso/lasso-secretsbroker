@@ -1251,6 +1251,201 @@
         ],
         "type": "object"
       },
+      "kvDataBody": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/kvVersionMetadata"
+          }
+        },
+        "required": [
+          "data",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "kvDataResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/kvDataBody"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "kvListedVersion": {
+        "additionalProperties": true,
+        "properties": {
+          "created_time": {
+            "type": "string"
+          },
+          "deletion_time": {
+            "type": "string"
+          },
+          "destroyed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "created_time",
+          "deletion_time",
+          "destroyed"
+        ],
+        "type": "object"
+      },
+      "kvMetadataBody": {
+        "additionalProperties": true,
+        "properties": {
+          "cas_required": {
+            "type": "boolean"
+          },
+          "created_time": {
+            "type": "string"
+          },
+          "current_version": {
+            "type": "integer"
+          },
+          "custom_metadata": {},
+          "delete_version_after": {
+            "type": "string"
+          },
+          "max_versions": {
+            "type": "integer"
+          },
+          "oldest_version": {
+            "type": "integer"
+          },
+          "updated_time": {
+            "type": "string"
+          },
+          "versions": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/kvListedVersion"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "cas_required",
+          "created_time",
+          "current_version",
+          "custom_metadata",
+          "delete_version_after",
+          "max_versions",
+          "oldest_version",
+          "updated_time",
+          "versions"
+        ],
+        "type": "object"
+      },
+      "kvMetadataResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/kvMetadataBody"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "kvNoContentResponse": {
+        "additionalProperties": true,
+        "properties": {},
+        "type": "object"
+      },
+      "kvVersionMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "created_time": {
+            "type": "string"
+          },
+          "custom_metadata": {},
+          "deletion_time": {
+            "type": "string"
+          },
+          "destroyed": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created_time",
+          "custom_metadata",
+          "deletion_time",
+          "destroyed",
+          "version"
+        ],
+        "type": "object"
+      },
+      "kvVersionSelectRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "versions": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "versions"
+        ],
+        "type": "object"
+      },
+      "kvWriteEnvelope": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "options": {
+            "$ref": "#/components/schemas/kvWriteOptions"
+          }
+        },
+        "required": [
+          "data",
+          "options"
+        ],
+        "type": "object"
+      },
+      "kvWriteOptions": {
+        "additionalProperties": true,
+        "properties": {
+          "cas": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cas"
+        ],
+        "type": "object"
+      },
+      "kvWriteResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/kvVersionMetadata"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
       "launchIdentityLease": {
         "additionalProperties": true,
         "properties": {
@@ -5119,6 +5314,544 @@
           "limitationCode": "metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
+        }
+      }
+    },
+    "/v1/kv/data/{path}": {
+      "get": {
+        "operationId": "getv1_kv_data_path",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mount",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/kvDataResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/kvDataResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Read OpenBao-compatible KV v2 secret data",
+        "x-capability": {
+          "operationId": "getv1_kv_data_path",
+          "method": "GET",
+          "path": "/v1/kv/data/{path}",
+          "maturity": "validated",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "openbao_kv_v2",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      },
+      "patch": {
+        "operationId": "patchv1_kv_data_path",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mount",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/kvWriteEnvelope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/kvWriteResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/kvWriteResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Patch OpenBao-compatible KV v2 secret data",
+        "x-capability": {
+          "operationId": "patchv1_kv_data_path",
+          "method": "PATCH",
+          "path": "/v1/kv/data/{path}",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "openbao_kv_v2",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      },
+      "post": {
+        "operationId": "postv1_kv_data_path",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mount",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/kvWriteEnvelope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/kvWriteResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/kvWriteResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Write OpenBao-compatible KV v2 secret data",
+        "x-capability": {
+          "operationId": "postv1_kv_data_path",
+          "method": "POST",
+          "path": "/v1/kv/data/{path}",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "openbao_kv_v2",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/kv/delete/{path}": {
+      "post": {
+        "operationId": "postv1_kv_delete_path",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mount",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/kvVersionSelectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/kvNoContentResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/kvNoContentResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Soft-delete OpenBao-compatible KV v2 versions",
+        "x-capability": {
+          "operationId": "postv1_kv_delete_path",
+          "method": "POST",
+          "path": "/v1/kv/delete/{path}",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "openbao_kv_v2",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/kv/metadata/{path}": {
+      "get": {
+        "operationId": "getv1_kv_metadata_path",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mount",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "list",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/kvMetadataResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/kvMetadataResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Read or list OpenBao-compatible KV v2 metadata",
+        "x-capability": {
+          "operationId": "getv1_kv_metadata_path",
+          "method": "GET",
+          "path": "/v1/kv/metadata/{path}",
+          "maturity": "validated",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "openbao_kv_v2",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
+        }
+      }
+    },
+    "/v1/kv/undelete/{path}": {
+      "post": {
+        "operationId": "postv1_kv_undelete_path",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mount",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/kvVersionSelectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/kvNoContentResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/kvNoContentResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Undelete OpenBao-compatible KV v2 versions",
+        "x-capability": {
+          "operationId": "postv1_kv_undelete_path",
+          "method": "POST",
+          "path": "/v1/kv/undelete/{path}",
+          "maturity": "validated",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "mixed",
+          "providerKinds": [
+            "local-encrypted-store",
+            "vault",
+            "openbao"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "openbao_kv_v2",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
         }
       }
     },

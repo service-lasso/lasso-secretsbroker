@@ -62,6 +62,12 @@ func contractRoutes() []contractRoute {
 		{Method: http.MethodPost, Path: "/v1/secrets", Summary: "Write a local secret", Auth: true, Request: writeSecretRequest{}, Response: writeSecretResponse{}},
 		{Method: http.MethodPost, Path: "/v1/writeback", Summary: "Capture a generated secret", Auth: true, Request: generatedSecretCaptureRequest{}, Response: generatedSecretCaptureResponse{}},
 		{Method: http.MethodPost, Path: "/v1/resolve", Summary: "Resolve a batch of secret references", Auth: true, Request: resolveRequest{}, Response: resolveResponse{}},
+		{Method: http.MethodGet, Path: "/v1/kv/data/{path}", Summary: "Read OpenBao-compatible KV v2 secret data", Auth: true, Response: kvDataResponse{}, Query: kvContractQueryParameters(true, false)},
+		{Method: http.MethodPost, Path: "/v1/kv/data/{path}", Summary: "Write OpenBao-compatible KV v2 secret data", Auth: true, Request: kvWriteEnvelope{}, Response: kvWriteResponse{}, Query: kvContractQueryParameters(false, false)},
+		{Method: http.MethodPatch, Path: "/v1/kv/data/{path}", Summary: "Patch OpenBao-compatible KV v2 secret data", Auth: true, Request: kvWriteEnvelope{}, Response: kvWriteResponse{}, Query: kvContractQueryParameters(false, false)},
+		{Method: http.MethodGet, Path: "/v1/kv/metadata/{path}", Summary: "Read or list OpenBao-compatible KV v2 metadata", Auth: true, Response: kvMetadataResponse{}, Query: kvContractQueryParameters(false, true)},
+		{Method: http.MethodPost, Path: "/v1/kv/delete/{path}", Summary: "Soft-delete OpenBao-compatible KV v2 versions", Auth: true, Request: kvVersionSelectRequest{}, Response: kvNoContentResponse{}, Query: kvContractQueryParameters(false, false)},
+		{Method: http.MethodPost, Path: "/v1/kv/undelete/{path}", Summary: "Undelete OpenBao-compatible KV v2 versions", Auth: true, Request: kvVersionSelectRequest{}, Response: kvNoContentResponse{}, Query: kvContractQueryParameters(false, false)},
 		{Method: http.MethodGet, Path: "/v1/provisioning/status", Summary: "List generated-secret provisioning status", Auth: true, Response: provisioningStatusResponse{}, Query: []contractQueryParameter{{Name: "search", Type: "string"}, {Name: "ref", Type: "string"}}},
 		{Method: http.MethodPost, Path: "/v1/provisioning/operations/plan", Summary: "Plan a provisioning operation", Auth: true, Request: provisioningOperationRequest{}, Response: provisioningOperationResponse{}},
 		{Method: http.MethodPost, Path: "/v1/provisioning/operations/apply", Summary: "Apply a provisioning operation", Auth: true, Request: provisioningOperationRequest{}, Response: provisioningOperationResponse{}},
@@ -111,6 +117,20 @@ func contractRoutes() []contractRoute {
 		managedAction("/v1/management/secrets/policy/preview", "Preview a managed secret policy change"),
 		managedAction("/v1/management/secrets/policy/apply", "Apply a managed secret policy change"),
 	}
+}
+
+func kvContractQueryParameters(includeVersion, includeList bool) []contractQueryParameter {
+	params := []contractQueryParameter{
+		{Name: "source", Type: "string"},
+		{Name: "mount", Type: "string"},
+	}
+	if includeVersion {
+		params = append(params, contractQueryParameter{Name: "version", Type: "integer"})
+	}
+	if includeList {
+		params = append(params, contractQueryParameter{Name: "list", Type: "string"})
+	}
+	return params
 }
 
 func eventContractQueryParameters() []contractQueryParameter {

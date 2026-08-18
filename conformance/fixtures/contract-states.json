@@ -34,6 +34,10 @@
           "POST /v1/secrets",
           "POST /v1/writeback",
           "POST /v1/resolve",
+          "GET|POST|PATCH /v1/kv/data/{path}",
+          "GET /v1/kv/metadata/{path}",
+          "POST /v1/kv/delete/{path}",
+          "POST /v1/kv/undelete/{path}",
           "GET /v1/provisioning/status",
           "POST /v1/provisioning/operations/plan",
           "POST /v1/provisioning/operations/apply",
@@ -210,6 +214,126 @@
             ],
             "completionMode": "synchronous",
             "limitationCode": "runtime_controls_revalidated",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "getv1_kv_data_path",
+            "method": "GET",
+            "path": "/v1/kv/data/{path}",
+            "maturity": "validated",
+            "classification": "read",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "mixed",
+            "providerKinds": [
+              "local-encrypted-store",
+              "vault",
+              "openbao"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "openbao_kv_v2",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_kv_data_path",
+            "method": "POST",
+            "path": "/v1/kv/data/{path}",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "mixed",
+            "providerKinds": [
+              "local-encrypted-store",
+              "vault",
+              "openbao"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "openbao_kv_v2",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "patchv1_kv_data_path",
+            "method": "PATCH",
+            "path": "/v1/kv/data/{path}",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "mixed",
+            "providerKinds": [
+              "local-encrypted-store",
+              "vault",
+              "openbao"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "openbao_kv_v2",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "getv1_kv_metadata_path",
+            "method": "GET",
+            "path": "/v1/kv/metadata/{path}",
+            "maturity": "validated",
+            "classification": "read",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "mixed",
+            "providerKinds": [
+              "local-encrypted-store",
+              "vault",
+              "openbao"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "openbao_kv_v2",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_kv_delete_path",
+            "method": "POST",
+            "path": "/v1/kv/delete/{path}",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "mixed",
+            "providerKinds": [
+              "local-encrypted-store",
+              "vault",
+              "openbao"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "openbao_kv_v2",
+            "reasonCode": "implemented_and_validated",
+            "nextAction": "invoke_with_required_controls"
+          },
+          {
+            "operationId": "postv1_kv_undelete_path",
+            "method": "POST",
+            "path": "/v1/kv/undelete/{path}",
+            "maturity": "validated",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "mixed",
+            "providerKinds": [
+              "local-encrypted-store",
+              "vault",
+              "openbao"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "openbao_kv_v2",
             "reasonCode": "implemented_and_validated",
             "nextAction": "invoke_with_required_controls"
           },
@@ -1223,6 +1347,7 @@
           "versioned-operation-capability-manifest",
           "local-encrypted-store",
           "batched-resolve",
+          "openbao-compatible-kv-v2",
           "typed-errors",
           "audit-redaction",
           "source-status",
@@ -1470,6 +1595,114 @@
                 "path": "/v1/resolve",
                 "maturity": "validated",
                 "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "getv1_kv_data_path",
+                "method": "GET",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "validated",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_kv_data_path",
+                "method": "POST",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "patchv1_kv_data_path",
+                "method": "PATCH",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "getv1_kv_metadata_path",
+                "method": "GET",
+                "path": "/v1/kv/metadata/{path}",
+                "maturity": "validated",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_kv_delete_path",
+                "method": "POST",
+                "path": "/v1/kv/delete/{path}",
+                "maturity": "validated",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "broker-local",
+                "providerKinds": [
+                  "local-encrypted-store"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "runtime_auth_policy_audit_revalidated",
+                "reasonCode": "source_operation_available",
+                "nextAction": "invoke_with_required_controls"
+              },
+              {
+                "operationId": "postv1_kv_undelete_path",
+                "method": "POST",
+                "path": "/v1/kv/undelete/{path}",
+                "maturity": "validated",
+                "classification": "mutation",
                 "authenticationRequired": true,
                 "policyRequired": true,
                 "auditRequired": true,
@@ -1967,6 +2200,114 @@
                 "path": "/v1/resolve",
                 "maturity": "unavailable",
                 "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "source_auth_required",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "reconnect_source"
+              },
+              {
+                "operationId": "getv1_kv_data_path",
+                "method": "GET",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "source_auth_required",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "reconnect_source"
+              },
+              {
+                "operationId": "postv1_kv_data_path",
+                "method": "POST",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "source_auth_required",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "reconnect_source"
+              },
+              {
+                "operationId": "patchv1_kv_data_path",
+                "method": "PATCH",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "source_auth_required",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "reconnect_source"
+              },
+              {
+                "operationId": "getv1_kv_metadata_path",
+                "method": "GET",
+                "path": "/v1/kv/metadata/{path}",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "source_auth_required",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "reconnect_source"
+              },
+              {
+                "operationId": "postv1_kv_delete_path",
+                "method": "POST",
+                "path": "/v1/kv/delete/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "openbao"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "source_auth_required",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "reconnect_source"
+              },
+              {
+                "operationId": "postv1_kv_undelete_path",
+                "method": "POST",
+                "path": "/v1/kv/undelete/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
                 "authenticationRequired": true,
                 "policyRequired": true,
                 "auditRequired": true,
@@ -2480,6 +2821,114 @@
                 "nextAction": "reconnect_source"
               },
               {
+                "operationId": "getv1_kv_data_path",
+                "method": "GET",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_kv_data_path",
+                "method": "POST",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "patchv1_kv_data_path",
+                "method": "PATCH",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "getv1_kv_metadata_path",
+                "method": "GET",
+                "path": "/v1/kv/metadata/{path}",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_kv_delete_path",
+                "method": "POST",
+                "path": "/v1/kv/delete/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
+                "operationId": "postv1_kv_undelete_path",
+                "method": "POST",
+                "path": "/v1/kv/undelete/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "aws-secrets-manager"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "provider_operation_not_implemented",
+                "reasonCode": "operation_not_implemented",
+                "nextAction": "do_not_enable_operation"
+              },
+              {
                 "operationId": "getv1_management_secrets_value_search",
                 "method": "GET",
                 "path": "/v1/management/secrets/value-search",
@@ -2979,6 +3428,114 @@
                 "nextAction": "review_policy"
               },
               {
+                "operationId": "getv1_kv_data_path",
+                "method": "GET",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "policy_denied",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "review_policy"
+              },
+              {
+                "operationId": "postv1_kv_data_path",
+                "method": "POST",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "policy_denied",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "review_policy"
+              },
+              {
+                "operationId": "patchv1_kv_data_path",
+                "method": "PATCH",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "policy_denied",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "review_policy"
+              },
+              {
+                "operationId": "getv1_kv_metadata_path",
+                "method": "GET",
+                "path": "/v1/kv/metadata/{path}",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "policy_denied",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "review_policy"
+              },
+              {
+                "operationId": "postv1_kv_delete_path",
+                "method": "POST",
+                "path": "/v1/kv/delete/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "policy_denied",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "review_policy"
+              },
+              {
+                "operationId": "postv1_kv_undelete_path",
+                "method": "POST",
+                "path": "/v1/kv/undelete/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "policy_denied",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "review_policy"
+              },
+              {
                 "operationId": "getv1_management_secrets_value_search",
                 "method": "GET",
                 "path": "/v1/management/secrets/value-search",
@@ -3465,6 +4022,114 @@
                 "path": "/v1/resolve",
                 "maturity": "unavailable",
                 "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "audit_unavailable",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "restore_audit"
+              },
+              {
+                "operationId": "getv1_kv_data_path",
+                "method": "GET",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "audit_unavailable",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "restore_audit"
+              },
+              {
+                "operationId": "postv1_kv_data_path",
+                "method": "POST",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "audit_unavailable",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "restore_audit"
+              },
+              {
+                "operationId": "patchv1_kv_data_path",
+                "method": "PATCH",
+                "path": "/v1/kv/data/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "audit_unavailable",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "restore_audit"
+              },
+              {
+                "operationId": "getv1_kv_metadata_path",
+                "method": "GET",
+                "path": "/v1/kv/metadata/{path}",
+                "maturity": "unavailable",
+                "classification": "read",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "audit_unavailable",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "restore_audit"
+              },
+              {
+                "operationId": "postv1_kv_delete_path",
+                "method": "POST",
+                "path": "/v1/kv/delete/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
+                "authenticationRequired": true,
+                "policyRequired": true,
+                "auditRequired": true,
+                "scope": "provider-remote",
+                "providerKinds": [
+                  "vault"
+                ],
+                "completionMode": "synchronous",
+                "limitationCode": "audit_unavailable",
+                "reasonCode": "source_operation_blocked",
+                "nextAction": "restore_audit"
+              },
+              {
+                "operationId": "postv1_kv_undelete_path",
+                "method": "POST",
+                "path": "/v1/kv/undelete/{path}",
+                "maturity": "unavailable",
+                "classification": "mutation",
                 "authenticationRequired": true,
                 "policyRequired": true,
                 "auditRequired": true,
@@ -3982,6 +4647,114 @@
               "path": "/v1/resolve",
               "maturity": "unavailable",
               "classification": "read",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "getv1_kv_data_path",
+              "method": "GET",
+              "path": "/v1/kv/data/{path}",
+              "maturity": "unavailable",
+              "classification": "read",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_kv_data_path",
+              "method": "POST",
+              "path": "/v1/kv/data/{path}",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "patchv1_kv_data_path",
+              "method": "PATCH",
+              "path": "/v1/kv/data/{path}",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "getv1_kv_metadata_path",
+              "method": "GET",
+              "path": "/v1/kv/metadata/{path}",
+              "maturity": "unavailable",
+              "classification": "read",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_kv_delete_path",
+              "method": "POST",
+              "path": "/v1/kv/delete/{path}",
+              "maturity": "unavailable",
+              "classification": "mutation",
+              "authenticationRequired": true,
+              "policyRequired": true,
+              "auditRequired": true,
+              "scope": "provider-remote",
+              "providerKinds": [
+                "future-provider"
+              ],
+              "completionMode": "synchronous",
+              "limitationCode": "provider_operation_not_implemented",
+              "reasonCode": "operation_not_implemented",
+              "nextAction": "do_not_enable_operation"
+            },
+            {
+              "operationId": "postv1_kv_undelete_path",
+              "method": "POST",
+              "path": "/v1/kv/undelete/{path}",
+              "maturity": "unavailable",
+              "classification": "mutation",
               "authenticationRequired": true,
               "policyRequired": true,
               "auditRequired": true,

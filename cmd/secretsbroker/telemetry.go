@@ -960,7 +960,18 @@ func telemetryRouteTemplate(path string) string {
 	case "/v1/management/secrets/policy/apply":
 		return "/v1/management/secrets/policy/apply"
 	default:
-		return "/unmatched"
+		switch {
+		case strings.HasPrefix(path, "/v1/kv/data/"):
+			return "/v1/kv/data/{path}"
+		case strings.HasPrefix(path, "/v1/kv/metadata"):
+			return "/v1/kv/metadata/{path}"
+		case strings.HasPrefix(path, "/v1/kv/delete/"):
+			return "/v1/kv/delete/{path}"
+		case strings.HasPrefix(path, "/v1/kv/undelete/"):
+			return "/v1/kv/undelete/{path}"
+		default:
+			return "/unmatched"
+		}
 	}
 }
 

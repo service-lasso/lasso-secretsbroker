@@ -43,6 +43,7 @@ type sourceConfig struct {
 	Token                 string                     `json:"token,omitempty"`
 	TokenEnv              string                     `json:"tokenEnv,omitempty"`
 	CredentialRef         string                     `json:"credentialRef,omitempty"`
+	Mount                 string                     `json:"mount,omitempty"`
 	Refs                  map[string]sourceRefConfig `json:"refs"`
 }
 
