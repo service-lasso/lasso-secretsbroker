@@ -100,7 +100,7 @@ func TestProviderConfigAddressMetadataStripsCredentialAndRequestDetails(t *testi
 	}
 }
 
-func TestProviderConfigApplyRequiresConfirmationAndNeverClaimsUnpersistedSuccess(t *testing.T) {
+func TestProviderConfigApplyPersistsMetadataOnlySourceRegistry(t *testing.T) {
 	backend := managedTestBackend(t)
 	req := providerConfigRequest{RequestID: "req-apply", ServiceID: "@serviceadmin", ProviderID: "vault-prod", ProviderKind: "vault", Address: "https://vault.example.invalid", CredentialRef: "secret://local/provider/vault-prod/token"}
 
@@ -112,16 +112,27 @@ func TestProviderConfigApplyRequiresConfirmationAndNeverClaimsUnpersistedSuccess
 	req.Confirm = true
 	req.Reason = "operator approved provider migration setup"
 	req.OperationID = "provider-config-2026-05-08-a"
-	unsupported, err := backend.applyProviderConfig(req)
-	if !errors.Is(err, errUnsupportedProvider) || unsupported.Applied || unsupported.Outcome != "unsupported" || unsupported.UnsupportedCapability != "provider_configuration_persistence" || unsupported.NextAction != "implement_persisted_provider_configuration" || unsupported.AuditStatus != "audit_recorded" {
-		t.Fatalf("unpersisted provider apply = %#v err=%v", unsupported, err)
+	applied, err := backend.applyProviderConfig(req)
+	if err != nil || !applied.Applied || applied.Outcome != "ready" || applied.Provider.ProviderID != req.ProviderID || applied.AuditStatus != "audit_recorded" {
+		t.Fatalf("persisted provider apply = %#v err=%v", applied, err)
 	}
+	found := false
 	for _, provider := range backend.providerConfigStatusResponse().Providers {
 		if provider.ProviderID == req.ProviderID {
-			t.Fatalf("planned provider configuration was unexpectedly persisted: %#v", provider)
+			found = true
+			if provider.Address != "https://vault.example.invalid" || strings.Contains(string(mustManagedJSON(t, provider)), providerCredentialValue) {
+				t.Fatalf("persisted provider status leaked or missed address: %#v", provider)
+			}
 		}
 	}
-	assertNoSecretMaterial(t, mustManagedJSON(t, unsupported), providerCredentialValue)
+	if !found {
+		t.Fatalf("applied provider was not present in status: %#v", backend.providerConfigStatusResponse())
+	}
+	persisted, err := os.ReadFile(backend.sourcesPath)
+	if err != nil || !strings.Contains(string(persisted), `"sourceId": "vault-prod"`) || strings.Contains(strings.ToLower(string(persisted)), providerCredentialValue) {
+		t.Fatalf("sources.json persist = %s err=%v", persisted, err)
+	}
+	assertNoSecretMaterial(t, mustManagedJSON(t, applied), providerCredentialValue)
 }
 
 func TestProviderConfigValidationAndApplyFailClosedWhenAuditUnavailable(t *testing.T) {
@@ -168,11 +179,24 @@ func TestMigrationDryRunMetadataOnlyPartialDenialAndApplyGating(t *testing.T) {
 		t.Fatalf("unconfirmed migration apply should fail closed: %#v err=%v", blocked, err)
 	}
 
-	unsupported, err := backend.migrationApply(migrationPlanRequest{RequestID: "req-migrate-apply", ServiceID: "@serviceadmin", OperationID: "migration-op-a", SourceProviderID: "local", TargetProviderID: "local", Confirm: true, Reason: "approved migration"})
-	if !errors.Is(err, errUnsupportedProvider) || unsupported.Applied || unsupported.Outcome != "unsupported" || unsupported.NextAction != "implement_provider_operation_executor" || len(unsupported.Results) != 2 {
-		t.Fatalf("non-executable migration apply = %#v err=%v", unsupported, err)
+	applied, err := backend.migrationApply(migrationPlanRequest{RequestID: "req-migrate-apply", ServiceID: "@serviceadmin", OperationID: "migration-op-a", SourceProviderID: "local", TargetProviderID: "local", Confirm: true, Reason: "approved migration"})
+	if err != nil || applied.Outcome != "partial_failure" || applied.Applied || len(applied.Results) != 2 {
+		t.Fatalf("local migration apply = %#v err=%v", applied, err)
 	}
-	assertNoSecretMaterial(t, mustManagedJSON(t, unsupported), managedSecretValue, "deny-value-fixture")
+	migrated := false
+	denied := false
+	for _, item := range applied.Results {
+		if item.Ref == "services/@serviceadmin/runtime/SESSION_SIGNING_KEY" && item.Outcome == "migrated" {
+			migrated = true
+		}
+		if item.Ref == "services/deny/runtime/DENY_ME" && item.Outcome == "policy_denied" {
+			denied = true
+		}
+	}
+	if !migrated || !denied {
+		t.Fatalf("local migration apply results = %#v", applied.Results)
+	}
+	assertNoSecretMaterial(t, mustManagedJSON(t, applied), managedSecretValue, "deny-value-fixture")
 }
 
 func TestMigrationUnsupportedTargetAndLockedFailClosed(t *testing.T) {
@@ -391,7 +415,7 @@ func TestProviderConfigMigrationHTTPContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	applyPayload := readClose(t, applyRes.Body)
-	if applyRes.StatusCode != http.StatusNotImplemented || !bytes.Contains(applyPayload, []byte(`"outcome":"unsupported"`)) || !bytes.Contains(applyPayload, []byte(`"applied":false`)) {
+	if applyRes.StatusCode != http.StatusOK || !bytes.Contains(applyPayload, []byte(`"outcome":"ready"`)) || !bytes.Contains(applyPayload, []byte(`"applied":true`)) {
 		t.Fatalf("provider apply code=%d body=%s", applyRes.StatusCode, applyPayload)
 	}
 	assertNoSecretMaterial(t, applyPayload, providerCredentialValue, "test-token")
@@ -425,7 +449,7 @@ func TestProviderConfigMigrationHTTPContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	migrationApplyPayload := readClose(t, migrationApplyRes.Body)
-	if migrationApplyRes.StatusCode != http.StatusNotImplemented || !bytes.Contains(migrationApplyPayload, []byte(`"outcome":"unsupported"`)) || !bytes.Contains(migrationApplyPayload, []byte(`"applied":false`)) {
+	if migrationApplyRes.StatusCode != http.StatusOK || !bytes.Contains(migrationApplyPayload, []byte(`"applied":true`)) {
 		t.Fatalf("migration apply code=%d body=%s", migrationApplyRes.StatusCode, migrationApplyPayload)
 	}
 	assertNoSecretMaterial(t, migrationApplyPayload, managedSecretValue, "test-token")

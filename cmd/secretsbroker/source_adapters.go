@@ -40,8 +40,9 @@ type sourceConfig struct {
 	AccessKeyIDEnv        string                     `json:"accessKeyIdEnv,omitempty"`
 	SecretAccessKeyEnv    string                     `json:"secretAccessKeyEnv,omitempty"`
 	SessionTokenEnv       string                     `json:"sessionTokenEnv,omitempty"`
-	Token                 string                     `json:"token"`
-	TokenEnv              string                     `json:"tokenEnv"`
+	Token                 string                     `json:"token,omitempty"`
+	TokenEnv              string                     `json:"tokenEnv,omitempty"`
+	CredentialRef         string                     `json:"credentialRef,omitempty"`
 	Refs                  map[string]sourceRefConfig `json:"refs"`
 }
 
@@ -86,6 +87,36 @@ func loadSourceConfig(path string) (sourceConfigFile, error) {
 	}
 	cfg.Security = security
 	return cfg, nil
+}
+
+func saveSourceConfig(path string, cfg sourceConfigFile) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return errors.New("source config path is required")
+	}
+	payload, err := json.MarshalIndent(struct {
+		Sources []sourceConfig `json:"sources"`
+	}{Sources: cfg.Sources}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writePrivateFileAtomically(path, payload)
+}
+
+func providerCredentialEnvName(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	for index, runeValue := range value {
+		if index == 0 && (runeValue < 'A' || runeValue > 'Z') {
+			return false
+		}
+		if (runeValue < 'A' || runeValue > 'Z') && (runeValue < '0' || runeValue > '9') && runeValue != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 func (cfg sourceConfigFile) enabledSources() []sourceConfig {

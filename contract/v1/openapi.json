@@ -7638,7 +7638,7 @@
           "operationId": "postv1_providers_config_apply",
           "method": "POST",
           "path": "/v1/providers/config/apply",
-          "maturity": "planned",
+          "maturity": "validated",
           "classification": "mutation",
           "authenticationRequired": true,
           "policyRequired": true,
@@ -7656,9 +7656,9 @@
             "onepassword-cli"
           ],
           "completionMode": "synchronous",
-          "limitationCode": "configuration_not_persisted",
-          "reasonCode": "planning_only_not_executable",
-          "nextAction": "do_not_enable_apply"
+          "limitationCode": "persisted_source_registry",
+          "reasonCode": "implemented_and_validated",
+          "nextAction": "invoke_with_required_controls"
         }
       }
     },

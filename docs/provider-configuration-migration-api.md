@@ -84,15 +84,14 @@ Request:
 }
 ```
 
-### `POST /v1/providers/config/apply` (planned)
+### `POST /v1/providers/config/apply`
 
-The current handler validates confirmation, operation id and audit reason, but
-it does not persist provider configuration. A fully authorized request therefore
-fails closed with `outcome: "unsupported"`, `applied: false`,
-`unsupportedCapability: "provider_configuration_persistence"`, and
-`nextAction: "implement_persisted_provider_configuration"`. Its manifest
-maturity is `planned`; clients must not enable it as an executable configuration
-action or interpret it as a successful mutation.
+Persists provider configuration into the source registry as metadata-only
+handles. A fully authorized request with `confirm: true`, `operationId`, and an
+audit `reason` writes `sourceId`, kind, address origin, namespaces, and
+`credentialRef` or `tokenEnv`. It never stores plaintext credentials or
+`credentialValue`. Manifest maturity is `validated`; clients may enable the
+configuration action after those controls succeed.
 
 ### `POST /v1/providers/migration/dry-run`
 
@@ -138,12 +137,14 @@ sink cannot accept the record, the response fails closed with
 also marked `audit_unavailable`; provider credentials, source values, and raw
 provider bodies are never returned.
 
-### `POST /v1/providers/migration/apply` (executor-gated; advertised as planned)
+### `POST /v1/providers/migration/apply` (executor-gated)
 
 The handler validates confirmation, operation id, audit reason, selected-source
-inventory, provider readiness, and exact target capability. It then requires an
-explicit in-process executor registration for the selected provider id. Without
-that registration every target fails closed with `outcome: "unsupported"`,
+inventory, provider readiness, and exact target capability. Local encrypted-store
+targets register an in-process copy executor, so local-to-local apply is
+validated after those controls succeed. Remote targets still require an explicit
+in-process executor registration for the selected provider id. Without that
+registration every remote target fails closed with `outcome: "unsupported"`,
 `applied: false`, and `nextAction: "implement_provider_operation_executor"`.
 Vault/OpenBao KV v2 and AWS Secrets Manager sources can register a production
 executor only when the exact source sets `enableMigrationTarget: true` and its

@@ -169,7 +169,6 @@ func (b *localBackend) providerConfigStatusResponse() providerConfigStatusRespon
 
 func providerStatusFromSource(source SourceStatus, backend *localBackend) providerConfigStatus {
 	credential := ""
-	address := ""
 	if source.Kind == "vault" || source.Kind == "openbao" || source.Kind == "bitwarden-bws" || source.Kind == "aws-secrets-manager" {
 		credential = "configured-ref-or-env"
 	}
@@ -182,7 +181,19 @@ func providerStatusFromSource(source SourceStatus, backend *localBackend) provid
 	auditStatus := firstNonEmpty(source.AuditStatus, "audit_available")
 	operations := providerOperationCapabilitiesForSource(source.Kind, source.Lifecycle, auditStatus)
 	operations = backend.connectionProviderOperations(source.SourceID, source.Lifecycle, auditStatus, operations)
-	return providerConfigStatus{ProviderID: source.SourceID, ProviderKind: source.Kind, DisplayName: source.DisplayName, State: source.State, Outcome: source.Outcome, CredentialHandle: credential, Address: address, Namespaces: safeList(source.Namespaces), Capabilities: providerCapabilitiesByKind(source.Kind).Capabilities, Operations: operations, NextAction: source.NextAction, AuditStatus: auditStatus}
+	return providerConfigStatus{ProviderID: source.SourceID, ProviderKind: source.Kind, DisplayName: source.DisplayName, State: source.State, Outcome: source.Outcome, CredentialHandle: credential, Address: providerAddressForSource(source, backend), Namespaces: safeList(source.Namespaces), Capabilities: providerCapabilitiesByKind(source.Kind).Capabilities, Operations: operations, NextAction: source.NextAction, AuditStatus: auditStatus}
+}
+
+func providerAddressForSource(source SourceStatus, backend *localBackend) string {
+	if backend == nil {
+		return ""
+	}
+	for _, configured := range backend.sources.Sources {
+		if configured.SourceID == source.SourceID {
+			return safeProviderAddress(configured.Address)
+		}
+	}
+	return ""
 }
 
 func (b *localBackend) validateProviderConfig(req providerConfigRequest) (providerConfigActionResponse, error) {
@@ -212,12 +223,80 @@ func (b *localBackend) applyProviderConfig(req providerConfigRequest) (providerC
 		res.NextAction = "confirm_with_operation_id_and_audit_reason"
 		return b.finalizeProviderConfigAudit("provider_config_apply", req, res, errPolicyDenied)
 	}
-	res.Outcome = "unsupported"
-	res.Applied = false
+	if b.locked() {
+		res.Outcome = "locked"
+		res.Applied = false
+		res.NextAction = "unlock_broker"
+		return b.finalizeProviderConfigAudit("provider_config_apply", req, res, errLocked)
+	}
+	if strings.EqualFold(strings.TrimSpace(req.ProviderID), "local") || strings.EqualFold(strings.TrimSpace(req.ProviderKind), "local-encrypted-store") {
+		res.Outcome = "invalid_ref"
+		res.Applied = false
+		res.NextAction = "select_supported_provider"
+		return b.finalizeProviderConfigAudit("provider_config_apply", req, res, errInvalidRef)
+	}
+	source := providerSourceFromValidatedRequest(req, status)
+	if err := b.persistProviderSource(source); err != nil {
+		res.Outcome = "degraded"
+		res.Applied = false
+		res.NextAction = "retry_or_inspect_source"
+		return b.finalizeProviderConfigAudit("provider_config_apply", req, res, errBackendDegraded)
+	}
+	res.Applied = true
 	res.RequiresConfirmation = false
-	res.NextAction = "implement_persisted_provider_configuration"
-	res.UnsupportedCapability = "provider_configuration_persistence"
-	return b.finalizeProviderConfigAudit("provider_config_apply", req, res, errUnsupportedProvider)
+	res.Outcome = "ready"
+	res.NextAction = "inspect_provider_status"
+	res.Provider = b.lookupProvider(req.ProviderID)
+	return b.finalizeProviderConfigAudit("provider_config_apply", req, res, nil)
+}
+
+func providerSourceFromValidatedRequest(req providerConfigRequest, status providerConfigStatus) sourceConfig {
+	source := sourceConfig{
+		SourceID:      strings.TrimSpace(req.ProviderID),
+		Kind:          strings.TrimSpace(req.ProviderKind),
+		DisplayName:   firstNonEmpty(req.DisplayName, firstNonEmpty(status.DisplayName, req.ProviderKind)),
+		Enabled:       true,
+		Address:       status.Address,
+		Namespaces:    status.Namespaces,
+		CredentialRef: strings.TrimSpace(req.CredentialRef),
+	}
+	if providerCredentialEnvName(req.CredentialRef) {
+		source.TokenEnv = strings.TrimSpace(req.CredentialRef)
+		source.CredentialRef = ""
+	}
+	return source
+}
+
+func (b *localBackend) persistProviderSource(source sourceConfig) error {
+	if b == nil {
+		return errBackendDegraded
+	}
+	path := strings.TrimSpace(b.sourcesPath)
+	if path == "" {
+		path = defaultSourcesPath(b.storePath)
+		b.sourcesPath = path
+	}
+	b.sourcesMu.Lock()
+	defer b.sourcesMu.Unlock()
+	current := b.sources
+	replaced := false
+	for index, existing := range current.Sources {
+		if existing.SourceID == source.SourceID {
+			current.Sources[index] = source
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		current.Sources = append(current.Sources, source)
+	}
+	if err := saveSourceConfig(path, current); err != nil {
+		return err
+	}
+	current.Security = inspectSourceConfigSecurity(path)
+	b.sources = current
+	b.configureProviderMigrationExecutors()
+	return nil
 }
 
 func (b *localBackend) finalizeProviderConfigAudit(operation string, req providerConfigRequest, res providerConfigActionResponse, operationErr error) (providerConfigActionResponse, error) {

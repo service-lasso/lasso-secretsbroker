@@ -68,6 +68,9 @@ func defaultSourceRegistry(backend *localBackend) SourceRegistry {
 		AffectedServices: []string{},
 	}
 	localStatus.Operations = providerOperationCapabilitiesForSource(localStatus.Kind, localStatus.Lifecycle, localStatus.AuditStatus)
+	if backend != nil {
+		localStatus.Operations = backend.connectionProviderOperations(localStatus.SourceID, localStatus.Lifecycle, localStatus.AuditStatus, localStatus.Operations)
+	}
 	sources := []SourceStatus{localStatus}
 	if backend != nil {
 		for _, source := range backend.sources.Sources {
