@@ -63,6 +63,8 @@ type localBackend struct {
 	providerMigrationMu      sync.Mutex
 	providerExecutorMu       sync.RWMutex
 	providerExecutors        map[string]providerMigrationExecutor
+	sourcesPath              string
+	sourcesMu                sync.Mutex
 	wrapperProvider          keyWrapperProvider
 	wrapperContextOverride   *wrapperContext
 	eventMu                  sync.RWMutex
@@ -266,14 +268,19 @@ type auditEvent struct {
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
 	stateRoot := filepath.Dir(storePath)
-	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), wrapperPath: filepath.Join(stateRoot, "secretsbroker-wrapper.json"), backupRoot: filepath.Join(stateRoot, "backups"), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}, telemetry: newTelemetryRequestRecorder(50), seenLaunchLeaseJTI: map[string]time.Time{}, providerExecutors: map[string]providerMigrationExecutor{}}
+	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), wrapperPath: filepath.Join(stateRoot, "secretsbroker-wrapper.json"), backupRoot: filepath.Join(stateRoot, "backups"), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}, telemetry: newTelemetryRequestRecorder(50), seenLaunchLeaseJTI: map[string]time.Time{}, providerExecutors: map[string]providerMigrationExecutor{}, sourcesPath: defaultSourcesPath(storePath)}
 	backend.lockouts = newLockoutStore(func() time.Time {
 		if backend.now == nil {
 			return time.Now().UTC()
 		}
 		return backend.now()
 	})
+	backend.configureProviderMigrationExecutors()
 	return backend
+}
+
+func defaultSourcesPath(storePath string) string {
+	return filepath.Join(filepath.Dir(storePath), "sources.json")
 }
 
 func defaultStorePath() string { return filepath.Join("data", "secretsbroker-store.json") }

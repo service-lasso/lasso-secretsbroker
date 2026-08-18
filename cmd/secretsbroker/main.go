@@ -415,11 +415,16 @@ func serve(args []string) error {
 	}
 	backend.eventPath = eventsPathValue
 	backend.launchIdentitySigningKey = strings.TrimSpace(*launchIdentitySigningKey)
-	sources, err := loadSourceConfig(*sourcesPath)
+	sourcesFile := strings.TrimSpace(*sourcesPath)
+	if sourcesFile == "" {
+		sourcesFile = defaultSourcesPath(*storePath)
+	}
+	sources, err := loadSourceConfig(sourcesFile)
 	if err != nil {
 		return err
 	}
 	backend.sources = sources
+	backend.sourcesPath = sourcesFile
 	backend.configureProviderMigrationExecutors()
 
 	binding, err := resolveServeTransport(serveTransportOptions{

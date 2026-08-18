@@ -240,10 +240,18 @@ func (b *localBackend) executeProviderMigration(req migrationPlanRequest, target
 }
 
 func (b *localBackend) persistProviderMigrationOperation(store *localStoreFile, operation *providerMigrationOperation) error {
+	current, err := b.loadStore()
+	if err != nil {
+		return err
+	}
 	operation.UpdatedAt = b.now()
-	store.Migrations[operation.OperationID] = *operation
-	store.UpdatedAt = operation.UpdatedAt
-	return b.saveStore(*store)
+	if current.Migrations == nil {
+		current.Migrations = map[string]providerMigrationOperation{}
+	}
+	current.Migrations[operation.OperationID] = *operation
+	current.UpdatedAt = operation.UpdatedAt
+	*store = current
+	return b.saveStore(current)
 }
 
 func (b *localBackend) localMigrationSourceValue(store localStoreFile, sourceProviderID, ref string) (string, string) {

@@ -151,7 +151,7 @@ func defaultOperationManifest() []OperationCapability {
 		manifestOperation(http.MethodPost, "/v1/management/lifecycle/key/rotate", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "broker_generated_key_and_wrapper_refresh"),
 		manifestOperation(http.MethodPost, "/v1/management/lockouts/clear", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, nil, "scoped_lockout_only"),
 		manifestOperation(http.MethodPost, "/v1/providers/config/validate", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "configuration_validation_only"),
-		manifestOperation(http.MethodPost, "/v1/providers/config/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "configuration_not_persisted"),
+		manifestOperation(http.MethodPost, "/v1/providers/config/apply", OperationMaturityValidated, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "persisted_source_registry"),
 		manifestOperation(http.MethodPost, "/v1/providers/migration/dry-run", OperationMaturityDryRun, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "local_target_only"),
 		manifestOperation(http.MethodPost, "/v1/providers/migration/apply", OperationMaturityPlanned, OperationClassificationMutation, true, true, true, OperationScopeMixed, providers, "registered_provider_executor_required"),
 		manifestOperation(http.MethodGet, "/v1/management/secrets", OperationMaturityReadOnly, OperationClassificationRead, true, false, false, OperationScopeMixed, providers, "metadata_only"),

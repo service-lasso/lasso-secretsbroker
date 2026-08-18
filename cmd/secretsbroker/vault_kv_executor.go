@@ -37,6 +37,7 @@ func (b *localBackend) configureProviderMigrationExecutors() {
 	if b == nil {
 		return
 	}
+	b.registerLocalStoreMigrationExecutor()
 	for _, source := range b.sources.enabledSources() {
 		if !source.EnableMigrationTarget {
 			continue
