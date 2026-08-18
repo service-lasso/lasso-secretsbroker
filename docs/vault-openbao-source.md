@@ -59,14 +59,18 @@ Vault/OpenBao capability/status output follows the shared adapter contract in `d
 - A disabled or incomplete connection remains planned/unsupported. The
   provider-family capability is also still planning metadata and never enables
   apply by itself.
-- General write/update, rotate/reset and policy apply remain unavailable or
-  planned; the executable mutation is limited to verified KV v2 migration.
+- General write/update, rotate/reset and policy apply on the management
+  dry-run/apply routes remain local-store-only or planned.
+- Operator create/read/update/delete of secret *data* uses the OpenBao-compatible
+  KV v2 facade (`/v1/kv/*`). That facade writes the local encrypted store by
+  default and proxies the same JSON to a configured `vault` or `openbao` source
+  when `?source=<sourceId>` is set. See `docs/kv-v2.md`.
 - `value-search` is intentionally not advertised for Vault/OpenBao.
 
 Service Admin must use the connection-scoped operation manifest. Vault/OpenBao
-read/reveal are validated. Migration apply is validated only on an explicitly
-enabled and fully configured connection; all other remote apply operations are
-unavailable or planned.
+read/reveal are validated. KV v2 data/metadata/delete/undelete are validated for
+the local store and for configured Vault/OpenBao sources. Migration apply is
+validated only on an explicitly enabled and fully configured connection.
 
 ## Auth and backend state mapping
 

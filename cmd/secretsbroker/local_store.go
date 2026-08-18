@@ -109,6 +109,7 @@ type secretEntry struct {
 	Ref      string         `json:"ref"`
 	Metadata SecretMetadata `json:"metadata"`
 	Payload  secretPayload  `json:"payload"`
+	KV       *kvSecretState `json:"kv,omitempty"`
 }
 
 type SecretMetadata struct {

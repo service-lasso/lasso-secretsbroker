@@ -248,6 +248,10 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/secrets",
 			"POST /v1/writeback",
 			"POST /v1/resolve",
+			"GET|POST|PATCH /v1/kv/data/{path}",
+			"GET /v1/kv/metadata/{path}",
+			"POST /v1/kv/delete/{path}",
+			"POST /v1/kv/undelete/{path}",
 			"GET /v1/provisioning/status",
 			"POST /v1/provisioning/operations/plan",
 			"POST /v1/provisioning/operations/apply",
@@ -294,6 +298,7 @@ func defaultCapabilities() CapabilitiesResponse {
 			"versioned-operation-capability-manifest",
 			"local-encrypted-store",
 			"batched-resolve",
+			"openbao-compatible-kv-v2",
 			"typed-errors",
 			"audit-redaction",
 			"source-status",
@@ -498,6 +503,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 			security.audit = backend.audit
 		}
 		registerLocalStoreHandlers(mux, backend, security)
+		registerKVHandlers(mux, backend, security)
 		registerSourceRegistryHandlers(mux, backend)
 		registerSecretsManagementHandlers(mux, backend, security)
 		registerDecommissionHandlers(mux, backend, security)
