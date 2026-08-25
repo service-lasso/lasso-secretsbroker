@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -16,6 +17,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestWindowsDPAPIWrapperUsesPrivateCurrentUserCustody(t *testing.T) {
@@ -122,6 +125,229 @@ func TestWindowsDPAPIWrapperRejectsBroadACLAndReparseTraversal(t *testing.T) {
 	}
 	if err := provider.ValidatePath(filepath.Join(link, "wrapper.json"), false); !errors.Is(err, errWrapperAccess) {
 		t.Fatalf("reparse traversal validation error = %v", err)
+	}
+}
+
+func TestWindowsDPAPIWrapperConvergesOwnerACLAndIsIdempotent(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "converge")
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "wrapper.json")
+	if err := os.WriteFile(path, []byte("ciphertext-only-placeholder"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	provider := windowsDPAPIKeyWrapperProvider{}
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := provider.SecurePath(directory, true); err != nil {
+			t.Fatalf("secure directory attempt %d: %v", attempt+1, err)
+		}
+		if err := provider.SecurePath(path, false); err != nil {
+			t.Fatalf("secure wrapper attempt %d: %v", attempt+1, err)
+		}
+	}
+	userSID, err := currentWindowsUserSID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []struct {
+		path      string
+		directory bool
+	}{{directory, true}, {path, false}} {
+		sd, err := windows.GetNamedSecurityInfo(target.path, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION)
+		if err != nil {
+			t.Fatal(err)
+		}
+		owner, _, err := sd.Owner()
+		if err != nil || owner == nil || !owner.Equals(userSID) {
+			t.Fatalf("owner did not converge for %s", filepath.Base(target.path))
+		}
+		if err := provider.ValidatePath(target.path, target.directory); err != nil {
+			t.Fatalf("validate %s: %v", filepath.Base(target.path), err)
+		}
+	}
+}
+
+func TestWindowsDPAPIWrapperRequestsWrongOwnerConvergence(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "wrapper.json")
+	if err := os.WriteFile(path, []byte("ciphertext-only-placeholder"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	userSID, err := currentWindowsUserSID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongOwnerSD, err := windows.SecurityDescriptorFromString(fmt.Sprintf("O:SYD:P(A;;FA;;;SY)(A;;FA;;;%s)", userSID.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	convergedSD, err := windows.SecurityDescriptorFromString(fmt.Sprintf("O:%sD:P(A;;FA;;;SY)(A;;FA;;;%s)", userSID.String(), userSID.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldGet, oldSet := getWindowsNamedSecurityInfo, setWindowsNamedSecurityInfo
+	t.Cleanup(func() {
+		getWindowsNamedSecurityInfo = oldGet
+		setWindowsNamedSecurityInfo = oldSet
+	})
+	state := wrongOwnerSD
+	setCalls := 0
+	getWindowsNamedSecurityInfo = func(string, windows.SE_OBJECT_TYPE, windows.SECURITY_INFORMATION) (*windows.SECURITY_DESCRIPTOR, error) {
+		return state, nil
+	}
+	setWindowsNamedSecurityInfo = func(_ string, _ windows.SE_OBJECT_TYPE, information windows.SECURITY_INFORMATION, owner, _ *windows.SID, dacl, _ *windows.ACL) error {
+		setCalls++
+		switch setCalls {
+		case 1:
+			if information != windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION || owner != nil || dacl == nil {
+				t.Fatal("secure path did not request a protected private DACL first")
+			}
+		case 2:
+			if information != windows.OWNER_SECURITY_INFORMATION || owner == nil || !owner.Equals(userSID) || dacl != nil {
+				t.Fatal("secure path did not request current-user ownership after tightening the DACL")
+			}
+			state = convergedSD
+		default:
+			t.Fatalf("unexpected security convergence call %d", setCalls)
+		}
+		return nil
+	}
+	if err := (windowsDPAPIKeyWrapperProvider{}).SecurePath(path, false); err != nil {
+		t.Fatal(err)
+	}
+	if setCalls != 2 {
+		t.Fatalf("security convergence calls = %d, want 2", setCalls)
+	}
+}
+
+func TestWindowsDPAPIWrapperRejectsPartialControlAndRepairsIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "wrapper.json")
+	if err := os.WriteFile(path, []byte("ciphertext-only-placeholder"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	userSID, err := currentWindowsUserSID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sd, err := windows.SecurityDescriptorFromString(fmt.Sprintf("O:%sD:P(A;;FA;;;SY)(A;;FR;;;%s)", userSID.String(), userSID.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dacl, _, err := sd.DACL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil); err != nil {
+		t.Fatal(err)
+	}
+	provider := windowsDPAPIKeyWrapperProvider{}
+	if err := provider.ValidatePath(path, false); !errors.Is(err, errWrapperAccess) {
+		t.Fatalf("partial-control ACL validation error = %v", err)
+	}
+	if err := provider.SecurePath(path, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := provider.ValidatePath(path, false); err != nil {
+		t.Fatalf("repaired ACL validation: %v", err)
+	}
+}
+
+func TestWindowsDPAPIWrapperSecurityFailurePreservesCiphertext(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "wrapper.json")
+	ciphertext := []byte("ciphertext-only-placeholder")
+	if err := os.WriteFile(path, ciphertext, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldSet := setWindowsNamedSecurityInfo
+	t.Cleanup(func() { setWindowsNamedSecurityInfo = oldSet })
+	setWindowsNamedSecurityInfo = func(string, windows.SE_OBJECT_TYPE, windows.SECURITY_INFORMATION, *windows.SID, *windows.SID, *windows.ACL, *windows.ACL) error {
+		return windows.ERROR_ACCESS_DENIED
+	}
+	if err := (windowsDPAPIKeyWrapperProvider{}).SecurePath(path, false); !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+		t.Fatalf("security failure = %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(after, ciphertext) {
+		t.Fatal("security failure changed wrapper ciphertext")
+	}
+}
+
+func TestWindowsDPAPIWrapperOwnerFailureAfterDACLTighteningPreservesCiphertextAndRetryHeals(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "wrapper.json")
+	ciphertext := []byte("ciphertext-only-placeholder")
+	if err := os.WriteFile(path, ciphertext, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldSet := setWindowsNamedSecurityInfo
+	t.Cleanup(func() { setWindowsNamedSecurityInfo = oldSet })
+	setCalls := 0
+	setWindowsNamedSecurityInfo = func(path string, objectType windows.SE_OBJECT_TYPE, information windows.SECURITY_INFORMATION, owner, group *windows.SID, dacl, sacl *windows.ACL) error {
+		setCalls++
+		if setCalls == 2 {
+			if information != windows.OWNER_SECURITY_INFORMATION {
+				t.Fatalf("second security update = %#x, want owner", information)
+			}
+			return windows.ERROR_ACCESS_DENIED
+		}
+		return oldSet(path, objectType, information, owner, group, dacl, sacl)
+	}
+	provider := windowsDPAPIKeyWrapperProvider{}
+	if err := provider.SecurePath(path, false); !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+		t.Fatalf("owner convergence failure = %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(after, ciphertext) {
+		t.Fatal("partial security convergence changed wrapper ciphertext")
+	}
+
+	setWindowsNamedSecurityInfo = oldSet
+	if err := provider.SecurePath(path, false); err != nil {
+		t.Fatalf("security convergence retry: %v", err)
+	}
+	if err := provider.ValidatePath(path, false); err != nil {
+		t.Fatalf("validate after retry: %v", err)
+	}
+}
+
+func TestWindowsDPAPIWrapperDeduplicatesLocalSystemAndRejectsUnsafeACEs(t *testing.T) {
+	systemSID, err := windows.StringToSid("S-1-5-18")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sd, err := windowsPrivateSecurityDescriptor(systemSID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateWindowsPrivateSecurityDescriptor(sd, systemSID, false); err != nil {
+		t.Fatalf("LocalSystem descriptor: %v", err)
+	}
+	dacl, _, err := sd.DACL()
+	if err != nil || dacl == nil || dacl.AceCount != 1 {
+		t.Fatalf("LocalSystem ACE count = %v, err = %v", dacl, err)
+	}
+
+	userSID, err := currentWindowsUserSID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsafeDescriptors := []string{
+		fmt.Sprintf("O:%sD:P(A;ID;FA;;;SY)(A;ID;FA;;;%s)", userSID.String(), userSID.String()),
+		fmt.Sprintf("O:%sD:P(A;;FA;;;SY)(A;;FA;;;%s)(A;;FA;;;BU)", userSID.String(), userSID.String()),
+	}
+	for _, sddl := range unsafeDescriptors {
+		unsafeSD, err := windows.SecurityDescriptorFromString(sddl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := validateWindowsPrivateSecurityDescriptor(unsafeSD, userSID, false); !errors.Is(err, errWrapperAccess) {
+			t.Fatalf("unsafe descriptor validation error = %v", err)
+		}
 	}
 }
 

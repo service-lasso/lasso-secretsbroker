@@ -15,7 +15,14 @@ import (
 
 const windowsDPAPIAlgorithm = "windows-dpapi-current-user"
 
+const windowsFileAllAccess = windows.ACCESS_MASK(windows.STANDARD_RIGHTS_REQUIRED | windows.SYNCHRONIZE | 0x1ff)
+
 var windowsDPAPIEntropy = []byte("service-lasso:@secretsbroker:master-key-wrapper:v2")
+
+var (
+	getWindowsNamedSecurityInfo = windows.GetNamedSecurityInfo
+	setWindowsNamedSecurityInfo = windows.SetNamedSecurityInfo
+)
 
 type windowsDPAPIKeyWrapperProvider struct{}
 
@@ -84,12 +91,7 @@ func (windowsDPAPIKeyWrapperProvider) SecurePath(path string, directory bool) er
 	if err != nil {
 		return err
 	}
-	inheritance := ""
-	if directory {
-		inheritance = "OICI"
-	}
-	sddl := fmt.Sprintf("O:%sD:P(A;%s;FA;;;SY)(A;%s;FA;;;%s)", userSID.String(), inheritance, inheritance, userSID.String())
-	sd, err := windows.SecurityDescriptorFromString(sddl)
+	sd, err := windowsPrivateSecurityDescriptor(userSID, directory)
 	if err != nil {
 		return err
 	}
@@ -97,7 +99,29 @@ func (windowsDPAPIKeyWrapperProvider) SecurePath(path string, directory bool) er
 	if err != nil {
 		return err
 	}
-	if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil); err != nil {
+	if err := setWindowsNamedSecurityInfo(
+		path,
+		windows.SE_FILE_OBJECT,
+		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION,
+		nil,
+		nil,
+		dacl,
+		nil,
+	); err != nil {
+		return err
+	}
+	// Tighten the DACL first. Besides minimizing the failure state, this gives
+	// the current user WRITE_OWNER before correcting an elevated/default group
+	// owner on existing wrapper paths.
+	if err := setWindowsNamedSecurityInfo(
+		path,
+		windows.SE_FILE_OBJECT,
+		windows.OWNER_SECURITY_INFORMATION,
+		userSID,
+		nil,
+		nil,
+		nil,
+	); err != nil {
 		return err
 	}
 	return windowsDPAPIKeyWrapperProvider{}.ValidatePath(path, directory)
@@ -111,11 +135,37 @@ func (windowsDPAPIKeyWrapperProvider) ValidatePath(path string, directory bool) 
 	if err != nil {
 		return err
 	}
-	systemSID, err := windows.StringToSid("S-1-5-18")
+	sd, err := getWindowsNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.OWNER_SECURITY_INFORMATION)
 	if err != nil {
 		return err
 	}
-	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.OWNER_SECURITY_INFORMATION)
+	return validateWindowsPrivateSecurityDescriptor(sd, userSID, directory)
+}
+
+func windowsPrivateSecurityDescriptor(userSID *windows.SID, directory bool) (*windows.SECURITY_DESCRIPTOR, error) {
+	if userSID == nil {
+		return nil, errWrapperUnavailable
+	}
+	systemSID, err := windows.StringToSid("S-1-5-18")
+	if err != nil {
+		return nil, err
+	}
+	inheritance := ""
+	if directory {
+		inheritance = "OICI"
+	}
+	aces := []string{fmt.Sprintf("(A;%s;FA;;;SY)", inheritance)}
+	if !userSID.Equals(systemSID) {
+		aces = append(aces, fmt.Sprintf("(A;%s;FA;;;%s)", inheritance, userSID.String()))
+	}
+	return windows.SecurityDescriptorFromString(fmt.Sprintf("O:%sD:P%s", userSID.String(), strings.Join(aces, "")))
+}
+
+func validateWindowsPrivateSecurityDescriptor(sd *windows.SECURITY_DESCRIPTOR, userSID *windows.SID, directory bool) error {
+	if sd == nil || userSID == nil {
+		return errWrapperAccess
+	}
+	systemSID, err := windows.StringToSid("S-1-5-18")
 	if err != nil {
 		return err
 	}
@@ -128,17 +178,31 @@ func (windowsDPAPIKeyWrapperProvider) ValidatePath(path string, directory bool) 
 		return errWrapperAccess
 	}
 	dacl, _, err := sd.DACL()
-	if err != nil || dacl == nil || dacl.AceCount != 2 {
+	expectedACECount := uint16(2)
+	if userSID.Equals(systemSID) {
+		expectedACECount = 1
+	}
+	if err != nil || dacl == nil || dacl.AceCount != expectedACECount {
 		return errWrapperAccess
 	}
 	seen := map[string]bool{}
+	expectedFlags := uint8(0)
+	if directory {
+		expectedFlags = windows.OBJECT_INHERIT_ACE | windows.CONTAINER_INHERIT_ACE
+	}
 	for index := uint32(0); index < uint32(dacl.AceCount); index++ {
 		var ace *windows.ACCESS_ALLOWED_ACE
 		if err := windows.GetAce(dacl, index, &ace); err != nil || ace == nil || ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE {
 			return errWrapperAccess
 		}
+		if ace.Mask != windowsFileAllAccess || ace.Header.AceFlags != expectedFlags || ace.Header.AceFlags&windows.INHERITED_ACE != 0 {
+			return errWrapperAccess
+		}
 		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
 		if !sid.Equals(userSID) && !sid.Equals(systemSID) {
+			return errWrapperAccess
+		}
+		if seen[sid.String()] {
 			return errWrapperAccess
 		}
 		seen[sid.String()] = true
