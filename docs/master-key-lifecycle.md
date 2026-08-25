@@ -89,6 +89,8 @@ secretsbroker key rewrap `
 
 Re-wraps the same portable key for the current OS/user/machine context. Re-wrap is auditable and fail-closed: unsupported wrapper providers, unreadable wrappers, wrong keys, corrupted ciphertext, or store verification failures do not write a new wrapper.
 
+On Windows, wrapper directories and files converge to current-user ownership and a protected DACL containing exactly current-user and LocalSystem full-control entries. Directory entries are inheritable by child files and directories; wrapper-file entries are not. First enrollment, unlock after upgrade, and re-wrap repair safe owner/default-ACL drift before reading wrapper ciphertext. Reparse traversal, ownership changes that the OS refuses, inherited or extra entries, partial-control entries, and post-change validation failures remain fail-closed.
+
 ### OS wrapper status
 
 ```powershell

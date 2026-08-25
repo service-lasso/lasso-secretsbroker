@@ -467,10 +467,21 @@ func wrapperStatusWithProvider(path string, ctx wrapperContext, provider keyWrap
 	if !ctx.Supported {
 		return wrapperStatusDetail{Available: false, Supported: false, WrapperKind: ctx.Kind, OS: ctx.OS, State: "degraded", NextAction: "use_portable_key_unlock", FailureReason: ctx.Unsupported}
 	}
-	wrapper, err := readLocalKeyWrapper(path)
-	if errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return wrapperStatusDetail{Available: false, Supported: true, WrapperKind: ctx.Kind, OS: ctx.OS, User: ctx.User, Machine: ctx.Machine, State: "locked", NextAction: "import_portable_key"}
+	} else if err != nil {
+		return wrapperStatusDetail{Available: true, Supported: true, WrapperKind: ctx.Kind, OS: ctx.OS, User: ctx.User, Machine: ctx.Machine, State: "degraded", NextAction: "import_portable_key", FailureReason: "wrapper metadata could not be read"}
 	}
+	// Converge owner and DACL state before reading even safe wrapper metadata.
+	// This prevents status inspection from bypassing upgrade repair or exposing
+	// metadata from a path whose private-custody state cannot be proven.
+	if err := provider.SecurePath(filepath.Dir(path), true); err != nil {
+		return wrapperStatusDetail{Available: true, Supported: true, WrapperKind: ctx.Kind, OS: ctx.OS, User: ctx.User, Machine: ctx.Machine, State: "degraded", NextAction: "import_portable_key", FailureReason: wrapperFailureReason(errWrapperAccess)}
+	}
+	if err := provider.SecurePath(path, false); err != nil {
+		return wrapperStatusDetail{Available: true, Supported: true, WrapperKind: ctx.Kind, OS: ctx.OS, User: ctx.User, Machine: ctx.Machine, State: "degraded", NextAction: "import_portable_key", FailureReason: wrapperFailureReason(errWrapperAccess)}
+	}
+	wrapper, err := readLocalKeyWrapper(path)
 	if err != nil {
 		return wrapperStatusDetail{Available: true, Supported: true, WrapperKind: ctx.Kind, OS: ctx.OS, User: ctx.User, Machine: ctx.Machine, State: "degraded", NextAction: "import_portable_key", FailureReason: "wrapper metadata could not be read"}
 	}
@@ -529,7 +540,11 @@ func wrapMasterKeyWithProvider(path, masterKey string, ctx wrapperContext, now t
 	defer zeroBytes(protected)
 	createdAt := now
 	if _, statErr := os.Stat(path); statErr == nil {
-		if err := provider.ValidatePath(path, false); err != nil {
+		// Existing wrappers can retain an inherited DACL or a different default
+		// owner after an OS/toolchain upgrade. Converge the metadata before
+		// reading the wrapper, then fail closed if the resulting state is not
+		// exactly private.
+		if err := provider.SecurePath(path, false); err != nil {
 			return localKeyWrapper{}, errWrapperAccess
 		}
 		if existing, readErr := readLocalKeyWrapper(path); readErr == nil && !existing.CreatedAt.IsZero() {
@@ -560,10 +575,12 @@ func unwrapMasterKeyWithProvider(path string, ctx wrapperContext, provider keyWr
 	if _, err := os.Stat(path); err != nil {
 		return nil, err
 	}
-	if err := provider.ValidatePath(filepath.Dir(path), true); err != nil {
+	// SecurePath is idempotent and repairs legacy/default ownership and ACL
+	// metadata without reading or rewriting wrapper ciphertext.
+	if err := provider.SecurePath(filepath.Dir(path), true); err != nil {
 		return nil, errWrapperAccess
 	}
-	if err := provider.ValidatePath(path, false); err != nil {
+	if err := provider.SecurePath(path, false); err != nil {
 		return nil, errWrapperAccess
 	}
 	wrapper, err := readLocalKeyWrapper(path)

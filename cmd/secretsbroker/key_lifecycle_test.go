@@ -27,6 +27,41 @@ func (testKeyWrapperProvider) Unprotect(value []byte) ([]byte, error) {
 func (testKeyWrapperProvider) SecurePath(string, bool) error   { return nil }
 func (testKeyWrapperProvider) ValidatePath(string, bool) error { return nil }
 
+type orderedKeyWrapperProvider struct {
+	calls        []string
+	secureCalls  int
+	failSecureAt int
+}
+
+func (p *orderedKeyWrapperProvider) Algorithm() string { return testKeyWrapperProvider{}.Algorithm() }
+func (p *orderedKeyWrapperProvider) Protect(value []byte) ([]byte, error) {
+	return testKeyWrapperProvider{}.Protect(value)
+}
+func (p *orderedKeyWrapperProvider) Unprotect(value []byte) ([]byte, error) {
+	p.calls = append(p.calls, "unprotect")
+	return testKeyWrapperProvider{}.Unprotect(value)
+}
+func (p *orderedKeyWrapperProvider) SecurePath(_ string, directory bool) error {
+	p.secureCalls++
+	kind := "file"
+	if directory {
+		kind = "directory"
+	}
+	p.calls = append(p.calls, "secure:"+kind)
+	if p.failSecureAt > 0 && p.secureCalls == p.failSecureAt {
+		return errWrapperAccess
+	}
+	return nil
+}
+func (p *orderedKeyWrapperProvider) ValidatePath(_ string, directory bool) error {
+	kind := "file"
+	if directory {
+		kind = "directory"
+	}
+	p.calls = append(p.calls, "validate:"+kind)
+	return nil
+}
+
 func testWrapperContext() wrapperContext {
 	return wrapperContext{OS: "test", User: "test-user", Machine: "test-machine", Kind: "test-user-scope", Supported: true}
 }
@@ -278,5 +313,42 @@ func TestWrapperStatusReportsRecoveryGuidanceWithoutKeyMaterial(t *testing.T) {
 	unsupported := wrapperStatusResponse(missingPath, wrapperContextFor("plan9"))
 	if unsupported.Outcome != "degraded" || unsupported.Wrapper == nil || unsupported.Wrapper.Supported || unsupported.Wrapper.NextAction != "use_portable_key_unlock" {
 		t.Fatalf("unsupported wrapper status = %#v", unsupported)
+	}
+}
+
+func TestWrapperStatusConvergesSecurityBeforeReadingMetadata(t *testing.T) {
+	key := lifecycleTestKey(44)
+	path := filepath.Join(t.TempDir(), "wrapper.json")
+	ctx := testWrapperContext()
+	if _, err := wrapMasterKeyWithProvider(path, key, ctx, time.Now(), testKeyWrapperProvider{}); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := &orderedKeyWrapperProvider{}
+	detail := wrapperStatusWithProvider(path, ctx, provider)
+	if detail.State != "ready" {
+		t.Fatalf("wrapper status = %#v", detail)
+	}
+	if len(provider.calls) < 3 || provider.calls[0] != "secure:directory" || provider.calls[1] != "secure:file" {
+		t.Fatalf("wrapper status call order = %#v", provider.calls)
+	}
+	unprotectIndex := -1
+	for index, call := range provider.calls {
+		if call == "unprotect" {
+			unprotectIndex = index
+			break
+		}
+	}
+	if unprotectIndex < 2 {
+		t.Fatalf("wrapper was unprotected before security convergence: %#v", provider.calls)
+	}
+
+	failing := &orderedKeyWrapperProvider{failSecureAt: 1}
+	degraded := wrapperStatusWithProvider(path, ctx, failing)
+	if degraded.State != "degraded" || degraded.KeyID != "" || degraded.FailureReason != wrapperFailureReason(errWrapperAccess) {
+		t.Fatalf("failed security status = %#v", degraded)
+	}
+	if len(failing.calls) != 1 || failing.calls[0] != "secure:directory" {
+		t.Fatalf("failed security call order = %#v", failing.calls)
 	}
 }
