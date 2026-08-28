@@ -17,6 +17,7 @@ try {
   $manifestPaths = @('service.json') + (Get-ChildItem -Path (Join-Path $root 'services') -Recurse -Filter 'service.json' | ForEach-Object {
     $_.FullName.Substring($root.Length + 1)
   })
+  $supportedActionModes = @('built-in', 'command', 'workflow', 'handler')
   foreach ($manifestPath in $manifestPaths) {
     $manifest = Get-Content (Join-Path $root $manifestPath) -Raw | ConvertFrom-Json
     foreach ($legacyField in @('ports', 'urls', 'portmapping')) {
@@ -26,6 +27,12 @@ try {
     }
     if ($manifestPath -in @('service.json', 'services\@nginx\service.json', 'services\@serviceadmin\service.json', 'services\@traefik\service.json', 'services\echo-service\service.json') -and -not $manifest.endpoints) {
       throw "$manifestPath is missing endpoints[]"
+    }
+    foreach ($action in @($manifest.actions.PSObject.Properties)) {
+      $mode = $action.Value.mode
+      if ($mode -and $mode -notin $supportedActionModes) {
+        throw "$manifestPath action $($action.Name) uses unsupported mode $mode"
+      }
     }
   }
 

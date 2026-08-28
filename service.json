@@ -107,43 +107,6 @@
       }
     }
   },
-  "actions": {
-    "install": {
-      "description": "Acquire or unpack the packaged @secretsbroker runtime artifact.",
-      "mode": "converge-install",
-      "idempotent": true
-    },
-    "config": {
-      "description": "Materialize deployment-local @secretsbroker config and env values.",
-      "mode": "converge-config",
-      "idempotent": true
-    },
-    "update": {
-      "description": "Apply a newer @secretsbroker release artifact and reconcile update-time changes before restart.",
-      "mode": "converge-update",
-      "idempotent": true
-    },
-    "start": {
-      "description": "Start the @secretsbroker daemon.",
-      "mode": "runtime-start",
-      "idempotent": true
-    },
-    "stop": {
-      "description": "Stop the @secretsbroker daemon gracefully.",
-      "mode": "runtime-stop",
-      "idempotent": true
-    },
-    "restart": {
-      "description": "Restart @secretsbroker after config or update changes.",
-      "mode": "runtime-restart",
-      "idempotent": false
-    },
-    "rollback": {
-      "description": "Restore the previously deployed @secretsbroker artifact if an update fails validation.",
-      "mode": "state-rollback",
-      "idempotent": false
-    }
-  },
   "execconfig": {
     "serviceorder": 5,
     "execcwd": ".",
