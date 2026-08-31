@@ -1,11 +1,11 @@
 # Secrets Broker Threat Model and Hardening Pass
 
-Status: baseline hardening pass
-Issue: #25
+Status: Release 1 production-hardening candidate
+Issue: #169
 
 ## Scope
 
-This document covers the current `@secretsbroker` baseline: local encrypted store, portable master key, loopback HTTP API, source adapters, write-back capture, audit events, backup/restore, and UI-facing diagnostics.
+This document covers the current `@secretsbroker` local-store product: local encrypted store, portable master key, OS-authenticated IPC, source adapters, scoped launch leases, write-back capture, tamper-evident audit, backup/restore, recovery, and UI-facing diagnostics.
 
 The broker is local-first. It is not yet a multi-tenant remote secret service and should not be exposed as one.
 
@@ -23,10 +23,10 @@ The broker is local-first. It is not yet a multi-tenant remote secret service an
 
 | Boundary | Trusted side | Untrusted or lower-trust side |
 | --- | --- | --- |
-| Local API token | Broker process and authorized local clients | Other local processes, browser pages, service code without token |
+| Local IPC and API token | Broker process, explicitly allowlisted launcher identity, and authorized local clients | Other users/processes, browser pages, service code without token |
 | Store encryption | Broker with master key loaded | Store file, backups, filesystem copies |
 | Source adapter config | Operator-managed config | Source outputs, exec adapters, external secret managers |
-| Write-back policy | Launcher/Service Lasso identity and policy model | Service-provided write-back request body |
+| Launch lease and write-back policy | Exact trusted launcher issuer, distinct signing key, authenticated IPC peer, and policy model | Service-provided claims and request body |
 | Audit/diagnostics | Metadata only | Secret values, tokens, raw credentials |
 
 ## Threats and current mitigations
@@ -41,7 +41,7 @@ Threats:
 
 Current mitigations:
 - Store payloads use AES-256-GCM with per-secret nonces and a key derived from the portable master key.
-- Store, audit, and backup writes use owner-only file modes where the platform honors them (`0600` files, `0700` directories).
+- Store, audit, source configuration, wrapper, and backup paths are regular-file checked and owner-only (`0600` files, `0700` directories on Unix; owner-only ACLs on Windows).
 - Secret-bearing endpoints require a configured local API token and return `503 security_not_configured` rather than falling open.
 - Token comparison hashes both candidate and expected token before constant-time compare to avoid length-dependent comparison behavior.
 - Secret-bearing request bodies are capped at 1 MiB before JSON decode to limit accidental or malicious memory pressure.
@@ -49,7 +49,7 @@ Current mitigations:
 
 Residual risk:
 - A privileged local attacker can read process memory, environment variables, command lines, or key files. Prefer key files with OS permissions over shell history or process arguments.
-- Loopback HTTP is a development/bootstrap transport. Production should move to OS-authenticated named pipes or Unix sockets.
+- A privileged local attacker remains outside this product boundary. Production rejects loopback HTTP and uses an explicitly allowlisted Windows named-pipe identity or same-UID Unix peer credentials.
 
 ### Malicious or compromised service
 
@@ -61,13 +61,14 @@ Threats:
 
 Current mitigations:
 - Resolve and write-back HTTP requests require a signed launch identity lease with service id, workspace id, allowed refs/namespaces, allowed operations, expiry, and one-time `jti`.
+- Production additionally requires the exact configured issuer and a signed binding to the authenticated named-pipe SID or Unix UID.
 - Write-back capture validates namespace, ref, operation, launch identity service id, expiry, allowed namespaces, and allowed operations before storing generated values.
 - Invalid, denied, expired, replayed, and source-auth-required attempts produce typed errors and audit events without storing values.
 - Secret-bearing HTTP endpoints require the local API token before request bodies are processed.
 - Request-size limits apply to write, resolve, and write-back endpoints.
 
 Residual risk:
-- Resolve currently authenticates the local API token but does not yet enforce per-service/ref policy. That belongs in the planned policy engine.
+- A correctly authorized launched service can use values within its assigned scope during the lease lifetime; scopes and expiry should remain minimal.
 
 ### Compromised source adapter
 
@@ -79,12 +80,11 @@ Threats:
 Current mitigations:
 - Source lifecycle normalization exposes safe state/outcome/nextAction/retry metadata instead of raw provider errors.
 - Source lifecycle audit events record source id, ref, state, outcome, service id, and request id only.
-- Exec adapters run with an empty environment, validate command presence, can restrict commands to trusted directories, reject symlink commands by default, enforce timeout, and cap stdout.
+- Generic exec adapters are disabled by default in production. Explicit production enablement requires an absolute regular executable under `trustedDirs`, a matching SHA-256 digest, no symlink/reparse components, an empty environment, a maximum 30-second timeout, and at most 1 MiB output.
 - Vault/OpenBao handling maps missing/unauthorized/forbidden/not-found/sealed/unavailable outcomes into typed lifecycle states without returning token values.
 
 Residual risk:
-- Exec sources are powerful local code execution hooks. Operators should keep them disabled unless needed and restrict `trustedDirs`.
-- Persistent source config protection is currently delegated to filesystem permissions.
+- Exec sources are powerful local code execution hooks even with pinning. Keep them disabled unless the reviewed integration requires one and re-approve the digest on every binary change.
 
 ### Log and diagnostic leakage
 
@@ -113,7 +113,7 @@ Current mitigations:
 - Denied/expired/replayed attempts are audited with metadata only.
 
 Residual risk:
-- Bootstrap mode can fall back to the local API token as the HMAC key when `SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY` is not configured. Production deployments should configure a distinct launcher-owned signing key.
+- Development/bootstrap mode retains API-token signing fallback and optional transport binding for migration compatibility. Production startup rejects both conditions and requires distinct API, signing, and master keys.
 
 ### Backup exfiltration
 
@@ -130,16 +130,15 @@ Current mitigations:
 Residual risk:
 - Backup plus matching master key is sufficient to recover secrets. Store backup artifacts and key/recovery material separately.
 
-## Small hardening changes in this pass
+## Release 1 hardening controls
 
-- Local API token comparison now hashes both sides before constant-time comparison.
-- Secret-bearing HTTP endpoints now cap request bodies at 1 MiB before JSON decode and return a safe `request_too_large` error.
-- Added regression tests that oversized requests do not echo the bearer token or large request value.
+- Local API token comparison hashes both sides before constant-time comparison.
+- Secret-bearing endpoints cap request bodies at 1 MiB and return safe typed errors.
+- Production launch leases enforce issuer, service, workspace, operation, ref/namespace, expiry, one-time JTI, and authenticated transport peer.
+- Production uses distinct authority keys, OS IPC, owner-only persistence, and tamper-evident audit.
+- Provider HTTP clients validate credential-free HTTPS endpoints and never follow redirects.
+- Archive, path, malformed-input, replay, recovery, and no-leak contracts are covered by unit, integration, fuzz, and persisted-corpus tests.
 
-## Follow-up candidates
+## Explicit non-claims
 
-These are intentionally out of scope for this bounded slice unless already tracked elsewhere:
-
-1. Add per-service/ref resolve authorization policy enforcement: [#30](https://github.com/service-lasso/lasso-secretsbroker/issues/30).
-2. Replace production loopback HTTP with OS-authenticated named pipe / Unix socket transport: [#31](https://github.com/service-lasso/lasso-secretsbroker/issues/31).
-3. Add source config file permission checks and audit tamper-evidence: [#32](https://github.com/service-lasso/lasso-secretsbroker/issues/32).
+This release does not claim remote multi-tenant operation, Vault/OpenBao enterprise parity, HSM custody, FIPS compliance, MFA, external-provider bulk mutation, scheduled rotation, full Secrets Sync apply, or mutation-capable MCP. Independent penetration testing remains a separate human assurance decision.

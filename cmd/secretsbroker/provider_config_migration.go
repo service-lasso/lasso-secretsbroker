@@ -168,20 +168,20 @@ func (b *localBackend) providerConfigStatusResponse() providerConfigStatusRespon
 }
 
 func providerStatusFromSource(source SourceStatus, backend *localBackend) providerConfigStatus {
-	credential := ""
+	credentialHandle := ""
 	if source.Kind == "vault" || source.Kind == "openbao" || source.Kind == "bitwarden-bws" || source.Kind == "aws-secrets-manager" {
-		credential = "configured-ref-or-env"
+		credentialHandle = "configured-ref-or-env" // #nosec G101 -- this is a redacted status label, never a credential value.
 	}
 	if source.SourceID == "local" {
-		credential = "local-master-key"
+		credentialHandle = "local-master-key"
 		if backend != nil && backend.locked() {
-			credential = "missing"
+			credentialHandle = "missing"
 		}
 	}
 	auditStatus := firstNonEmpty(source.AuditStatus, "audit_available")
 	operations := providerOperationCapabilitiesForSource(source.Kind, source.Lifecycle, auditStatus)
 	operations = backend.connectionProviderOperations(source.SourceID, source.Lifecycle, auditStatus, operations)
-	return providerConfigStatus{ProviderID: source.SourceID, ProviderKind: source.Kind, DisplayName: source.DisplayName, State: source.State, Outcome: source.Outcome, CredentialHandle: credential, Address: providerAddressForSource(source, backend), Namespaces: safeList(source.Namespaces), Capabilities: providerCapabilitiesByKind(source.Kind).Capabilities, Operations: operations, NextAction: source.NextAction, AuditStatus: auditStatus}
+	return providerConfigStatus{ProviderID: source.SourceID, ProviderKind: source.Kind, DisplayName: source.DisplayName, State: source.State, Outcome: source.Outcome, CredentialHandle: credentialHandle, Address: providerAddressForSource(source, backend), Namespaces: safeList(source.Namespaces), Capabilities: providerCapabilitiesByKind(source.Kind).Capabilities, Operations: operations, NextAction: source.NextAction, AuditStatus: auditStatus}
 }
 
 func providerAddressForSource(source SourceStatus, backend *localBackend) string {

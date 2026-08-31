@@ -182,6 +182,60 @@ func TestExecSourceAdapterJSONProtocolSuccess(t *testing.T) {
 	}
 }
 
+func TestProductionExecSourceRequiresExplicitEnablementAndImmutableBinary(t *testing.T) {
+	cfg, refCfg := execSourceFixture(t, "success-json")
+	cfg.Production = true
+	res := cfg.resolve("ref", refCfg)
+	if res.Outcome != "policy_denied" {
+		t.Fatalf("disabled production exec result = %#v", res)
+	}
+
+	cfg.AllowExecInProduction = true
+	res = cfg.resolve("ref", refCfg)
+	if res.Outcome != "invalid_ref" {
+		t.Fatalf("digestless production exec result = %#v", res)
+	}
+	digest, err := fileSHA256(refCfg.Command, 256<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refCfg.CommandSHA256 = digest
+	res = cfg.resolve("ref", refCfg)
+	if res.Outcome != "ready" || res.Value != "exec-secret" {
+		t.Fatalf("pinned production exec result = %#v", res)
+	}
+	refCfg.CommandSHA256 = "sha256:" + strings.Repeat("0", 64)
+	res = cfg.resolve("ref", refCfg)
+	if res.Outcome != "invalid_ref" {
+		t.Fatalf("mismatched production exec result = %#v", res)
+	}
+}
+
+func TestProductionFileSourceRequiresTrustedNonSymlinkPath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "secret.txt")
+	if err := os.WriteFile(path, []byte("file-secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	source := sourceConfig{SourceID: "file", Kind: "file", Enabled: true, Production: true}
+	res := source.resolve("ref", sourceRefConfig{Path: path})
+	if res.Outcome != "invalid_ref" {
+		t.Fatalf("untrusted production file result = %#v", res)
+	}
+	source.TrustedDirs = []string{dir}
+	res = source.resolve("ref", sourceRefConfig{Path: path})
+	if res.Outcome != "ready" || res.Value != "file-secret" {
+		t.Fatalf("trusted production file result = %#v", res)
+	}
+	link := filepath.Join(dir, "secret-link.txt")
+	if err := os.Symlink(path, link); err == nil {
+		res = source.resolve("ref", sourceRefConfig{Path: link})
+		if res.Outcome != "invalid_ref" {
+			t.Fatalf("symlinked production file result = %#v", res)
+		}
+	}
+}
+
 func TestExecSourceAdapterNormalizesProtocolOutcomes(t *testing.T) {
 	cases := []struct {
 		name        string

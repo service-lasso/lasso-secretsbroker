@@ -8,7 +8,10 @@ import (
 )
 
 func writePrivateFileAtomically(path string, content []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil { // #nosec G703 -- callers authorize the destination; all writes use private temporary files and atomic replacement.
+		return err
+	}
+	if err := secureOwnerOnlyPath(filepath.Dir(path), true); err != nil {
 		return err
 	}
 	temp, err := os.CreateTemp(filepath.Dir(path), ".secretsbroker-atomic-*")
@@ -18,6 +21,10 @@ func writePrivateFileAtomically(path string, content []byte) error {
 	tempPath := temp.Name()
 	defer os.Remove(tempPath)
 	if err := temp.Chmod(0o600); err != nil {
+		_ = temp.Close()
+		return err
+	}
+	if err := secureOwnerOnlyPath(tempPath, false); err != nil {
 		_ = temp.Close()
 		return err
 	}
@@ -32,11 +39,17 @@ func writePrivateFileAtomically(path string, content []byte) error {
 	if err := temp.Close(); err != nil {
 		return err
 	}
-	return replaceFileAtomically(tempPath, path)
+	if err := replaceFileAtomically(tempPath, path); err != nil {
+		return err
+	}
+	return secureOwnerOnlyPath(path, false)
 }
 
 func writePrivateFileExclusive(path string, content []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil { // #nosec G703 -- caller authorizes the destination and publication is exclusive.
+		return err
+	}
+	if err := secureOwnerOnlyPath(filepath.Dir(path), true); err != nil {
 		return err
 	}
 	temp, err := os.CreateTemp(filepath.Dir(path), ".secretsbroker-publish-*")
@@ -46,6 +59,10 @@ func writePrivateFileExclusive(path string, content []byte) error {
 	tempPath := temp.Name()
 	defer os.Remove(tempPath)
 	if err := temp.Chmod(0o600); err != nil {
+		_ = temp.Close()
+		return err
+	}
+	if err := secureOwnerOnlyPath(tempPath, false); err != nil {
 		_ = temp.Close()
 		return err
 	}
@@ -66,5 +83,5 @@ func writePrivateFileExclusive(path string, content []byte) error {
 		}
 		return err
 	}
-	return nil
+	return secureOwnerOnlyPath(path, false)
 }

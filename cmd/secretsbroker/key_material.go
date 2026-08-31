@@ -108,9 +108,14 @@ func loadKeyMaterial(flagValue, filePath string) (keyMaterial, error) {
 		return keyMaterial{Value: strings.TrimSpace(flagValue), Source: "flag/env"}, nil
 	}
 	if strings.TrimSpace(filePath) != "" {
-		bytes, err := os.ReadFile(filePath)
+		file, err := openValidatedRegularFile(filePath, 1<<20, true)
 		if err != nil {
 			return keyMaterial{}, err
+		}
+		defer file.Close()
+		bytes, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+		if err != nil || len(bytes) > 1<<20 {
+			return keyMaterial{}, errLocked
 		}
 		value := strings.TrimSpace(string(bytes))
 		if value != "" {

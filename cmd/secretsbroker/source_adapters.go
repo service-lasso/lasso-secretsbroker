@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -33,6 +32,8 @@ type sourceConfig struct {
 	Namespaces            []string                   `json:"namespaces"`
 	TrustedDirs           []string                   `json:"trustedDirs"`
 	AllowSymlinkCommand   bool                       `json:"allowSymlinkCommand"`
+	AllowExecInProduction bool                       `json:"allowExecInProduction,omitempty"`
+	Production            bool                       `json:"-"`
 	EnableMigrationTarget bool                       `json:"enableMigrationTarget,omitempty"`
 	Address               string                     `json:"address"`
 	Region                string                     `json:"region"`
@@ -51,6 +52,7 @@ type sourceRefConfig struct {
 	Env            string   `json:"env"`
 	Path           string   `json:"path"`
 	Command        string   `json:"command"`
+	CommandSHA256  string   `json:"commandSha256,omitempty"`
 	Args           []string `json:"args"`
 	MaxBytes       int      `json:"maxBytes"`
 	TimeoutMs      int      `json:"timeoutMs"`
@@ -75,12 +77,17 @@ func loadSourceConfig(path string) (sourceConfigFile, error) {
 		return sourceConfigFile{Security: defaultSourceConfigSecurity()}, nil
 	}
 	security := inspectSourceConfigSecurity(path)
-	bytes, err := os.ReadFile(path)
+	file, err := openValidatedRegularFile(path, 4<<20, true)
 	if errors.Is(err, os.ErrNotExist) {
 		return sourceConfigFile{Security: security}, nil
 	}
 	if err != nil {
 		return sourceConfigFile{}, err
+	}
+	defer file.Close()
+	bytes, err := io.ReadAll(io.LimitReader(file, (4<<20)+1))
+	if err != nil || len(bytes) > 4<<20 {
+		return sourceConfigFile{}, errors.New("source config exceeds the safe size limit")
 	}
 	var cfg sourceConfigFile
 	if err := json.Unmarshal(bytes, &cfg); err != nil {
@@ -212,6 +219,9 @@ func validateFileConfig(source sourceConfig, refCfg sourceRefConfig) error {
 	if path == "" {
 		return errors.New("file source mapping is missing path")
 	}
+	if source.Production && len(source.TrustedDirs) == 0 {
+		return errors.New("production file source requires trustedDirs")
+	}
 	if len(source.TrustedDirs) == 0 {
 		return nil
 	}
@@ -226,6 +236,11 @@ func validateFileConfig(source sourceConfig, refCfg sourceRefConfig) error {
 		}
 		rel, err := filepath.Rel(cleanDir, cleanPath)
 		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			if source.Production {
+				if pathHasSymlinkOrReparseComponent(cleanPath) {
+					return errors.New("production file source symlink or reparse target is not allowed")
+				}
+			}
 			return nil
 		}
 	}
@@ -233,14 +248,17 @@ func validateFileConfig(source sourceConfig, refCfg sourceRefConfig) error {
 }
 
 func (s sourceConfig) resolveExec(refCfg sourceRefConfig) sourceResolveResult {
+	if s.Production && !s.AllowExecInProduction {
+		return sourceResolveResult{Outcome: "policy_denied", Message: "Exec sources are disabled by default in production."}
+	}
 	if err := validateExecConfig(s, refCfg); err != nil {
 		return sourceResolveResult{Outcome: "invalid_ref", Message: err.Error()}
 	}
-	timeout := time.Duration(firstPositive(refCfg.TimeoutMs, 2000)) * time.Millisecond
-	maxStdout := firstPositive(refCfg.MaxStdoutBytes, 4096)
+	timeout := time.Duration(boundedPositive(refCfg.TimeoutMs, 2000, 30000)) * time.Millisecond
+	maxStdout := boundedPositive(refCfg.MaxStdoutBytes, 4096, 1<<20)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, refCfg.Command, refCfg.Args...)
+	cmd := exec.CommandContext(ctx, refCfg.Command, refCfg.Args...) // #nosec G204 -- absolute executable, trusted directory, reparse policy, and production digest are validated above.
 	cmd.Env = []string{}
 	stdout := newBoundedOutput(maxStdout)
 	cmd.Stdout = stdout
@@ -345,7 +363,7 @@ func (s sourceConfig) resolveOnePasswordCLI(ref string, refCfg sourceRefConfig) 
 	maxOutput := firstPositive(refCfg.MaxStdoutBytes, firstPositive(refCfg.MaxBytes, 32768))
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, refCfg.Command, onePasswordCLIArgs(refCfg)...)
+	cmd := exec.CommandContext(ctx, refCfg.Command, onePasswordCLIArgs(refCfg)...) // #nosec G204 -- absolute executable, trusted directory, reparse policy, and production digest are validated above.
 	cmd.Env = append(os.Environ(),
 		"OP_ITEM_REF="+refCfg.Path,
 		"OP_FIELD_REF="+refCfg.Field,
@@ -547,14 +565,21 @@ func (s sourceConfig) resolveVault(refCfg sourceRefConfig) sourceResolveResult {
 	if strings.TrimSpace(token) == "" {
 		return sourceResolveResult{Outcome: "source_auth_required", Message: "Vault/OpenBao token is missing."}
 	}
-	url := strings.TrimRight(s.Address, "/") + "/v1/" + strings.TrimLeft(refCfg.Path, "/")
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	baseURL, err := validatedSourceEndpoint(s.Address, s.Production)
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Vault/OpenBao URL is invalid."}
+	}
+	requestURL, err := url.JoinPath(baseURL.String(), "v1", strings.TrimLeft(refCfg.Path, "/"))
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Vault/OpenBao URL is invalid."}
+	}
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return sourceResolveResult{Outcome: "invalid_ref", Message: "Vault/OpenBao URL is invalid."}
 	}
 	req.Header.Set("X-Vault-Token", token)
-	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 3000)) * time.Millisecond}
-	res, err := client.Do(req)
+	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 3000)) * time.Millisecond, CheckRedirect: rejectCredentialRedirect}
+	res, err := client.Do(req) // #nosec G704 -- endpoint comes from the owner-protected source configuration and is validated above.
 	if err != nil {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Vault/OpenBao source is unavailable."}
 	}
@@ -737,15 +762,15 @@ func (s sourceConfig) resolveAWSSecretsManager(refCfg sourceRefConfig) sourceRes
 	if err != nil {
 		return sourceResolveResult{Outcome: "invalid_ref", Message: "AWS Secrets Manager request could not be prepared."}
 	}
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(requestBody))
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(requestBody)) // #nosec G704 -- awsSecretsManagerEndpoint validates the protected provider endpoint.
 	if err != nil {
 		return sourceResolveResult{Outcome: "invalid_ref", Message: "AWS Secrets Manager request is invalid."}
 	}
 	req.Header.Set("Content-Type", "application/x-amz-json-1.1")
 	req.Header.Set("X-Amz-Target", "secretsmanager.GetSecretValue")
 	req.Header.Set("Authorization", "Bearer "+token)
-	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 5000)) * time.Millisecond}
-	res, err := client.Do(req)
+	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 5000)) * time.Millisecond, CheckRedirect: rejectCredentialRedirect}
+	res, err := client.Do(req) // #nosec G704 -- the protected provider endpoint is validated and redirects are disabled below.
 	if err != nil {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "AWS Secrets Manager source is unavailable."}
 	}
@@ -776,14 +801,21 @@ type awsSecretsManagerPayload struct {
 }
 
 func awsSecretsManagerEndpoint(source sourceConfig) (string, error) {
+	raw := ""
 	if address := strings.TrimSpace(source.Address); address != "" {
-		return strings.TrimRight(address, "/"), nil
+		raw = strings.TrimRight(address, "/")
+	} else {
+		region := strings.TrimSpace(source.Region)
+		if region == "" {
+			return "", errors.New("AWS Secrets Manager source requires address or region")
+		}
+		raw = "https://secretsmanager." + region + ".amazonaws.com"
 	}
-	region := strings.TrimSpace(source.Region)
-	if region == "" {
-		return "", errors.New("AWS Secrets Manager source requires address or region")
+	parsed, err := validatedSourceEndpoint(raw, source.Production)
+	if err != nil {
+		return "", errors.New("AWS Secrets Manager endpoint is invalid")
 	}
-	return "https://secretsmanager." + region + ".amazonaws.com", nil
+	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
 func awsSecretsManagerStatusResult(status int, errorType string, body io.Reader, refCfg sourceRefConfig) sourceResolveResult {
@@ -915,7 +947,11 @@ func (s sourceConfig) resolveBitwardenBWSAPI(refCfg sourceRefConfig, token strin
 	if strings.TrimSpace(s.Address) == "" {
 		return sourceResolveResult{Outcome: "invalid_ref", Message: "Bitwarden/BWS API source requires address or command."}
 	}
-	secretURL, err := url.JoinPath(strings.TrimRight(s.Address, "/"), "v1", "secrets", strings.TrimLeft(refCfg.Path, "/"))
+	baseURL, err := validatedSourceEndpoint(s.Address, s.Production)
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Bitwarden/BWS API URL is invalid."}
+	}
+	secretURL, err := url.JoinPath(strings.TrimRight(baseURL.String(), "/"), "v1", "secrets", strings.TrimLeft(refCfg.Path, "/"))
 	if err != nil {
 		return sourceResolveResult{Outcome: "invalid_ref", Message: "Bitwarden/BWS API URL is invalid."}
 	}
@@ -924,7 +960,7 @@ func (s sourceConfig) resolveBitwardenBWSAPI(refCfg sourceRefConfig, token strin
 		return sourceResolveResult{Outcome: "invalid_ref", Message: "Bitwarden/BWS API request is invalid."}
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 5000)) * time.Millisecond}
+	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 5000)) * time.Millisecond, CheckRedirect: rejectCredentialRedirect}
 	res, err := client.Do(req)
 	if err != nil {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Bitwarden/BWS API is unavailable."}
@@ -944,7 +980,7 @@ func (s sourceConfig) resolveBitwardenBWSCLI(refCfg sourceRefConfig, token strin
 	maxStdout := firstPositive(refCfg.MaxStdoutBytes, 65536)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, refCfg.Command, refCfg.Args...)
+	cmd := exec.CommandContext(ctx, refCfg.Command, refCfg.Args...) // #nosec G204 -- absolute executable, trusted directory, reparse policy, and production digest are validated above.
 	cmd.Env = append(os.Environ(), "BWS_ACCESS_TOKEN="+token, "BITWARDEN_BWS_SECRET_ID="+refCfg.Path)
 	stdout := newBoundedOutput(maxStdout)
 	cmd.Stdout = stdout
@@ -1075,8 +1111,11 @@ func validateExecConfig(source sourceConfig, refCfg sourceRefConfig) error {
 	if command == "" {
 		return errors.New("exec source mapping is missing command")
 	}
-	if !filepath.IsAbs(command) && runtime.GOOS != "windows" {
+	if !filepath.IsAbs(command) {
 		return errors.New("exec command must be absolute")
+	}
+	if source.Production && len(source.TrustedDirs) == 0 {
+		return errors.New("production exec source requires trustedDirs")
 	}
 	if len(source.TrustedDirs) > 0 {
 		cleanCommand, err := filepath.Abs(command)
@@ -1099,12 +1138,61 @@ func validateExecConfig(source sourceConfig, refCfg sourceRefConfig) error {
 			return errors.New("exec command is outside trustedDirs")
 		}
 	}
-	if !source.AllowSymlinkCommand {
-		if info, err := os.Lstat(command); err == nil && info.Mode()&os.ModeSymlink != 0 {
-			return errors.New("exec command symlink is not allowed")
+	info, err := os.Lstat(command)
+	if err != nil {
+		if source.Production {
+			return errors.New("exec command is unavailable")
+		}
+		return nil
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("exec command must be a regular file")
+	}
+	if !source.AllowSymlinkCommand || source.Production {
+		if pathHasSymlinkOrReparseComponent(command) {
+			return errors.New("exec command symlink or reparse target is not allowed")
+		}
+	}
+	if source.Production {
+		want := strings.ToLower(strings.TrimSpace(refCfg.CommandSHA256))
+		if len(want) != len("sha256:")+64 || !strings.HasPrefix(want, "sha256:") {
+			return errors.New("production exec source requires commandSha256")
+		}
+		got, err := fileSHA256(command, 256<<20)
+		if err != nil || !constantTimeTokenEqual(got, want) {
+			return errors.New("production exec command digest mismatch")
+		}
+		if refCfg.TimeoutMs > 30000 || refCfg.MaxStdoutBytes > 1<<20 {
+			return errors.New("production exec source exceeds timeout or output limit")
 		}
 	}
 	return nil
+}
+
+func validatedSourceEndpoint(raw string, production bool) (*url.URL, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+		return nil, errors.New("source endpoint must be an absolute credential-free HTTP(S) URL")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, errors.New("source endpoint must use HTTP(S)")
+	}
+	if production && parsed.Scheme != "https" {
+		return nil, errors.New("production source endpoint must use HTTPS")
+	}
+	return parsed, nil
+}
+
+func rejectCredentialRedirect(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
+}
+
+func boundedPositive(value, fallback, maximum int) int {
+	value = firstPositive(value, fallback)
+	if value > maximum {
+		return maximum
+	}
+	return value
 }
 
 func firstPositive(value, fallback int) int {

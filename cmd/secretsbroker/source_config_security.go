@@ -32,7 +32,7 @@ func inspectSourceConfigSecurity(path string) sourceConfigSecurity {
 		Outcome:    "degraded",
 		NextAction: "inspect_source_config",
 	}
-	info, err := os.Stat(path)
+	info, err := os.Stat(path) // #nosec G703 -- startup-owned config path is inspected only to report permission metadata.
 	if errors.Is(err, os.ErrNotExist) {
 		security.State = "missing"
 		security.Outcome = "missing_ref"

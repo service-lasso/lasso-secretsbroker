@@ -37,7 +37,7 @@ func prepareChainedAuditEvent(event auditEvent, previousHash string) auditEvent 
 }
 
 func readAuditEvents(path string) ([]auditEvent, error) {
-	file, err := os.Open(path)
+	file, err := openValidatedRegularFile(path, 256<<20, true)
 	if errors.Is(err, os.ErrNotExist) {
 		return []auditEvent{}, nil
 	}

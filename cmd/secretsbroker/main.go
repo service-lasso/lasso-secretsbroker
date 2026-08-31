@@ -373,19 +373,20 @@ func serve(args []string) error {
 	unixSocket := fs.String("unix-socket", getenvDefault("SECRETSBROKER_UNIX_SOCKET", ""), "Unix socket path for unix-socket transport")
 	namedPipe := fs.String("named-pipe", getenvDefault("SECRETSBROKER_NAMED_PIPE", ""), "Windows named pipe path for windows-named-pipe transport")
 	namedPipeAllowedSIDs := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_NAMED_PIPE_ALLOWED_SIDS", "")))
-	namedPipeAllowAdmin := fs.Bool("named-pipe-allow-admin", envBoolDefault("SECRETSBROKER_NAMED_PIPE_ALLOW_ADMIN", true), "allow enabled local Administrators group members to connect to the Windows named-pipe transport")
-	namedPipeAllowLocalSystem := fs.Bool("named-pipe-allow-local-system", envBoolDefault("SECRETSBROKER_NAMED_PIPE_ALLOW_LOCAL_SYSTEM", true), "allow LocalSystem to connect to the Windows named-pipe transport")
+	namedPipeAllowAdmin := fs.Bool("named-pipe-allow-admin", envBoolDefault("SECRETSBROKER_NAMED_PIPE_ALLOW_ADMIN", false), "allow enabled local Administrators group members to connect to the Windows named-pipe transport")
+	namedPipeAllowLocalSystem := fs.Bool("named-pipe-allow-local-system", envBoolDefault("SECRETSBROKER_NAMED_PIPE_ALLOW_LOCAL_SYSTEM", false), "allow LocalSystem to connect to the Windows named-pipe transport")
 	state := fs.String("state", getenvDefault("SECRETSBROKER_STATE", "setup_needed"), "state to report")
 	storePath := fs.String("store", getenvDefault("SECRETSBROKER_STORE_PATH", defaultStorePath()), "local encrypted store path")
 	auditPath := fs.String("audit", getenvDefault("SECRETSBROKER_AUDIT_PATH", defaultAuditPath()), "audit JSONL path")
 	eventsPath := fs.String("events", getenvDefault("SECRETSBROKER_EVENTS_PATH", defaultEventsPath(*auditPath)), "operational events JSONL path")
-	auditHashChain := fs.Bool("audit-hash-chain", envBoolDefault("SECRETSBROKER_AUDIT_HASH_CHAIN", false), "append tamper-evident audit hash-chain metadata")
+	auditHashChain := fs.Bool("audit-hash-chain", envBoolDefault("SECRETSBROKER_AUDIT_HASH_CHAIN", normalizeServeMode(*mode) == "production"), "append tamper-evident audit hash-chain metadata")
 	masterKey := fs.String("master-key", getenvDefault("SECRETSBROKER_MASTER_KEY", ""), "local development master key; empty means locked")
 	masterKeyFile := fs.String("master-key-file", getenvDefault("SECRETSBROKER_MASTER_KEY_FILE", ""), "file containing portable master key")
 	wrapperPath := fs.String("wrapper", getenvDefault("SECRETSBROKER_WRAPPER_PATH", defaultWrapperPath()), "local OS wrapper path used for lifecycle status and broker-controlled key rotation")
 	backupRoot := fs.String("backup-root", getenvDefault("SECRETSBROKER_BACKUP_ROOT", ""), "broker-owned encrypted backup directory; defaults beside the store")
 	apiToken := fs.String("api-token", getenvDefault("SECRETSBROKER_API_TOKEN", ""), "local API token for secret-bearing endpoints")
 	launchIdentitySigningKey := fs.String("launch-identity-signing-key", getenvDefault("SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY", ""), "HMAC key for signed scoped launch identity leases; defaults to local API token in bootstrap mode")
+	launchIdentityIssuer := fs.String("launch-identity-issuer", getenvDefault("SECRETSBROKER_LAUNCH_IDENTITY_ISSUER", "service-lasso-local-launcher"), "exact trusted issuer for signed scoped launch identity leases")
 	sourcesPath := fs.String("sources", getenvDefault("SECRETSBROKER_SOURCES_PATH", ""), "source adapter config path")
 	affectedRefs := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_REFS", "")))
 	affectedServices := multiFlag(splitCSV(getenvDefault("SECRETSBROKER_AFFECTED_SERVICES", "")))
@@ -414,12 +415,14 @@ func serve(args []string) error {
 		return err
 	}
 	backend := newLocalBackendWithAudit(*storePath, *auditPath, material.Value, *auditHashChain)
+	backend.production = normalizeServeMode(*mode) == "production"
 	backend.wrapperPath = *wrapperPath
 	if strings.TrimSpace(*backupRoot) != "" {
 		backend.backupRoot = *backupRoot
 	}
 	backend.eventPath = eventsPathValue
 	backend.launchIdentitySigningKey = strings.TrimSpace(*launchIdentitySigningKey)
+	backend.launchIdentityIssuer = strings.TrimSpace(*launchIdentityIssuer)
 	sourcesFile := strings.TrimSpace(*sourcesPath)
 	if sourcesFile == "" {
 		sourcesFile = defaultSourcesPath(*storePath)
@@ -427,6 +430,9 @@ func serve(args []string) error {
 	sources, err := loadSourceConfig(sourcesFile)
 	if err != nil {
 		return err
+	}
+	for index := range sources.Sources {
+		sources.Sources[index].Production = backend.production
 	}
 	backend.sources = sources
 	backend.sourcesPath = sourcesFile
@@ -443,6 +449,9 @@ func serve(args []string) error {
 		NamedPipeAllowBuiltinAdmins: *namedPipeAllowAdmin,
 	})
 	if err != nil {
+		return err
+	}
+	if err := validateProductionRuntimeConfig(*mode, material.Value, *apiToken, *launchIdentitySigningKey, *launchIdentityIssuer, *auditHashChain, binding); err != nil {
 		return err
 	}
 	ln, cleanup, err := listenForTransport(binding)
@@ -470,6 +479,35 @@ func serve(args []string) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return server.Shutdown(shutdownCtx)
+}
+
+func validateProductionRuntimeConfig(mode, masterKey, apiToken, signingKey, trustedIssuer string, auditHashChain bool, binding serveTransportBinding) error {
+	if normalizeServeMode(mode) != "production" {
+		return nil
+	}
+	masterKey = strings.TrimSpace(masterKey)
+	apiToken = strings.TrimSpace(apiToken)
+	signingKey = strings.TrimSpace(signingKey)
+	trustedIssuer = strings.TrimSpace(trustedIssuer)
+	if masterKey == "" || apiToken == "" || signingKey == "" || trustedIssuer == "" {
+		return errors.New("production mode requires distinct master key, API token, launch-identity signing key, and an exact trusted launch-identity issuer")
+	}
+	if masterKey == apiToken || masterKey == signingKey || apiToken == signingKey {
+		return errors.New("production master key, API token, and launch-identity signing key must be distinct")
+	}
+	if !auditHashChain {
+		return errors.New("production mode requires tamper-evident audit hash chaining")
+	}
+	if binding.Kind == "windows-named-pipe" {
+		policy := binding.WindowsNamedPipeAccessPolicy
+		if policy.AllowBuiltinAdmins || policy.AllowLocalSystem {
+			return errors.New("production named-pipe mode denies Administrators and LocalSystem by default; allow only an explicitly reviewed launcher identity")
+		}
+		if len(policy.AllowedUserSIDs) == 0 {
+			return errors.New("production named-pipe mode requires an explicitly allowlisted launcher or service SID")
+		}
+	}
+	return nil
 }
 
 func newHandler(state runtimeState, backend *localBackend, security localAPISecurity) http.Handler {

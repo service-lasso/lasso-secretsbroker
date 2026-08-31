@@ -63,11 +63,13 @@ Example:
       "sourceId": "exec-local",
       "kind": "exec",
       "enabled": true,
+      "allowExecInProduction": true,
       "priority": 30,
       "trustedDirs": ["C:/tools/secrets"],
       "refs": {
         "openclaw/github/token": {
           "command": "C:/tools/secrets/read-secret.exe",
+          "commandSha256": "<reviewed-lowercase-sha256>",
           "args": ["openclaw/github/token"],
           "timeoutMs": 2000,
           "maxStdoutBytes": 4096
@@ -110,6 +112,7 @@ Rules:
 - files over the configured byte limit are `source_unavailable`
 - value is returned only through authenticated resolve
 - diagnostics and status output must not include file contents
+- production requires at least one `trustedDirs` entry and rejects symlink/reparse components
 
 ## Exec adapter hardening
 
@@ -117,12 +120,14 @@ The exec adapter is intentionally strict:
 
 - no shell execution
 - command must be configured exactly
-- command must be absolute when the OS/path format can determine that
-- command must live under one configured `trustedDirs` entry when `trustedDirs` is set
-- symlink commands are rejected unless `allowSymlinkCommand` is true
+- production exec is disabled unless `allowExecInProduction` is explicitly true
+- production command paths must be absolute regular files under a configured `trustedDirs` entry
+- production rejects every symlink/reparse component and requires an exact lowercase `commandSha256`
 - args are fixed in config
+- the generic exec adapter receives an empty environment
 - timeout defaults to 2000ms
 - max stdout defaults to 4096 bytes
+- production rejects timeout values over 30 seconds and output limits over 1 MiB
 - stderr is never treated as secret
 - JSON protocol mode is default: stdout must be `{ "value": "..." }`
 - simple stdout mode requires `unsafeStdout: true`
@@ -139,11 +144,10 @@ Outcomes:
 
 When a source config path is configured, the response also includes a metadata-only `sourceConfig`
 summary. The summary reports whether the config was checked, the platform, a path hash, the observed
-permission mode where meaningful, and safe lifecycle fields such as `state`, `outcome`, and
-`nextAction`. It never includes the raw config path, source tokens, provider credentials, mapped file
-contents, or resolved values. POSIX-style broad group/other permissions are reported as degraded with
-`nextAction: "restrict_source_config_permissions"`; Windows ACLs are reported as not verified with
-`nextAction: "review_os_acl"` because mode bits are not a complete ACL proof there.
+permission state, and safe lifecycle fields such as `state`, `outcome`, and `nextAction`. It never
+includes the raw config path, source tokens, provider credentials, mapped file contents, or resolved
+values. Source configuration is opened as a bounded regular file and durable writes use owner-only
+permissions (`0600`/`0700` on Unix and an owner-only ACL on Windows).
 
 ## Audit
 

@@ -24,6 +24,7 @@ const (
 	localStoreVersion            = 1
 	localStoreSource             = "local"
 	maxSecretBearingRequestBytes = 1 << 20
+	maxLocalStoreBytes           = 256 << 20
 )
 
 var (
@@ -55,6 +56,8 @@ type localBackend struct {
 	campaigns                map[string]bulkCampaignResponse
 	telemetry                *telemetryRequestRecorder
 	launchIdentitySigningKey string
+	launchIdentityIssuer     string
+	production               bool
 	launchLeaseMu            sync.Mutex
 	seenLaunchLeaseJTI       map[string]time.Time
 	decommissionMu           sync.Mutex
@@ -71,6 +74,16 @@ type localBackend struct {
 	storeMutationMu          sync.Mutex
 	lifecycleMu              sync.Mutex
 	managementMu             sync.Mutex
+}
+
+func (b *localBackend) launchLeaseSigningKey(apiToken string) string {
+	if b != nil && b.production {
+		return strings.TrimSpace(b.launchIdentitySigningKey)
+	}
+	if b == nil {
+		return strings.TrimSpace(apiToken)
+	}
+	return firstNonEmpty(b.launchIdentitySigningKey, apiToken)
 }
 
 type localStoreFile struct {
@@ -269,7 +282,7 @@ type auditEvent struct {
 
 func newLocalBackend(storePath, auditPath, masterKey string) *localBackend {
 	stateRoot := filepath.Dir(storePath)
-	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), wrapperPath: filepath.Join(stateRoot, "secretsbroker-wrapper.json"), backupRoot: filepath.Join(stateRoot, "backups"), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}, telemetry: newTelemetryRequestRecorder(50), seenLaunchLeaseJTI: map[string]time.Time{}, providerExecutors: map[string]providerMigrationExecutor{}, sourcesPath: defaultSourcesPath(storePath)}
+	backend := &localBackend{storePath: storePath, auditPath: auditPath, eventPath: defaultEventsPath(auditPath), wrapperPath: filepath.Join(stateRoot, "secretsbroker-wrapper.json"), backupRoot: filepath.Join(stateRoot, "backups"), masterKey: masterKey, now: func() time.Time { return time.Now().UTC() }, campaigns: map[string]bulkCampaignResponse{}, telemetry: newTelemetryRequestRecorder(50), launchIdentityIssuer: "service-lasso-local-launcher", seenLaunchLeaseJTI: map[string]time.Time{}, providerExecutors: map[string]providerMigrationExecutor{}, sourcesPath: defaultSourcesPath(storePath)}
 	backend.lockouts = newLockoutStore(func() time.Time {
 		if backend.now == nil {
 			return time.Now().UTC()
@@ -480,6 +493,12 @@ func (b *localBackend) verifyLaunchIdentityLease(lease *launchIdentityLease, sig
 	binding := normalizeLaunchTransportBinding(lease.TransportBinding)
 	if lease.TransportBinding != nil && binding == nil {
 		return errIdentityInvalid
+	}
+	if strings.TrimSpace(lease.Issuer) != strings.TrimSpace(b.launchIdentityIssuer) {
+		return errPolicyDenied
+	}
+	if b.production && binding == nil {
+		return errPolicyDenied
 	}
 	if expectedServiceID != "" && strings.TrimSpace(lease.ServiceID) != expectedServiceID {
 		return errPolicyDenied
@@ -918,12 +937,17 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 func (b *localBackend) loadStore() (localStoreFile, error) {
 	now := b.now()
 	store := localStoreFile{Version: localStoreVersion, ServiceID: serviceID, CreatedAt: now, UpdatedAt: now, Secrets: map[string]secretEntry{}, Tombstones: map[string]localSecretTombstone{}, Rotations: map[string]rotationLedger{}, Migrations: map[string]providerMigrationOperation{}, Campaigns: map[string]bulkCampaignResponse{}, ManagementOps: map[string]managedCreateReceipt{}}
-	bytes, err := os.ReadFile(b.storePath)
+	file, err := openValidatedRegularFile(b.storePath, maxLocalStoreBytes, true)
 	if errors.Is(err, os.ErrNotExist) {
 		return store, nil
 	}
 	if err != nil {
 		return store, err
+	}
+	defer file.Close()
+	bytes, err := io.ReadAll(io.LimitReader(file, maxLocalStoreBytes+1))
+	if err != nil || len(bytes) > maxLocalStoreBytes {
+		return store, errBackendDegraded
 	}
 	if len(bytes) == 0 {
 		return store, nil
@@ -996,8 +1020,12 @@ func (b *localBackend) writeAuditEvent(event auditEvent) error {
 			}
 			event = prepareChainedAuditEvent(event, previousHash)
 		}
-		file, err := os.OpenFile(b.auditPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		file, err := os.OpenFile(b.auditPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600) // #nosec G703 -- auditPath is immutable startup configuration and its parent is private and locked.
 		if err != nil {
+			return err
+		}
+		if err := secureOwnerOnlyPath(b.auditPath, false); err != nil {
+			_ = file.Close()
 			return err
 		}
 		if err := json.NewEncoder(file).Encode(event); err != nil {
@@ -1188,7 +1216,7 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, secur
 			return
 		}
 		peer := transportPeerIdentityFromContext(r.Context())
-		if err := backend.authorizeWritebackLaunchLease(&req, firstNonEmpty(backend.launchIdentitySigningKey, security.token), peer); err != nil {
+		if err := backend.authorizeWritebackLaunchLease(&req, backend.launchLeaseSigningKey(security.token), peer); err != nil {
 			writeLaunchIdentityAPIError(w, err)
 			return
 		}
@@ -1227,7 +1255,7 @@ func registerLocalStoreHandlers(mux *http.ServeMux, backend *localBackend, secur
 			return
 		}
 		peer := transportPeerIdentityFromContext(r.Context())
-		if err := backend.authorizeResolveLaunchLease(&req, firstNonEmpty(backend.launchIdentitySigningKey, security.token), peer); err != nil {
+		if err := backend.authorizeResolveLaunchLease(&req, backend.launchLeaseSigningKey(security.token), peer); err != nil {
 			writeLaunchIdentityAPIError(w, err)
 			return
 		}

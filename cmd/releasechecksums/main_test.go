@@ -103,10 +103,13 @@ func createReleaseFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	contents := map[string]string{
-		"secretsbroker-win32.zip":     "windows",
-		"secretsbroker-linux.tar.gz":  "linux",
-		"secretsbroker-darwin.tar.gz": "darwin",
-		"service.json":                `{"artifact":{"platforms":{"win32":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}},"linux":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}},"darwin":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}}}}}`,
+		"secretsbroker-win32.zip":       "windows",
+		"secretsbroker-linux.tar.gz":    "linux",
+		"secretsbroker-darwin.tar.gz":   "darwin",
+		"secretsbroker-win32.cdx.json":  `{"bomFormat":"CycloneDX","specVersion":"1.6"}`,
+		"secretsbroker-linux.cdx.json":  `{"bomFormat":"CycloneDX","specVersion":"1.6"}`,
+		"secretsbroker-darwin.cdx.json": `{"bomFormat":"CycloneDX","specVersion":"1.6"}`,
+		"service.json":                  `{"artifact":{"platforms":{"win32":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}},"linux":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}},"darwin":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}}}}}`,
 	}
 	for name, content := range contents {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {

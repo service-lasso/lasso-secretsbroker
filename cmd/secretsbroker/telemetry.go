@@ -601,13 +601,15 @@ func sendTelemetryExportFromResponse(res telemetryResponse, client *http.Client)
 	if client == nil {
 		client = http.DefaultClient
 	}
+	safeClient := *client
+	safeClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	payload, err := json.Marshal(buildTelemetryExportPayload(res))
 	if err != nil {
 		base.Status = "blocked"
 		base.Reason = "OTLP export payload could not be encoded."
 		return base
 	}
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(payload)) // #nosec G704 -- endpoint is an explicit operator-owned setting validated by isTelemetryHTTPEndpoint.
 	if err != nil {
 		base.Status = "blocked"
 		base.Reason = "OTLP export endpoint could not be prepared."
@@ -617,7 +619,7 @@ func sendTelemetryExportFromResponse(res telemetryResponse, client *http.Client)
 	for name, value := range headers {
 		req.Header.Set(name, value)
 	}
-	resp, err := client.Do(req)
+	resp, err := safeClient.Do(req) // #nosec G704 -- the validated operator endpoint is called without following redirects.
 	if err != nil {
 		base.Status = "failed"
 		base.Reason = "OTLP export failed before the configured endpoint accepted the sanitized envelope."
@@ -686,7 +688,7 @@ func isTelemetryHTTPEndpoint(endpoint string) bool {
 	if err != nil {
 		return false
 	}
-	return parsed.Scheme == "http" || parsed.Scheme == "https"
+	return (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != "" && parsed.User == nil && parsed.Fragment == ""
 }
 
 func buildTelemetrySignals(counters telemetryCounters) []telemetrySignalPreview {

@@ -7,7 +7,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$scanner = 'golang.org/x/vuln/cmd/govulncheck@v1.6.0'
+$scanner = 'golang.org/x/vuln/cmd/govulncheck@v1.7.0'
 $results = @()
 foreach ($path in @($BrokerPath, $ResolverPath)) {
   $resolved = [IO.Path]::GetFullPath($path)

@@ -40,6 +40,35 @@ func TestLaunchIdentityLeaseTransportBinding(t *testing.T) {
 	}
 }
 
+func TestProductionLaunchIdentityRequiresTrustedIssuerAndTransportBinding(t *testing.T) {
+	backend := testBackend(t)
+	backend.production = true
+	backend.now = func() time.Time { return time.Date(2026, 5, 7, 0, 1, 0, 0, time.UTC) }
+	key := "production-lease-key"
+	peer := transportPeerIdentity{Kind: "unix-uid", Subject: "1000"}
+
+	valid := testLaunchIdentityLease(t, backend, "api-service", []string{"services/api-service/*"}, nil, []string{"resolve"}, "jti-production-valid")
+	valid.TransportBinding = &launchTransportBinding{Kind: peer.Kind, Subject: peer.Subject}
+	valid = mustSignLaunchIdentityLease(t, valid, key)
+	if err := backend.verifyLaunchIdentityLease(&valid, key, "api-service", "", "resolve", []string{"services/api-service/runtime/API_TOKEN"}, nil, peer); err != nil {
+		t.Fatalf("valid production lease rejected: %v", err)
+	}
+
+	wrongIssuer := testLaunchIdentityLease(t, backend, "api-service", []string{"services/api-service/*"}, nil, []string{"resolve"}, "jti-production-wrong-issuer")
+	wrongIssuer.Issuer = "untrusted-launcher"
+	wrongIssuer.TransportBinding = &launchTransportBinding{Kind: peer.Kind, Subject: peer.Subject}
+	wrongIssuer = mustSignLaunchIdentityLease(t, wrongIssuer, key)
+	if err := backend.verifyLaunchIdentityLease(&wrongIssuer, key, "api-service", "", "resolve", []string{"services/api-service/runtime/API_TOKEN"}, nil, peer); !errors.Is(err, errPolicyDenied) {
+		t.Fatalf("wrong issuer error = %v, want policy denied", err)
+	}
+
+	unbound := testLaunchIdentityLease(t, backend, "api-service", []string{"services/api-service/*"}, nil, []string{"resolve"}, "jti-production-unbound")
+	unbound = mustSignLaunchIdentityLease(t, unbound, key)
+	if err := backend.verifyLaunchIdentityLease(&unbound, key, "api-service", "", "resolve", []string{"services/api-service/runtime/API_TOKEN"}, nil, peer); !errors.Is(err, errPolicyDenied) {
+		t.Fatalf("unbound production lease error = %v, want policy denied", err)
+	}
+}
+
 func TestHTTPResolveHonorsTransportBoundLaunchLease(t *testing.T) {
 	backend := testBackend(t)
 	backend.now = func() time.Time { return time.Date(2026, 5, 7, 0, 1, 0, 0, time.UTC) }

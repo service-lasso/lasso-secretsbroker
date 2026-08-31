@@ -343,7 +343,7 @@ func writeBackupArtifact(path string, artifact backupArtifact) error {
 }
 
 func readBackupArtifact(path string) (backupArtifact, error) {
-	file, err := os.Open(path)
+	file, err := openValidatedRegularFile(path, maxManagedBackupSize, true)
 	if err != nil {
 		return backupArtifact{}, err
 	}

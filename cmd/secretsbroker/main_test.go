@@ -107,6 +107,68 @@ func TestProductionAutoSelectsOSTransport(t *testing.T) {
 	}
 }
 
+func TestProductionRuntimeRequiresSeparatedAuthorityAndTamperEvidentAudit(t *testing.T) {
+	binding := serveTransportBinding{Kind: "unix-socket"}
+	valid := func(masterKey, apiToken, signingKey string, audit bool) error {
+		return validateProductionRuntimeConfig("production", masterKey, apiToken, signingKey, "service-lasso-local-launcher", audit, binding)
+	}
+	if err := valid("master-key", "api-token", "lease-signing-key", true); err != nil {
+		t.Fatalf("valid production authority rejected: %v", err)
+	}
+	for name, err := range map[string]error{
+		"missing signing key": valid("master-key", "api-token", "", true),
+		"API token fallback":  valid("master-key", "shared-key", "shared-key", true),
+		"master key reuse":    valid("shared-key", "api-token", "shared-key", true),
+		"audit disabled":      valid("master-key", "api-token", "lease-signing-key", false),
+		"missing issuer":      validateProductionRuntimeConfig("production", "master-key", "api-token", "lease-signing-key", "", true, binding),
+	} {
+		if err == nil {
+			t.Fatalf("%s should fail closed", name)
+		}
+	}
+	if err := validateProductionRuntimeConfig("development", "", "", "", "", false, serveTransportBinding{}); err != nil {
+		t.Fatalf("development bootstrap compatibility should remain available: %v", err)
+	}
+}
+
+func TestProductionWindowsPipeRequiresExplicitNonPrivilegedLauncherIdentity(t *testing.T) {
+	binding := serveTransportBinding{
+		Kind: "windows-named-pipe",
+		WindowsNamedPipeAccessPolicy: windowsNamedPipeAccessPolicy{
+			AllowedUserSIDs: []string{"S-1-5-80-12345"},
+		},
+	}
+	if err := validateProductionRuntimeConfig("production", "master-key", "api-token", "lease-signing-key", "service-lasso-local-launcher", true, binding); err != nil {
+		t.Fatalf("explicit launcher SID rejected: %v", err)
+	}
+	binding.WindowsNamedPipeAccessPolicy.AllowedUserSIDs = nil
+	if err := validateProductionRuntimeConfig("production", "master-key", "api-token", "lease-signing-key", "service-lasso-local-launcher", true, binding); err == nil {
+		t.Fatal("production named pipe should reject an implicit-only launcher identity")
+	}
+	binding.WindowsNamedPipeAccessPolicy.AllowedUserSIDs = []string{"S-1-5-80-12345"}
+	binding.WindowsNamedPipeAccessPolicy.AllowLocalSystem = true
+	if err := validateProductionRuntimeConfig("production", "master-key", "api-token", "lease-signing-key", "service-lasso-local-launcher", true, binding); err == nil {
+		t.Fatal("production named pipe should reject broad LocalSystem access")
+	}
+}
+
+func TestProductionLeaseSigningNeverFallsBackToAPIToken(t *testing.T) {
+	backend := newLocalBackend("store.json", "audit.jsonl", "master-key")
+	backend.production = true
+	if got := backend.launchLeaseSigningKey("api-token"); got != "" {
+		t.Fatalf("production fallback key = %q, want empty", got)
+	}
+	backend.launchIdentitySigningKey = "lease-signing-key"
+	if got := backend.launchLeaseSigningKey("api-token"); got != "lease-signing-key" {
+		t.Fatalf("production signing key = %q", got)
+	}
+	backend.production = false
+	backend.launchIdentitySigningKey = ""
+	if got := backend.launchLeaseSigningKey("api-token"); got != "api-token" {
+		t.Fatalf("development bootstrap signing key = %q", got)
+	}
+}
+
 func TestWindowsNamedPipeRequiresPipeNamespace(t *testing.T) {
 	_, err := resolveServeTransport(serveTransportOptions{Transport: "windows-named-pipe", NamedPipe: `C:\tmp\not-a-pipe`})
 	if err == nil {

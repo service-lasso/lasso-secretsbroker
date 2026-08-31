@@ -305,8 +305,13 @@ func (b *localBackend) proxyRemoteKV(w http.ResponseWriter, r *http.Request, sou
 		return true
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if !json.Valid(body) {
+		writeKVStoreError(w, errBackendDegraded)
+		return true
+	}
 	w.WriteHeader(status)
-	_, _ = w.Write(body)
+	_, _ = w.Write(body) // #nosec G705 -- the body is valid JSON and is served with nosniff immediately above.
 	return true
 }
 
@@ -382,7 +387,7 @@ func (b *localBackend) forwardOpenBaoKV(source sourceConfig, method, mount, op, 
 			return http.ErrUseLastResponse
 		},
 	}
-	res, err := client.Do(req)
+	res, err := client.Do(req) // #nosec G704 -- validatedVaultKVBaseURL restricts the protected provider endpoint and redirects are disabled.
 	if err != nil {
 		return 0, nil, errBackendDegraded
 	}
