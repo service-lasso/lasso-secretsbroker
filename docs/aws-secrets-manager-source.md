@@ -34,6 +34,8 @@ AWS sources use the same `SECRETSBROKER_SOURCES_PATH` config as other external a
 ```
 
 `address` may be set for tests or local AWS-compatible mocks. If `address` is omitted, `region` is used to derive the Secrets Manager endpoint. Tests use fake tokens and fake secret strings only.
+Private-PKI compatible endpoints can use the digest-pinned trust contract in
+`docs/source-tls-trust.md`.
 
 The read-adapter fixture above is retained for compatibility. A production
 migration target must instead add explicit signing credential handles and opt in:

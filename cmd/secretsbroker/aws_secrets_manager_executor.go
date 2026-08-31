@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -74,16 +75,15 @@ func newAWSSecretsManagerMigrationExecutor(source sourceConfig) (*awsSecretsMana
 			return nil, errors.New("AWS Secrets Manager migration target mapping is invalid")
 		}
 	}
+	client, err := newSourceHTTPClient(maximumAWSSecretsManagerMigrationTimeout, source.Production, rejectCredentialRedirect)
+	if err != nil {
+		return nil, fmt.Errorf("AWS Secrets Manager migration target TLS trust configuration is invalid: %w", err)
+	}
 	return &awsSecretsManagerMigrationExecutor{
 		source:   source,
 		endpoint: endpoint,
-		client: &http.Client{
-			Timeout: maximumAWSSecretsManagerMigrationTimeout,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		},
-		now: func() time.Time { return time.Now().UTC() },
+		client:   client,
+		now:      func() time.Time { return time.Now().UTC() },
 	}, nil
 }
 

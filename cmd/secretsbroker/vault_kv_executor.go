@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -79,15 +80,14 @@ func newVaultKVMigrationExecutor(source sourceConfig) (*vaultKVMigrationExecutor
 			return nil, errors.New("vault migration target mapping is invalid")
 		}
 	}
+	client, err := newSourceHTTPClient(maximumVaultKVMigrationTimeout, source.Production, rejectCredentialRedirect)
+	if err != nil {
+		return nil, fmt.Errorf("vault migration target TLS trust configuration is invalid: %w", err)
+	}
 	return &vaultKVMigrationExecutor{
 		source:  source,
 		baseURL: baseURL,
-		client: &http.Client{
-			Timeout: maximumVaultKVMigrationTimeout,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		},
+		client:  client,
 	}, nil
 }
 

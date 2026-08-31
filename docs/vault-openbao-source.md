@@ -14,6 +14,8 @@ Service Lasso -> @secretsbroker -> Vault/OpenBao cluster
 ## Source config
 
 Vault/OpenBao sources use the same `SECRETSBROKER_SOURCES_PATH` config as env/file/exec sources.
+Private-PKI deployments can append an explicitly digest-pinned CA to the host
+trust pool as described in `docs/source-tls-trust.md`.
 
 Example:
 

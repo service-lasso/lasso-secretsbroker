@@ -381,11 +381,9 @@ func (b *localBackend) forwardOpenBaoKV(source sourceConfig, method, mount, op, 
 	if bodyReader != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	client := &http.Client{
-		Timeout: kvV2ProxyTimeout,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
+	client, err := newSourceHTTPClient(kvV2ProxyTimeout, source.Production, rejectCredentialRedirect)
+	if err != nil {
+		return 0, nil, errInvalidRef
 	}
 	res, err := client.Do(req) // #nosec G704 -- validatedVaultKVBaseURL restricts the protected provider endpoint and redirects are disabled.
 	if err != nil {
