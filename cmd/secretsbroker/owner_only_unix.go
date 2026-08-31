@@ -5,13 +5,24 @@ package main
 import (
 	"errors"
 	"os"
+	"path/filepath"
 )
 
 func secureOwnerOnlyPath(path string, directory bool) error {
 	if pathHasSymlinkOrReparseComponent(path) {
 		return errors.New("owner-only path contains symlink indirection")
 	}
-	info, err := os.Lstat(path)
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(filepath.Dir(abs))
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	name := filepath.Base(abs)
+	info, err := root.Lstat(name)
 	if err != nil {
 		return err
 	}
@@ -22,10 +33,19 @@ func secureOwnerOnlyPath(path string, directory bool) error {
 	if directory {
 		want = 0o700
 	}
-	if err := os.Chmod(path, want); err != nil {
+	file, err := root.Open(name)
+	if err != nil {
 		return err
 	}
-	verified, err := os.Lstat(path)
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil || !os.SameFile(info, opened) {
+		return errors.New("owner-only path identity changed during open")
+	}
+	if err := file.Chmod(want); err != nil {
+		return err
+	}
+	verified, err := file.Stat()
 	if err != nil || verified.Mode().Perm() != want {
 		return errors.New("owner-only path permissions could not be verified")
 	}

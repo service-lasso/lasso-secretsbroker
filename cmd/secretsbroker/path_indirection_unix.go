@@ -13,10 +13,15 @@ func pathHasSymlinkOrReparseComponent(path string) bool {
 	if err != nil {
 		return true
 	}
-	current := string(os.PathSeparator)
+	root, err := os.OpenRoot(string(os.PathSeparator))
+	if err != nil {
+		return true
+	}
+	defer root.Close()
+	current := ""
 	for _, part := range strings.FieldsFunc(abs, func(r rune) bool { return r == '/' }) {
 		current = filepath.Join(current, part)
-		info, err := os.Lstat(current)
+		info, err := root.Lstat(current)
 		if err != nil || info.Mode()&os.ModeSymlink != 0 {
 			return true
 		}
