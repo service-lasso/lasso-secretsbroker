@@ -13,7 +13,7 @@ env:
   SERVICE_LASSO_HARNESS_REPO: service-lasso/service-lasso-harness
   SERVICE_LASSO_HARNESS_VERSION: v0.1.1
   SECRETSBROKER_PREVIOUS_RELEASE_REPO: service-lasso/lasso-secretsbroker
-  SECRETSBROKER_PREVIOUS_RELEASE_VERSION: 2026.8.31-d838d11
+  SECRETSBROKER_PREVIOUS_RELEASE_VERSION: 2026.8.31-ef26d3c
 
 jobs:
   validate:
@@ -29,7 +29,7 @@ jobs:
             harness_sha256: 3152dad06fa1661bd96f077462de4057f4136b81fb41dabf5aa7fc9a1dc30daa
             previous_archive_name: secretsbroker-win32.zip
             previous_binary_name: secretsbroker.exe
-            previous_archive_sha256: 63281a1bfb5114a12eb0528fa99846a36d56932493b030910a3ce7e3e97bc653
+            previous_archive_sha256: 0a268f8c26f90b2a0cdcb9e7b8c248e216490c2de99442b8da043d3b17ec1381
           - os: ubuntu-latest
             platform: linux
             archive_name: service-lasso-harness-linux-amd64.tar.gz
@@ -38,7 +38,7 @@ jobs:
             harness_sha256: 71d59667a82bd4d9a0221b5e822ec722052b96f2168d1b4d7bce5bfce8540cb5
             previous_archive_name: secretsbroker-linux.tar.gz
             previous_binary_name: secretsbroker
-            previous_archive_sha256: ce54b052144511a0f398009c68988945ae91c3f2121fa6b9b31fdb3188eafbf7
+            previous_archive_sha256: b7365a34bce2b6ff392c44ba3df8e505e5b6f4642f242b0175d8d2e60e663754
           - os: macos-14
             platform: darwin
             archive_name: service-lasso-harness-darwin-arm64.tar.gz
@@ -47,7 +47,7 @@ jobs:
             harness_sha256: 8f9c69057b4eb26902c8e69da7c183fafffc7382f90688b8566769267704673c
             previous_archive_name: secretsbroker-darwin.tar.gz
             previous_binary_name: secretsbroker
-            previous_archive_sha256: 23f8aac8a8c013b699f8b91dd8f1fa9424af6dafc7d0d730493d06e4613d93f8
+            previous_archive_sha256: 21d4fa6518fa77a4d58df4bde9573d16b74b8dc026859d27c8727667acde4654
 
     runs-on: ${{ matrix.os }}
 

@@ -578,7 +578,10 @@ func (s sourceConfig) resolveVault(refCfg sourceRefConfig) sourceResolveResult {
 		return sourceResolveResult{Outcome: "invalid_ref", Message: "Vault/OpenBao URL is invalid."}
 	}
 	req.Header.Set("X-Vault-Token", token)
-	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 3000)) * time.Millisecond, CheckRedirect: rejectCredentialRedirect}
+	client, err := newSourceHTTPClient(time.Duration(firstPositive(refCfg.TimeoutMs, 3000))*time.Millisecond, s.Production, rejectCredentialRedirect)
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Vault/OpenBao source TLS trust configuration is invalid."}
+	}
 	res, err := client.Do(req) // #nosec G704 -- endpoint comes from the owner-protected source configuration and is validated above.
 	if err != nil {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Vault/OpenBao source is unavailable."}
@@ -769,7 +772,10 @@ func (s sourceConfig) resolveAWSSecretsManager(refCfg sourceRefConfig) sourceRes
 	req.Header.Set("Content-Type", "application/x-amz-json-1.1")
 	req.Header.Set("X-Amz-Target", "secretsmanager.GetSecretValue")
 	req.Header.Set("Authorization", "Bearer "+token)
-	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 5000)) * time.Millisecond, CheckRedirect: rejectCredentialRedirect}
+	client, err := newSourceHTTPClient(time.Duration(firstPositive(refCfg.TimeoutMs, 5000))*time.Millisecond, s.Production, rejectCredentialRedirect)
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "AWS Secrets Manager source TLS trust configuration is invalid."}
+	}
 	res, err := client.Do(req) // #nosec G704 -- the protected provider endpoint is validated and redirects are disabled below.
 	if err != nil {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "AWS Secrets Manager source is unavailable."}
@@ -960,7 +966,10 @@ func (s sourceConfig) resolveBitwardenBWSAPI(refCfg sourceRefConfig, token strin
 		return sourceResolveResult{Outcome: "invalid_ref", Message: "Bitwarden/BWS API request is invalid."}
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	client := http.Client{Timeout: time.Duration(firstPositive(refCfg.TimeoutMs, 5000)) * time.Millisecond, CheckRedirect: rejectCredentialRedirect}
+	client, err := newSourceHTTPClient(time.Duration(firstPositive(refCfg.TimeoutMs, 5000))*time.Millisecond, s.Production, rejectCredentialRedirect)
+	if err != nil {
+		return sourceResolveResult{Outcome: "invalid_ref", Message: "Bitwarden/BWS API source TLS trust configuration is invalid."}
+	}
 	res, err := client.Do(req)
 	if err != nil {
 		return sourceResolveResult{Outcome: "source_unavailable", Message: "Bitwarden/BWS API is unavailable."}
