@@ -13,11 +13,11 @@ func replaceFileAtomically(source, target string) error {
 }
 
 func renamePrivateFile(source, target string) error {
-	absSource, err := filepath.Abs(source)
+	absSource, err := canonicalUnixSecurityPath(source)
 	if err != nil {
 		return err
 	}
-	absTarget, err := filepath.Abs(target)
+	absTarget, err := canonicalUnixSecurityPath(target)
 	if err != nil {
 		return err
 	}

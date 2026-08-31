@@ -60,3 +60,22 @@ func TestWritePrivateFileAtomicallyRejectsSymlinkIndirection(t *testing.T) {
 		t.Fatal("private write changed a symlink target")
 	}
 }
+
+func TestCanonicalUnixSecurityPathRejectsUntrustedAliases(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "target")
+	if err := os.Mkdir(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(root, "alias")
+	if err := os.Symlink(target, alias); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+	canonical, err := canonicalUnixSecurityPath(filepath.Join(alias, "credential.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if canonical == "" || !pathHasSymlinkOrReparseComponent(canonical) {
+		t.Fatal("untrusted alias was not rejected")
+	}
+}

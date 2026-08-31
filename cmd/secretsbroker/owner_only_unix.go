@@ -12,7 +12,7 @@ func secureOwnerOnlyPath(path string, directory bool) error {
 	if pathHasSymlinkOrReparseComponent(path) {
 		return errors.New("owner-only path contains symlink indirection")
 	}
-	abs, err := filepath.Abs(path)
+	abs, err := canonicalUnixSecurityPath(path)
 	if err != nil {
 		return err
 	}
