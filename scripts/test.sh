@@ -22,6 +22,20 @@ if [[ "$SERVICE_ID" != "@secretsbroker" ]]; then
   exit 1
 fi
 
+python3 - <<'PY'
+import json
+import pathlib
+
+supported_action_modes = {'built-in', 'command', 'workflow', 'handler'}
+manifest_paths = [pathlib.Path('service.json'), *pathlib.Path('services').glob('**/service.json')]
+for manifest_path in manifest_paths:
+    manifest = json.loads(manifest_path.read_text())
+    for action_name, action in manifest.get('actions', {}).items():
+        mode = action.get('mode')
+        if mode and mode not in supported_action_modes:
+            raise SystemExit(f'{manifest_path} action {action_name} uses unsupported mode {mode}')
+PY
+
 CONTRACT_ID=$(python3 - <<'PY'
 import json, pathlib
 print(json.loads(pathlib.Path('verify/service-harness.json').read_text())['serviceId'])
