@@ -14,7 +14,13 @@ try {
   $env:GOOS = 'windows'
   $env:GOARCH = 'amd64'
   go build -trimpath -o (Join-Path $staging 'secretsbroker.exe') ./cmd/secretsbroker
+  if ($LASTEXITCODE -ne 0) {
+    throw "secretsbroker build failed with exit code $LASTEXITCODE."
+  }
   go build -trimpath -o (Join-Path $staging 'secretsbroker-resolve.exe') ./cmd/secretsbroker-resolve
+  if ($LASTEXITCODE -ne 0) {
+    throw "secretsbroker-resolve build failed with exit code $LASTEXITCODE."
+  }
 }
 finally {
   Pop-Location

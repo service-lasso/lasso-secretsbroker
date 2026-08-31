@@ -42,15 +42,28 @@ try {
   }
 
   go test ./...
+  if ($LASTEXITCODE -ne 0) {
+    throw "go test failed with exit code $LASTEXITCODE."
+  }
 
   $tmp = Join-Path $root '.tmp\test'
   New-Item -ItemType Directory -Force -Path $tmp | Out-Null
   $exe = Join-Path $tmp 'secretsbroker.exe'
   $resolverExe = Join-Path $tmp 'secretsbroker-resolve.exe'
   go build -o $exe ./cmd/secretsbroker
+  if ($LASTEXITCODE -ne 0) {
+    throw "secretsbroker build failed with exit code $LASTEXITCODE."
+  }
   go build -o $resolverExe ./cmd/secretsbroker-resolve
+  if ($LASTEXITCODE -ne 0) {
+    throw "secretsbroker-resolve build failed with exit code $LASTEXITCODE."
+  }
 
-  $status = & $exe status | ConvertFrom-Json
+  $statusJSON = & $exe status
+  if ($LASTEXITCODE -ne 0) {
+    throw "secretsbroker status failed with exit code $LASTEXITCODE."
+  }
+  $status = $statusJSON | ConvertFrom-Json
   if ($status.serviceId -ne '@secretsbroker') {
     throw 'status serviceId mismatch'
   }
