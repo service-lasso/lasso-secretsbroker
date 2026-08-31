@@ -21,6 +21,9 @@ var releaseAssetNames = []string{
 	"secretsbroker-win32.zip",
 	"secretsbroker-linux.tar.gz",
 	"secretsbroker-darwin.tar.gz",
+	"secretsbroker-win32.cdx.json",
+	"secretsbroker-linux.cdx.json",
+	"secretsbroker-darwin.cdx.json",
 	"service.json",
 }
 
@@ -36,8 +39,15 @@ type serviceManifest struct {
 }
 
 func main() {
+	if len(os.Args) == 4 && os.Args[1] == "verify-file" {
+		if err := verifyFileDigest(os.Args[2], os.Args[3]); err != nil {
+			fmt.Fprintf(os.Stderr, "file checksum verification failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: releasechecksums <write|verify> <release-directory>")
+		fmt.Fprintln(os.Stderr, "usage: releasechecksums <write|verify> <release-directory> | verify-file <sha256> <path>")
 		os.Exit(2)
 	}
 	if err := run(os.Args[1], os.Args[2]); err != nil {
@@ -46,12 +56,29 @@ func main() {
 	}
 }
 
+func verifyFileDigest(expected, path string) error {
+	if len(expected) != sha256.Size*2 || strings.ToLower(expected) != expected {
+		return errors.New("expected SHA-256 must be 64 lowercase hexadecimal characters")
+	}
+	if _, err := hex.DecodeString(expected); err != nil {
+		return errors.New("expected SHA-256 is not hexadecimal")
+	}
+	observed, err := digestRegularFile(path)
+	if err != nil {
+		return err
+	}
+	if observed != expected {
+		return errors.New("SHA-256 mismatch")
+	}
+	return nil
+}
+
 func run(mode, releaseDir string) error {
 	absDir, err := filepath.Abs(releaseDir)
 	if err != nil {
 		return fmt.Errorf("resolve release directory: %w", err)
 	}
-	info, err := os.Lstat(absDir)
+	info, err := os.Lstat(absDir) // #nosec G703 -- release directory is an explicit local CLI input and must be a real directory below.
 	if err != nil {
 		return fmt.Errorf("inspect release directory: %w", err)
 	}
@@ -122,7 +149,7 @@ func writeChecksums(releaseDir string) error {
 	defer func() {
 		_ = temp.Close()
 		if !committed {
-			_ = os.Remove(tempPath)
+			_ = os.Remove(tempPath) // #nosec G703 -- tempPath is returned by CreateTemp inside the validated release directory.
 		}
 	}()
 	if err := temp.Chmod(0o600); err != nil {
@@ -137,7 +164,7 @@ func writeChecksums(releaseDir string) error {
 	if err := temp.Close(); err != nil {
 		return fmt.Errorf("close checksum temporary file: %w", err)
 	}
-	if err := os.Rename(tempPath, filepath.Join(releaseDir, checksumManifestName)); err != nil {
+	if err := os.Rename(tempPath, filepath.Join(releaseDir, checksumManifestName)); err != nil { // #nosec G703 -- both paths are fixed children of the validated release directory.
 		return fmt.Errorf("publish checksum manifest: %w", err)
 	}
 	committed = true
@@ -195,14 +222,14 @@ func verifyChecksums(releaseDir string) error {
 }
 
 func openRegularFile(path string) (*os.File, error) {
-	pathInfo, err := os.Lstat(path)
+	pathInfo, err := os.Lstat(path) // #nosec G703 -- path is a fixed allowlisted release asset child and is type-checked below.
 	if err != nil {
 		return nil, err
 	}
 	if !pathInfo.Mode().IsRegular() || pathInfo.Mode()&os.ModeSymlink != 0 {
 		return nil, errors.New("path must be a regular file")
 	}
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304,G703 -- Lstat rejects links and SameFile below closes the replacement race.
 	if err != nil {
 		return nil, err
 	}

@@ -12,6 +12,8 @@ permissions:
 env:
   SERVICE_LASSO_HARNESS_REPO: service-lasso/service-lasso-harness
   SERVICE_LASSO_HARNESS_VERSION: v0.1.1
+  SECRETSBROKER_PREVIOUS_RELEASE_REPO: service-lasso/lasso-secretsbroker
+  SECRETSBROKER_PREVIOUS_RELEASE_VERSION: 2026.8.31-d838d11
 
 jobs:
   validate:
@@ -24,25 +26,37 @@ jobs:
             archive_name: service-lasso-harness-windows-amd64.zip
             extracted_dir: service-lasso-harness-windows-amd64
             binary_name: service-lasso-harness.exe
+            harness_sha256: 3152dad06fa1661bd96f077462de4057f4136b81fb41dabf5aa7fc9a1dc30daa
+            previous_archive_name: secretsbroker-win32.zip
+            previous_binary_name: secretsbroker.exe
+            previous_archive_sha256: 63281a1bfb5114a12eb0528fa99846a36d56932493b030910a3ce7e3e97bc653
           - os: ubuntu-latest
             platform: linux
             archive_name: service-lasso-harness-linux-amd64.tar.gz
             extracted_dir: service-lasso-harness-linux-amd64
             binary_name: service-lasso-harness
+            harness_sha256: 71d59667a82bd4d9a0221b5e822ec722052b96f2168d1b4d7bce5bfce8540cb5
+            previous_archive_name: secretsbroker-linux.tar.gz
+            previous_binary_name: secretsbroker
+            previous_archive_sha256: ce54b052144511a0f398009c68988945ae91c3f2121fa6b9b31fdb3188eafbf7
           - os: macos-14
             platform: darwin
             archive_name: service-lasso-harness-darwin-arm64.tar.gz
             extracted_dir: service-lasso-harness-darwin-arm64
             binary_name: service-lasso-harness
+            harness_sha256: 8f9c69057b4eb26902c8e69da7c183fafffc7382f90688b8566769267704673c
+            previous_archive_name: secretsbroker-darwin.tar.gz
+            previous_binary_name: secretsbroker
+            previous_archive_sha256: 23f8aac8a8c013b699f8b91dd8f1fa9424af6dafc7d0d730493d06e4613d93f8
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
 
@@ -57,6 +71,12 @@ jobs:
             --repo "$SERVICE_LASSO_HARNESS_REPO" \
             --pattern "${{ matrix.archive_name }}" \
             --dir .harness/download
+
+      - name: Verify released harness digest before extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run ./cmd/releasechecksums verify-file '${{ matrix.harness_sha256 }}' ".harness/download/${{ matrix.archive_name }}"
 
       - name: Extract released harness binary (Windows)
         if: runner.os == 'Windows'
@@ -87,9 +107,63 @@ jobs:
           echo "$BIN_DIR" >> "$GITHUB_PATH"
           echo "SERVICE_LASSO_HARNESS_BIN=$BIN_PATH" >> "$GITHUB_ENV"
 
+      - name: Download and verify compatible previous Broker release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .compat/download .compat/bin
+          gh release download "$SECRETSBROKER_PREVIOUS_RELEASE_VERSION" \
+            --repo "$SECRETSBROKER_PREVIOUS_RELEASE_REPO" \
+            --pattern "${{ matrix.previous_archive_name }}" \
+            --dir .compat/download
+          go run ./cmd/releasechecksums verify-file '${{ matrix.previous_archive_sha256 }}' ".compat/download/${{ matrix.previous_archive_name }}"
+
+      - name: Extract compatible previous Broker release (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Expand-Archive -LiteralPath ".compat/download/${{ matrix.previous_archive_name }}" -DestinationPath .compat/bin
+          $bin = Get-ChildItem .compat/bin -Recurse -File -Filter "${{ matrix.previous_binary_name }}" | Select-Object -First 1
+          if (-not $bin) { throw "Compatible previous Broker binary not found." }
+          Add-Content -Path $env:GITHUB_ENV -Value "SECRETSBROKER_PREVIOUS_RELEASE_BINARY=$($bin.FullName)"
+
+      - name: Extract compatible previous Broker release (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -xzf ".compat/download/${{ matrix.previous_archive_name }}" -C .compat/bin
+          BIN_PATH="$(find "$PWD/.compat/bin" -type f -name "${{ matrix.previous_binary_name }}" | head -n 1)"
+          if [[ -z "$BIN_PATH" ]]; then
+            echo "Compatible previous Broker binary not found." >&2
+            exit 1
+          fi
+          chmod +x "$BIN_PATH"
+          echo "SECRETSBROKER_PREVIOUS_RELEASE_BINARY=$BIN_PATH" >> "$GITHUB_ENV"
+
       - name: Scan Go source vulnerabilities
         shell: bash
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
+      - name: Run gosec static analysis
+        shell: bash
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.29.0 ./...
+
+      - name: Run Go static analysis
+        shell: bash
+        run: go vet ./...
+
+      - name: Fuzz persisted security contract corpus
+        if: runner.os == 'Linux'
+        shell: bash
+        run: go test ./cmd/secretsbroker -run=^$ -fuzz=FuzzSecurityContractParsers -fuzztime=15s
+
+      - name: Run race detector
+        if: runner.os == 'Linux'
+        shell: bash
+        run: go test -race ./...
 
       - name: Package Secrets Broker artifact (Windows)
         if: runner.os == 'Windows'
@@ -138,8 +212,9 @@ jobs:
 
       - name: Upload verify artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: verify-${{ matrix.platform }}
           path: output/verify
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 90

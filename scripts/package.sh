@@ -42,8 +42,10 @@ mkdir -p "$STAGING"
 
 cp -R "$ROOT/config" "$STAGING/config"
 cp "$ROOT/service.json" "$STAGING/service.json"
+(cd "$ROOT" && go run ./cmd/sbom --output "$STAGING/sbom.cdx.json" --platform "$PLATFORM")
+cp "$STAGING/sbom.cdx.json" "$DIST/secretsbroker-$PLATFORM.cdx.json"
 chmod +x "$STAGING/secretsbroker" "$STAGING/secretsbroker-resolve"
 
 rm -f "$TAR_PATH"
-tar -czf "$TAR_PATH" -C "$STAGING" .
+(cd "$ROOT" && go run ./cmd/releasearchive --source "$STAGING" --output "$TAR_PATH" --format tar.gz)
 echo "Created $TAR_PATH"

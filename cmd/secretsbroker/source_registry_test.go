@@ -134,7 +134,7 @@ func TestSourceConfigSecurityStatusDoesNotExposeConfigPathOrSecrets(t *testing.T
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "sources.json")
 	config := `{"sources":[{"sourceId":"vault-prod","kind":"vault","enabled":true,"address":"https://vault.example.invalid","token":"SOURCE_CONFIG_TOKEN_SHOULD_NOT_LEAK","refs":{"services/api/runtime/API_TOKEN":{"path":"secret/data/api","field":"token"}}}]}`
-	if err := os.WriteFile(configPath, []byte(config), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := loadSourceConfig(configPath)

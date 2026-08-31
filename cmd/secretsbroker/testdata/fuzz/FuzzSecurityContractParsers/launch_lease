@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"issuer\":\"launcher\",\"serviceId\":\"service\",\"jti\":\"lease\",\"allowedOperations\":[\"resolve\"]}")

@@ -572,7 +572,7 @@ func unwrapMasterKeyWithProvider(path string, ctx wrapperContext, provider keyWr
 	if !ctx.Supported {
 		return nil, errUnsupportedOSWrapper
 	}
-	if _, err := os.Stat(path); err != nil {
+	if _, err := os.Stat(path); err != nil { // #nosec G703 -- the startup-owned wrapper path is secured and validated by the provider immediately below.
 		return nil, err
 	}
 	// SecurePath is idempotent and repairs legacy/default ownership and ACL
@@ -607,7 +607,7 @@ func unwrapMasterKeyWithProvider(path string, ctx wrapperContext, provider keyWr
 }
 
 func readLocalKeyWrapper(path string) (localKeyWrapper, error) {
-	file, err := os.Open(path)
+	file, err := openValidatedRegularFile(path, localWrapperMaxSize, true)
 	if err != nil {
 		return localKeyWrapper{}, err
 	}

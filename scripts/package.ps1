@@ -13,8 +13,14 @@ Push-Location $root
 try {
   $env:GOOS = 'windows'
   $env:GOARCH = 'amd64'
-  go build -o (Join-Path $staging 'secretsbroker.exe') ./cmd/secretsbroker
-  go build -o (Join-Path $staging 'secretsbroker-resolve.exe') ./cmd/secretsbroker-resolve
+  go build -trimpath -o (Join-Path $staging 'secretsbroker.exe') ./cmd/secretsbroker
+  if ($LASTEXITCODE -ne 0) {
+    throw "secretsbroker build failed with exit code $LASTEXITCODE."
+  }
+  go build -trimpath -o (Join-Path $staging 'secretsbroker-resolve.exe') ./cmd/secretsbroker-resolve
+  if ($LASTEXITCODE -ne 0) {
+    throw "secretsbroker-resolve build failed with exit code $LASTEXITCODE."
+  }
 }
 finally {
   Pop-Location
@@ -25,6 +31,21 @@ finally {
 Copy-Item -Recurse -Force (Join-Path $root 'config') (Join-Path $staging 'config')
 Copy-Item -Force (Join-Path $root 'service.json') (Join-Path $staging 'service.json')
 
+Push-Location $root
+try {
+  go run ./cmd/sbom --output (Join-Path $staging 'sbom.cdx.json') --platform win32
+}
+finally {
+  Pop-Location
+}
+Copy-Item -Force (Join-Path $staging 'sbom.cdx.json') (Join-Path $dist 'secretsbroker-win32.cdx.json')
+
 if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
-Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zipPath
+Push-Location $root
+try {
+  go run ./cmd/releasearchive --source $staging --output $zipPath --format zip
+}
+finally {
+  Pop-Location
+}
 Write-Host "Created $zipPath"

@@ -73,17 +73,44 @@ $exe = Join-Path $tmp 'secretsbroker.exe'
 Push-Location $root
 try {
   go build -o $exe ./cmd/secretsbroker
+  if ($LASTEXITCODE -ne 0) {
+    throw "secretsbroker build failed with exit code $LASTEXITCODE."
+  }
 
   $stdout = Join-Path $runDir 'broker.out.log'
   $stderr = Join-Path $runDir 'broker.err.log'
-  $proc = Start-Process -FilePath $exe -ArgumentList @(
-    'serve',
-    '--mode', 'production',
-    '--transport', 'windows-named-pipe',
-    '--named-pipe', $pipePath,
-    '--named-pipe-allow-admin=false',
-    '--named-pipe-allow-local-system=false'
-  ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+  $authorityEnvironment = @{
+    SECRETSBROKER_MASTER_KEY = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+    SECRETSBROKER_API_TOKEN = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+    SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+    SECRETSBROKER_LAUNCH_IDENTITY_ISSUER = 'service-lasso-local-launcher'
+    SECRETSBROKER_AUDIT_HASH_CHAIN = '1'
+  }
+  $previousAuthorityEnvironment = @{}
+  foreach ($entry in $authorityEnvironment.GetEnumerator()) {
+    $previousAuthorityEnvironment[$entry.Key] = [Environment]::GetEnvironmentVariable($entry.Key, 'Process')
+    [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
+  }
+  try {
+    $proc = Start-Process -FilePath $exe -ArgumentList @(
+      'serve',
+      '--mode', 'production',
+      '--transport', 'windows-named-pipe',
+      '--named-pipe', $pipePath,
+      '--named-pipe-allowed-sid', $currentSID,
+      '--named-pipe-allow-admin=false',
+      '--named-pipe-allow-local-system=false',
+      '--store', (Join-Path $runDir 'store.json'),
+      '--audit', (Join-Path $runDir 'audit.jsonl'),
+      '--events', (Join-Path $runDir 'events.jsonl')
+    ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+  }
+  finally {
+    foreach ($entry in $authorityEnvironment.GetEnumerator()) {
+      [Environment]::SetEnvironmentVariable($entry.Key, $previousAuthorityEnvironment[$entry.Key], 'Process')
+    }
+    $authorityEnvironment.Clear()
+  }
 
   try {
     $ready = $false

@@ -8,7 +8,7 @@ fi
 
 OUTPUT_PATH="$1"
 shift
-SCANNER="golang.org/x/vuln/cmd/govulncheck@v1.6.0"
+SCANNER="golang.org/x/vuln/cmd/govulncheck@v1.7.0"
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 
 tmp_json="${OUTPUT_PATH}.tmp"

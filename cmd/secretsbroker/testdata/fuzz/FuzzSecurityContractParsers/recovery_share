@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"version\":\"secretsbroker.recovery-share.v1\",\"threshold\":2,\"shareCount\":3,\"shareIndex\":1}")

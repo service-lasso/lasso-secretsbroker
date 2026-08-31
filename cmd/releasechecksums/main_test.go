@@ -99,14 +99,34 @@ func TestReleaseChecksumsRequireManifestContract(t *testing.T) {
 	}
 }
 
+func TestVerifyFileDigest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "download.tar.gz")
+	if err := os.WriteFile(path, []byte("verified download"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const digest = "636a193cc46913f6e164b8428da57752de7db348e95903e5f0e3c2e66a300525"
+	if err := verifyFileDigest(digest, path); err != nil {
+		t.Fatalf("verify exact file digest: %v", err)
+	}
+	if err := verifyFileDigest(strings.Repeat("0", 64), path); err == nil {
+		t.Fatal("verify-file unexpectedly accepted a digest mismatch")
+	}
+	if err := verifyFileDigest("BFB1FF", path); err == nil {
+		t.Fatal("verify-file unexpectedly accepted a malformed digest")
+	}
+}
+
 func createReleaseFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	contents := map[string]string{
-		"secretsbroker-win32.zip":     "windows",
-		"secretsbroker-linux.tar.gz":  "linux",
-		"secretsbroker-darwin.tar.gz": "darwin",
-		"service.json":                `{"artifact":{"platforms":{"win32":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}},"linux":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}},"darwin":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}}}}}`,
+		"secretsbroker-win32.zip":       "windows",
+		"secretsbroker-linux.tar.gz":    "linux",
+		"secretsbroker-darwin.tar.gz":   "darwin",
+		"secretsbroker-win32.cdx.json":  `{"bomFormat":"CycloneDX","specVersion":"1.6"}`,
+		"secretsbroker-linux.cdx.json":  `{"bomFormat":"CycloneDX","specVersion":"1.6"}`,
+		"secretsbroker-darwin.cdx.json": `{"bomFormat":"CycloneDX","specVersion":"1.6"}`,
+		"service.json":                  `{"artifact":{"platforms":{"win32":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}},"linux":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}},"darwin":{"checksum":{"algorithm":"sha256","assetName":"SHA256SUMS.txt"}}}}}`,
 	}
 	for name, content := range contents {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {

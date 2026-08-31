@@ -192,7 +192,7 @@ func safeRefPrefix(ref string) string {
 }
 
 func loadOperationalEvents(path string) ([]operationalEvent, error) {
-	file, err := os.Open(path)
+	file, err := openValidatedRegularFile(path, 256<<20, true)
 	if errors.Is(err, os.ErrNotExist) {
 		return []operationalEvent{}, nil
 	}
@@ -216,7 +216,7 @@ func loadOperationalEvents(path string) ([]operationalEvent, error) {
 }
 
 func saveOperationalEvents(path string, events []operationalEvent) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil { // #nosec G703 -- event path is immutable startup configuration and the directory is owner-only.
 		return err
 	}
 	var builder strings.Builder

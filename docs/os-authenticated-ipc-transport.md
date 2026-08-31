@@ -33,6 +33,7 @@ SECRETSBROKER_NAMED_PIPE=\\.\pipe\service-lasso-secretsbroker
 SECRETSBROKER_NAMED_PIPE_ALLOWED_SIDS=S-1-5-80-...
 SECRETSBROKER_NAMED_PIPE_ALLOW_ADMIN=true|false
 SECRETSBROKER_NAMED_PIPE_ALLOW_LOCAL_SYSTEM=true|false
+SECRETSBROKER_LAUNCH_IDENTITY_ISSUER=service-lasso-local-launcher
 ```
 
 Implemented behavior:
@@ -43,7 +44,7 @@ Implemented behavior:
 - `auto` chooses the platform IPC transport in production mode: Windows named pipe on Windows, Unix socket elsewhere.
 - Unix-like platforms can serve HTTP over a Unix socket, set the socket path to owner-only mode, and check OS peer credentials before passing a connection to the HTTP server. Linux uses `SO_PEERCRED`; macOS/FreeBSD use `LOCAL_PEERCRED`.
 - Windows can serve HTTP over a named pipe with a restricted security descriptor and a connected-client identity check before passing the connection to the HTTP server.
-- Authenticated IPC listeners attach safe local peer metadata to each accepted request: `windows-sid` for Windows named-pipe peers and `unix-uid` for Unix socket peers. Signed launch identity leases can optionally bind to that transport subject for secret-bearing resolve/write-back requests.
+- Authenticated IPC listeners attach safe local peer metadata to each accepted request: `windows-sid` for Windows named-pipe peers and `unix-uid` for Unix socket peers. Production signed launch identity leases must bind to that transport subject for secret-bearing resolve/write-back requests.
 - `secretsbroker admin launch-lease issue` can issue a signed lease with an explicit `transportBinding` so launcher integration tests and future core launch flows can produce the same bound payload the broker enforces.
 
 ## Production gate
@@ -64,9 +65,9 @@ Current Windows named-pipe support:
 Windows service-account policy:
 
 - `--named-pipe-allowed-sid` is repeatable and adds explicit service-account or launcher user SIDs to the named-pipe ACL and runtime authorization allowlist. `SECRETSBROKER_NAMED_PIPE_ALLOWED_SIDS` accepts a comma-separated list for service managers that prefer environment configuration.
-- `--named-pipe-allow-admin` / `SECRETSBROKER_NAMED_PIPE_ALLOW_ADMIN` controls whether enabled local Administrators group members can connect. The default is `true` for compatibility with existing local administrator launch flows; production profiles can set it to `false` once the launcher runs under a stable service account.
-- `--named-pipe-allow-local-system` / `SECRETSBROKER_NAMED_PIPE_ALLOW_LOCAL_SYSTEM` controls whether LocalSystem can connect. The default is `true` for service-manager compatibility; production profiles can set it to `false` when LocalSystem is not the launcher identity.
-- The Service Lasso core launcher should eventually issue transport-bound launch identity leases only after the selected launcher account SID is known and present in this policy. Until then, leases without `transportBinding` remain compatible and are still scoped by token/session/lease policy.
+- `--named-pipe-allow-admin` / `SECRETSBROKER_NAMED_PIPE_ALLOW_ADMIN` controls whether enabled local Administrators group members can connect. The default is `false`, and production startup rejects enabling this broad grant.
+- `--named-pipe-allow-local-system` / `SECRETSBROKER_NAMED_PIPE_ALLOW_LOCAL_SYSTEM` controls whether LocalSystem can connect. The default is `false`, and production startup rejects enabling this broad grant.
+- Production requires an explicit launcher/service-account SID and a lease bound to the authenticated client SID. Unbound leases remain compatible only in development/bootstrap mode.
 
 Remaining hardening:
 
@@ -139,7 +140,7 @@ Supported binding kinds:
 - `windows-sid`: the connected Windows named-pipe client process token user SID.
 - `unix-uid`: the connected Unix socket peer UID.
 
-If a lease omits `transportBinding`, existing token/session and lease scope checks continue unchanged. If a lease includes it, the broker requires an authenticated IPC listener to provide matching peer metadata before `POST /v1/resolve` or `POST /v1/writeback` can proceed. Loopback HTTP does not provide OS peer identity, so transport-bound leases fail closed on loopback.
+Production rejects a lease that omits `transportBinding`. The broker requires an authenticated IPC listener to provide matching peer metadata before `POST /v1/resolve` or `POST /v1/writeback` can proceed. Loopback HTTP does not provide OS peer identity, so transport-bound leases fail closed on loopback. Development/bootstrap mode retains unbound-lease compatibility.
 
 The broker-side issuance helper supports the launcher payload shape:
 

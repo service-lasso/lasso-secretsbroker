@@ -102,6 +102,10 @@ Production-mode startup must use an OS IPC transport instead of loopback HTTP:
 ```powershell
 $env:SECRETSBROKER_MODE = "production"
 $env:SECRETSBROKER_TRANSPORT = "auto"
+$env:SECRETSBROKER_MASTER_KEY = "<broker-store-key>"
+$env:SECRETSBROKER_API_TOKEN = "<local-api-token>"
+$env:SECRETSBROKER_LAUNCH_IDENTITY_SIGNING_KEY = "<distinct-launcher-hmac-key>"
+$env:SECRETSBROKER_LAUNCH_IDENTITY_ISSUER = "service-lasso-local-launcher"
 go run .\cmd\secretsbroker serve
 ```
 
@@ -112,11 +116,11 @@ Windows named-pipe production profiles can make launcher/service-account access 
 ```powershell
 $env:SECRETSBROKER_NAMED_PIPE_ALLOWED_SIDS = "S-1-5-80-..."
 $env:SECRETSBROKER_NAMED_PIPE_ALLOW_ADMIN = "false"
-$env:SECRETSBROKER_NAMED_PIPE_ALLOW_LOCAL_SYSTEM = "true"
+$env:SECRETSBROKER_NAMED_PIPE_ALLOW_LOCAL_SYSTEM = "false"
 go run .\cmd\secretsbroker serve --mode production --transport windows-named-pipe
 ```
 
-The broker process user SID is always included in the named-pipe ACL. Additional SIDs are for a stable Service Lasso launcher or service account. Local Administrators and LocalSystem stay enabled by default for compatibility, and production profiles can turn either off once the launcher identity is fixed.
+The broker process user SID is always included in the named-pipe ACL. Production also requires at least one explicitly allowlisted stable Service Lasso launcher or service-account SID. Local Administrators and LocalSystem are denied by default and production startup rejects either broad grant.
 
 Launcher-issued transport-bound leases can be produced with the broker helper while core launcher integration is being wired:
 

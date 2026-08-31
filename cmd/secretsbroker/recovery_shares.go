@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -403,7 +402,7 @@ func splitSecretGF256(secret []byte, threshold, shareCount int) ([]recoveryShare
 			}
 		}
 		for shareIndex := range shares {
-			x := byte(shares[shareIndex].Index)
+			x := byte(shares[shareIndex].Index) // #nosec G115 -- splitSecretGF256 rejects share counts above 255.
 			y := coefficients[threshold-1]
 			for i := threshold - 2; i >= 0; i-- {
 				y = gfMul(y, x) ^ coefficients[i]
@@ -440,13 +439,13 @@ func combineSecretGF256(shares []recoverySharePoint) ([]byte, error) {
 	for byteIndex := 0; byteIndex < length; byteIndex++ {
 		var value byte
 		for i, share := range shares {
-			xi := byte(share.Index)
+			xi := byte(share.Index) // #nosec G115 -- every share index is range-checked above.
 			basis := byte(1)
 			for j, other := range shares {
 				if i == j {
 					continue
 				}
-				xj := byte(other.Index)
+				xj := byte(other.Index) // #nosec G115 -- every share index is range-checked above.
 				denominator := xi ^ xj
 				if denominator == 0 {
 					return nil, errInvalidRecoveryShare
@@ -561,23 +560,15 @@ func writeRecoveryShareFile(path string, share recoveryShareFile) error {
 	if path == "" {
 		return errRecoveryShareOutputRequired
 	}
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("recovery share output already exists: %s", path)
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
 	bytes, err := json.MarshalIndent(share, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, bytes, 0o600)
+	return writePrivateFileExclusive(path, bytes)
 }
 
 func readRecoveryShareFile(path string) (recoveryShareFile, error) {
-	file, err := os.Open(strings.TrimSpace(path))
+	file, err := openValidatedRegularFile(strings.TrimSpace(path), maxRecoveryShareSize, true)
 	if err != nil {
 		return recoveryShareFile{}, err
 	}
@@ -652,9 +643,14 @@ func loadAgeStrings(inlineValues, files []string) ([]string, error) {
 		if path == "" {
 			continue
 		}
-		bytes, err := os.ReadFile(path)
+		file, err := openValidatedRegularFile(path, maxRecoveryShareSize, true)
 		if err != nil {
 			return nil, err
+		}
+		bytes, err := io.ReadAll(io.LimitReader(file, maxRecoveryShareSize+1))
+		_ = file.Close()
+		if err != nil || len(bytes) > maxRecoveryShareSize {
+			return nil, errInvalidRecoveryShare
 		}
 		for _, line := range strings.Split(string(bytes), "\n") {
 			line = strings.TrimSpace(line)

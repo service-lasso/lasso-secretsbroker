@@ -7,7 +7,7 @@ Secrets Broker is a security boundary. Its release artifacts must use a currentl
 ## Pinned release inputs
 
 - The exact Go patch release is declared in `go.mod`; workflows use `actions/setup-go` with `go-version-file`.
-- Source and binary scanning use the pinned command module `golang.org/x/vuln/cmd/govulncheck@v1.6.0`.
+- Source and binary scanning use the pinned command module `golang.org/x/vuln/cmd/govulncheck@v1.7.0`.
 - Scanner findings are not suppressed or allowlisted to make a release pass.
 
 ## Required release sequence

@@ -400,7 +400,7 @@ func (b *localBackend) loadManagedBackup(backupID string) (managedBackupMetadata
 	if err != nil || !lstat.Mode().IsRegular() || lstat.Size() <= 0 || lstat.Size() > maxManagedBackupSize {
 		return managedBackupMetadata{}, backupArtifact{}, errInvalidBackupArtifact
 	}
-	file, err := os.Open(path)
+	file, err := openValidatedRegularFile(path, maxManagedBackupSize, true)
 	if err != nil {
 		return managedBackupMetadata{}, backupArtifact{}, err
 	}
@@ -475,7 +475,7 @@ func validLifecycleID(value string) bool {
 }
 
 func fileSHA256(path string, maxSize int64) (string, error) {
-	file, err := os.Open(path)
+	file, err := openValidatedRegularFile(path, maxSize, false)
 	if err != nil {
 		return "", err
 	}

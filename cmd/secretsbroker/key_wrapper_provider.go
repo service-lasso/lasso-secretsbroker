@@ -92,7 +92,7 @@ func loadKeyMaterialWithWrapperWithProvider(flagValue, filePath, wrapperPath str
 	if err == nil || !errors.Is(err, errLocked) || wrapperPath == "" {
 		return material, err
 	}
-	if _, statErr := os.Stat(wrapperPath); errors.Is(statErr, os.ErrNotExist) {
+	if _, statErr := os.Stat(wrapperPath); errors.Is(statErr, os.ErrNotExist) { // #nosec G703 -- wrapperPath is startup-owned and is validated by the OS wrapper provider before read.
 		return material, errLocked
 	} else if statErr != nil {
 		return keyMaterial{Source: "os-wrapper"}, statErr
@@ -133,11 +133,11 @@ func loadKeyMaterialForStoreWithProvider(flagValue, filePath, wrapperPath, store
 	}
 	pendingPath := rotationPendingWrapperPath(wrapperPath)
 	if materialErr == nil && masterKeyID(material.Value) == storeKeyID {
-		if _, err := os.Lstat(pendingPath); err == nil {
+		if _, err := os.Lstat(pendingPath); err == nil { // #nosec G703 -- pendingPath is deterministically derived from the validated wrapper path.
 			if err := provider.ValidatePath(pendingPath, false); err != nil {
 				return keyMaterial{}, errWrapperAccess
 			}
-			if err := os.Remove(pendingPath); err != nil {
+			if err := os.Remove(pendingPath); err != nil { // #nosec G703 -- provider validation immediately above binds the exact private pending file.
 				return keyMaterial{}, err
 			}
 		}
@@ -187,7 +187,7 @@ func (b *localBackend) lifecycleWrapperContext() wrapperContext {
 }
 
 func readStoreKeyID(path string) (string, error) {
-	file, err := os.Open(path)
+	file, err := openValidatedRegularFile(path, maxStoreKeyMetadataSize, true)
 	if err != nil {
 		return "", err
 	}

@@ -47,7 +47,7 @@ share contents.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "serviceId": "@secretsbroker",
   "apiVersion": "secretsbroker.local/v1",
   "createdAt": "2026-05-08T00:00:00Z",
@@ -69,7 +69,8 @@ share contents.
         }
       }
     }
-  }
+  },
+  "integrity": "<keyed artifact integrity value>"
 }
 ```
 
@@ -104,6 +105,22 @@ Restore validates:
 - that every encrypted payload decrypts with the supplied key
 
 A missing key returns locked behavior. A wrong key returns an actionable backup-key failure and does not write the target store.
+
+## Compatible-release recovery proof
+
+Every Windows, Linux, and macOS validation and release job downloads the exact
+`2026.8.31-d838d11` Broker archive, verifies its pinned SHA-256 digest before
+extraction, and exposes only the verified binary to
+`TestBackupRestoreAcrossCompatibleReleaseBinary`. The test is bidirectional:
+
+1. the previous released binary creates an encrypted backup that the candidate restores;
+2. the candidate creates an encrypted backup that the previous released binary restores.
+
+The test rejects non-absolute, missing, symbolic-link, or non-regular previous
+binaries and checks that command output never contains the compatibility key.
+This proves the current version-2 backup contract across the immediately prior
+compatible release; it is not a promise that unknown future formats will be
+accepted.
 
 ## Rotate the portable master key
 

@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,8 +34,14 @@ func (windowsDPAPIKeyWrapperProvider) Protect(plaintext []byte) ([]byte, error) 
 	if len(plaintext) == 0 {
 		return nil, errInvalidMasterKey
 	}
-	input := dataBlob(plaintext)
-	entropy := dataBlob(windowsDPAPIEntropy)
+	input, err := dataBlob(plaintext)
+	if err != nil {
+		return nil, err
+	}
+	entropy, err := dataBlob(windowsDPAPIEntropy)
+	if err != nil {
+		return nil, err
+	}
 	description, err := windows.UTF16PtrFromString("Service Lasso Secrets Broker portable master key")
 	if err != nil {
 		return nil, err
@@ -43,7 +50,7 @@ func (windowsDPAPIKeyWrapperProvider) Protect(plaintext []byte) ([]byte, error) 
 	if err := windows.CryptProtectData(&input, description, &entropy, 0, nil, windows.CRYPTPROTECT_UI_FORBIDDEN, &output); err != nil {
 		return nil, err
 	}
-	defer windows.LocalFree(windows.Handle(unsafe.Pointer(output.Data)))
+	defer windows.LocalFree(windows.Handle(unsafe.Pointer(output.Data))) // #nosec G103 -- DPAPI returns memory that LocalFree must release through the Windows API.
 	runtime.KeepAlive(plaintext)
 	runtime.KeepAlive(windowsDPAPIEntropy)
 	return copyDataBlob(output)
@@ -53,34 +60,43 @@ func (windowsDPAPIKeyWrapperProvider) Unprotect(ciphertext []byte) ([]byte, erro
 	if len(ciphertext) == 0 {
 		return nil, errInvalidWrapper
 	}
-	input := dataBlob(ciphertext)
-	entropy := dataBlob(windowsDPAPIEntropy)
+	input, err := dataBlob(ciphertext)
+	if err != nil {
+		return nil, err
+	}
+	entropy, err := dataBlob(windowsDPAPIEntropy)
+	if err != nil {
+		return nil, err
+	}
 	var output windows.DataBlob
 	var description *uint16
 	if err := windows.CryptUnprotectData(&input, &description, &entropy, 0, nil, windows.CRYPTPROTECT_UI_FORBIDDEN, &output); err != nil {
 		return nil, err
 	}
 	if description != nil {
-		defer windows.LocalFree(windows.Handle(unsafe.Pointer(description)))
+		defer windows.LocalFree(windows.Handle(unsafe.Pointer(description))) // #nosec G103 -- CryptUnprotectData owns this Windows-allocated description.
 	}
-	defer windows.LocalFree(windows.Handle(unsafe.Pointer(output.Data)))
+	defer windows.LocalFree(windows.Handle(unsafe.Pointer(output.Data))) // #nosec G103 -- DPAPI returns memory that LocalFree must release through the Windows API.
 	runtime.KeepAlive(ciphertext)
 	runtime.KeepAlive(windowsDPAPIEntropy)
 	return copyDataBlob(output)
 }
 
-func dataBlob(bytes []byte) windows.DataBlob {
+func dataBlob(bytes []byte) (windows.DataBlob, error) {
 	if len(bytes) == 0 {
-		return windows.DataBlob{}
+		return windows.DataBlob{}, nil
 	}
-	return windows.DataBlob{Size: uint32(len(bytes)), Data: &bytes[0]}
+	if uint64(len(bytes)) > uint64(math.MaxUint32) {
+		return windows.DataBlob{}, errInvalidWrapper
+	}
+	return windows.DataBlob{Size: uint32(len(bytes)), Data: &bytes[0]}, nil // #nosec G115 -- the uint32 upper bound is checked immediately above.
 }
 
 func copyDataBlob(blob windows.DataBlob) ([]byte, error) {
 	if blob.Size == 0 || blob.Data == nil {
 		return nil, errWrapperUnavailable
 	}
-	return append([]byte(nil), unsafe.Slice(blob.Data, blob.Size)...), nil
+	return append([]byte(nil), unsafe.Slice(blob.Data, blob.Size)...), nil // #nosec G103 -- DataBlob size and pointer come from successful DPAPI output.
 }
 
 func (windowsDPAPIKeyWrapperProvider) SecurePath(path string, directory bool) error {
@@ -198,7 +214,7 @@ func validateWindowsPrivateSecurityDescriptor(sd *windows.SECURITY_DESCRIPTOR, u
 		if ace.Mask != windowsFileAllAccess || ace.Header.AceFlags != expectedFlags || ace.Header.AceFlags&windows.INHERITED_ACE != 0 {
 			return errWrapperAccess
 		}
-		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
+		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart)) // #nosec G103 -- ACE SidStart is the Windows API-defined SID memory layout.
 		if !sid.Equals(userSID) && !sid.Equals(systemSID) {
 			return errWrapperAccess
 		}

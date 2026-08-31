@@ -1131,7 +1131,7 @@ func registerSecretsManagementHandlers(mux *http.ServeMux, backend *localBackend
 		if req.RequireBrokerGenerate || normalizeProvisioningGenerationMode(req.GenerationMode) == "broker_generated" {
 			peer := transportPeerIdentityFromContext(r.Context())
 			leaseReq := generatedSecretCaptureRequest{Identity: req.Identity, IdentityLease: req.IdentityLease, Operation: operation, Namespace: namespaceFromRef(ref), Ref: refName(ref)}
-			if err := backend.authorizeWritebackLaunchLease(&leaseReq, firstNonEmpty(backend.launchIdentitySigningKey, security.token), peer); err != nil {
+			if err := backend.authorizeWritebackLaunchLease(&leaseReq, backend.launchLeaseSigningKey(security.token), peer); err != nil {
 				writeLaunchIdentityAPIError(w, err)
 				return
 			}
