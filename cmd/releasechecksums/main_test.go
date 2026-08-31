@@ -99,6 +99,23 @@ func TestReleaseChecksumsRequireManifestContract(t *testing.T) {
 	}
 }
 
+func TestVerifyFileDigest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "download.tar.gz")
+	if err := os.WriteFile(path, []byte("verified download"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const digest = "636a193cc46913f6e164b8428da57752de7db348e95903e5f0e3c2e66a300525"
+	if err := verifyFileDigest(digest, path); err != nil {
+		t.Fatalf("verify exact file digest: %v", err)
+	}
+	if err := verifyFileDigest(strings.Repeat("0", 64), path); err == nil {
+		t.Fatal("verify-file unexpectedly accepted a digest mismatch")
+	}
+	if err := verifyFileDigest("BFB1FF", path); err == nil {
+		t.Fatal("verify-file unexpectedly accepted a malformed digest")
+	}
+}
+
 func createReleaseFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()

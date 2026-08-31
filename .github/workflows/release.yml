@@ -96,7 +96,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s  %s\n' '${{ matrix.harness_sha256 }}' ".harness/download/${{ matrix.archive_name }}" | sha256sum --check --strict
+          go run ./cmd/releasechecksums verify-file '${{ matrix.harness_sha256 }}' ".harness/download/${{ matrix.archive_name }}"
 
       - name: Extract released harness binary (Windows)
         if: runner.os == 'Windows'
@@ -138,7 +138,7 @@ jobs:
             --repo "$SECRETSBROKER_PREVIOUS_RELEASE_REPO" \
             --pattern "${{ matrix.previous_archive_name }}" \
             --dir .compat/download
-          printf '%s  %s\n' '${{ matrix.previous_archive_sha256 }}' ".compat/download/${{ matrix.previous_archive_name }}" | sha256sum --check --strict
+          go run ./cmd/releasechecksums verify-file '${{ matrix.previous_archive_sha256 }}' ".compat/download/${{ matrix.previous_archive_name }}"
 
       - name: Extract compatible previous Broker release (Windows)
         if: runner.os == 'Windows'

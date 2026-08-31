@@ -39,14 +39,38 @@ type serviceManifest struct {
 }
 
 func main() {
+	if len(os.Args) == 4 && os.Args[1] == "verify-file" {
+		if err := verifyFileDigest(os.Args[2], os.Args[3]); err != nil {
+			fmt.Fprintf(os.Stderr, "file checksum verification failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: releasechecksums <write|verify> <release-directory>")
+		fmt.Fprintln(os.Stderr, "usage: releasechecksums <write|verify> <release-directory> | verify-file <sha256> <path>")
 		os.Exit(2)
 	}
 	if err := run(os.Args[1], os.Args[2]); err != nil {
 		fmt.Fprintf(os.Stderr, "release checksum verification failed: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func verifyFileDigest(expected, path string) error {
+	if len(expected) != sha256.Size*2 || strings.ToLower(expected) != expected {
+		return errors.New("expected SHA-256 must be 64 lowercase hexadecimal characters")
+	}
+	if _, err := hex.DecodeString(expected); err != nil {
+		return errors.New("expected SHA-256 is not hexadecimal")
+	}
+	observed, err := digestRegularFile(path)
+	if err != nil {
+		return err
+	}
+	if observed != expected {
+		return errors.New("SHA-256 mismatch")
+	}
+	return nil
 }
 
 func run(mode, releaseDir string) error {
