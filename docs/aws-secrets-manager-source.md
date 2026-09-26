@@ -1,5 +1,9 @@
 # AWS Secrets Manager source
 
+## Canonical operator guidance
+
+Start with [docs/security/broker-operator-tasks.md](https://github.com/service-lasso/service-lasso/blob/develop/docs/security/broker-operator-tasks.md) for the shared Service Lasso reader journey. This page retains Broker-owned command, API and security contracts; follow those contracts when configuring this component. Migration: [Broker #182](https://github.com/service-lasso/lasso-secretsbroker/issues/182), [Core #1420](https://github.com/service-lasso/service-lasso/issues/1420), source reviewed at `fc6fc7b481dc8f9b6657a5d397a73b4a88384e2b`. Source documentation does not prove installed-release, provider or platform acceptance.
+
 `aws-secrets-manager` is a Secrets Broker source kind behind the stable `@secretsbroker` contract. It may reveal secret values to broker resolution and broker-internal value-search paths, but status, diagnostics, management lists, audit events, logs, and fixtures remain metadata-only.
 
 The connection-scoped operation manifest is authoritative for action
