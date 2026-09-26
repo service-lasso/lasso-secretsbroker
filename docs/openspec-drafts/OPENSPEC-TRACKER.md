@@ -42,3 +42,7 @@ Still needs explicit implementation-ready work for:
 - deciding which starter-file fields are canonical first-pass contract versus illustrative placeholders
 - normalizing the exact health schema around `process` default plus explicit `http|tcp|file|variable` overrides
 - replacing the starter CI package/test flow with a real released-harness invocation once `service-lasso-harness` exists as a binary
+
+## Broker documentation migration
+
+[SPEC-BROKER-READER-MIGRATION.md](SPEC-BROKER-READER-MIGRATION.md) is active for Broker #182 / Core #1420. It governs the 14 audited reader entry points and preserves component contracts.

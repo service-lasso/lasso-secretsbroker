@@ -1,10 +1,9 @@
 # Secrets Broker delivery rules
 
-- `main` is the Broker integration and release branch. Do not create a Broker
-  `develop` branch.
-- All changes start from current `main` on an issue-scoped `feature/`, `fix/`,
+- Development uses current `develop` and an issue-scoped branch.
+- All changes start from current `develop` on an issue-scoped `feature/`, `fix/`,
   `docs/`, or `chore/` branch and merge through a pull request.
-- Never push directly to `main`, force-push, delete protected history, weaken a
+- Never push directly to integration branches, force-push, delete protected history, weaken a
   failing check, or publish from an ordinary branch push.
 - Release publication is an explicitly dispatched, approval-gated operation
   after terminal Windows, Linux, and macOS validation.
@@ -14,3 +13,5 @@
   dependency/advisory state, artifact identity, publication authority, and
   independent assurance.
 
+
+- Do not inspect, fetch, compare, orient from, branch from or target `main` during ordinary development. Release promotion requires explicit authorization.
