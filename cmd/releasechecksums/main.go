@@ -27,6 +27,60 @@ var releaseAssetNames = []string{
 	"service.json",
 }
 
+// Compatibility evidence is an indivisible inventory, never optional rows.
+var compatibilityAssetNames = []string{
+	"secretsbroker-darwin-amd64-macos11.tar.gz",
+	"secretsbroker-darwin-amd64-macos11.cdx.json",
+	"service-darwin-amd64-macos11.json",
+	"macos11-toolchain-provenance.json",
+	"macos11-go-trust-probe-amd64",
+	"macos11-native-receipt.json",
+}
+
+func inventory(releaseDir string, requireCompatibility bool) ([]string, error) {
+	entries, err := os.ReadDir(releaseDir)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		for _, name := range compatibilityAssetNames {
+			if entry.Name() == name {
+				requireCompatibility = true
+			}
+		}
+	}
+	names := append([]string(nil), releaseAssetNames...)
+	if requireCompatibility {
+		names = append(names, compatibilityAssetNames...)
+	}
+	allowed := map[string]bool{checksumManifestName: true}
+	for _, name := range names {
+		allowed[name] = true
+	}
+	for _, entry := range entries {
+		if !allowed[entry.Name()] {
+			return nil, fmt.Errorf("unexpected release asset %q", entry.Name())
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("release asset %q must be a regular file", entry.Name())
+		}
+	}
+	for _, name := range names {
+		file, err := openRegularFile(filepath.Join(releaseDir, name))
+		if err != nil {
+			return nil, fmt.Errorf("inspect %s: %w", name, err)
+		}
+		if err := file.Close(); err != nil {
+			return nil, err
+		}
+	}
+	return names, nil
+}
+
 type serviceManifest struct {
 	Artifact struct {
 		Platforms map[string]struct {
@@ -47,7 +101,7 @@ func main() {
 		return
 	}
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: releasechecksums <write|verify> <release-directory> | verify-file <sha256> <path>")
+		fmt.Fprintln(os.Stderr, "usage: releasechecksums <write|verify|write-compat|verify-compat> <release-directory> | verify-file <sha256> <path>")
 		os.Exit(2)
 	}
 	if err := run(os.Args[1], os.Args[2]); err != nil {
@@ -89,11 +143,15 @@ func run(mode, releaseDir string) error {
 		return err
 	}
 
+	names, err := inventory(absDir, mode == "write-compat" || mode == "verify-compat")
+	if err != nil {
+		return err
+	}
 	switch mode {
-	case "write":
-		return writeChecksums(absDir)
-	case "verify":
-		return verifyChecksums(absDir)
+	case "write", "write-compat":
+		return writeChecksums(absDir, names)
+	case "verify", "verify-compat":
+		return verifyChecksums(absDir, names)
 	default:
 		return fmt.Errorf("unsupported mode %q", mode)
 	}
@@ -123,9 +181,9 @@ func validateServiceManifest(releaseDir string) error {
 	return nil
 }
 
-func writeChecksums(releaseDir string) error {
-	digests := make(map[string]string, len(releaseAssetNames))
-	for _, name := range releaseAssetNames {
+func writeChecksums(releaseDir string, names []string) error {
+	digests := make(map[string]string, len(names))
+	for _, name := range names {
 		digest, err := digestRegularFile(filepath.Join(releaseDir, name))
 		if err != nil {
 			return fmt.Errorf("digest %s: %w", name, err)
@@ -133,7 +191,6 @@ func writeChecksums(releaseDir string) error {
 		digests[name] = digest
 	}
 
-	names := append([]string(nil), releaseAssetNames...)
 	sort.Strings(names)
 	var output strings.Builder
 	for _, name := range names {
@@ -168,21 +225,21 @@ func writeChecksums(releaseDir string) error {
 		return fmt.Errorf("publish checksum manifest: %w", err)
 	}
 	committed = true
-	return verifyChecksums(releaseDir)
+	return verifyChecksums(releaseDir, names)
 }
 
-func verifyChecksums(releaseDir string) error {
+func verifyChecksums(releaseDir string, names []string) error {
 	path := filepath.Join(releaseDir, checksumManifestName)
 	data, err := readRegularFile(path, 1<<20)
 	if err != nil {
 		return fmt.Errorf("read checksum manifest: %w", err)
 	}
 
-	expected := make(map[string]struct{}, len(releaseAssetNames))
-	for _, name := range releaseAssetNames {
+	expected := make(map[string]struct{}, len(names))
+	for _, name := range names {
 		expected[name] = struct{}{}
 	}
-	observed := make(map[string]string, len(releaseAssetNames))
+	observed := make(map[string]string, len(names))
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 4096), 1<<20)
 	for scanner.Scan() {
@@ -209,7 +266,7 @@ func verifyChecksums(releaseDir string) error {
 	if len(observed) != len(expected) {
 		return fmt.Errorf("checksum manifest has %d entries; expected %d", len(observed), len(expected))
 	}
-	for _, name := range releaseAssetNames {
+	for _, name := range names {
 		digest, err := digestRegularFile(filepath.Join(releaseDir, name))
 		if err != nil {
 			return fmt.Errorf("verify %s: %w", name, err)

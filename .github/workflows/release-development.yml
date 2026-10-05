@@ -415,8 +415,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go run ./cmd/releasechecksums write release-assets
-          go run ./cmd/releasechecksums verify release-assets
+          go run ./cmd/releasechecksums write-compat release-assets
+          go run ./cmd/releasechecksums verify-compat release-assets
 
       - name: Attest exact release assets
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
@@ -539,3 +539,9 @@ jobs:
             test "$remote_digest" = "sha256:${local_digest}"
             test "$remote_size" -gt 0
           done
+
+          # Verify the public consumer bytes, including the public manifest itself.
+          mkdir public-release-assets
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir public-release-assets
+          go run ./cmd/releasechecksums verify-compat public-release-assets
+          cmp release-assets/SHA256SUMS.txt public-release-assets/SHA256SUMS.txt
