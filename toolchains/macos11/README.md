@@ -7,8 +7,11 @@ It does not claim official Go support for macOS 11. ARM64 remains minOS 12, and
 the ordinary universal macOS artifact continues to use the official toolchain.
 
 Use `scripts/build-macos11-compat.sh /absolute/new/owned/directory` on Linux amd64,
-from a clean exact candidate checkout, then `scripts/package-macos11-compat.sh`
-with that directory. The builder downloads and verifies both official archives,
+from a clean exact candidate checkout, then set `SERVICE_LASSO_RELEASE_VERSION` to
+the exact preselected candidate tag and run `scripts/package-macos11-compat.sh`
+with that directory. The compatibility manifest pins that tag before packaging,
+receipt verification, checksums and attestation; it does not use a latest channel.
+The builder downloads and verifies both official archives,
 checks raw source equality and four-file preimages, verifies a pinned patch hash,
 rebuilds private cmd/link and records build commands, effective environment, source
 tree, source/patch/linker/binary hashes and private tool-selection logs. No shared
@@ -41,3 +44,12 @@ The validated receipt is included in the asset inventory/checksums/attestation.
 
 Development publication creates an immutable prerelease with `--latest=false`.
 It does not declare GA. Full published consumer tutorial acceptance remains distinct.
+
+The signed resolution gate means canonical Core first-run Broker enrollment and
+actual Core signed Unix IPC resolution of a nonempty SecretRef. Both CLI gates
+verify their existing help/linkage contracts only. The legacy OpenClaw exec CLI
+does not carry the required identity lease; it is not used by Todo and remains
+explicitly unqualified in deferred [issue #190](https://github.com/service-lasso/lasso-secretsbroker/issues/190).
+Empty-input success is never evidence of functional secret resolution. A future
+OpenClaw repair requires its own per-request identity blueprint and must preserve
+Broker authentication.

@@ -493,6 +493,7 @@ jobs:
             release-assets/macos11-native-receipt.json \
             --prerelease \
             --latest=false \
+            --notes "Development candidate from $GITHUB_SHA. The explicit Intel macOS 11 compatibility profile uses maintained custom Go 1.26.8 and is pinned to this tag. Native resolution qualification covers canonical Core-enrolled signed Unix IPC SecretRef lookup; both CLI linkage contracts are verified. Legacy OpenClaw exec CLI nonempty resolution remains unqualified and deferred in issue #190 (https://github.com/service-lasso/lasso-secretsbroker/issues/190). No authentication weakening or GA declaration." \
             --generate-notes
 
       - name: Verify immutable release readback
