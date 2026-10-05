@@ -60,6 +60,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Verify compatibility native profile and publication receipt contract
+        run: python -B -m unittest discover -s verify/macos11 -p 'test_*.py' -v
+
       - name: Download released service-lasso-harness binary
         env:
           GITHUB_TOKEN: ${{ github.token }}
