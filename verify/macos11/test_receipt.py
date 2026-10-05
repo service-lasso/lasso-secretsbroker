@@ -9,10 +9,11 @@ class Receipt(unittest.TestCase):
             candidate='a'*40
             for name in names: (root/name).write_text(name)
             (root/names[3]).write_text(json.dumps({'candidateSHA':candidate,'hashes':{'artifacts/secretsbroker':'b'*64,'artifacts/secretsbroker-resolve':'c'*64,'go/pkg/tool/linux_amd64/link':'d'*64}}))
+            (root/names[2]).write_text(json.dumps({'artifact':{'source':{'repo':'service-lasso/lasso-secretsbroker','type':'github-release','tag':'2026.10.5-aaaaaaa'}}}))
             required=('native-host-roots-chain','native-wrong-hostname','native-current-time-positive','native-current-time-negative','native-unknown-self-signed','go-custom-root-eku-pair','native-process-local-anchor-eku-pair','independent-concurrent-chain-ownership','live-trusted-https','cli-linkage-existing-exit-contract','broker-serve-bootstrap','signed-ipc-secret-resolution','core-admin-managed-flow','stop-restart-retention','zero-owned-processes','macho-imports-minos-signing')
             receipt={'schema':1,'candidateSHA':candidate,'workflowRunID':'123','host':{'architecture':'x86_64','version':'11.7.11'},'artifactSHA256':{n:hashlib.sha256((root/n).read_bytes()).hexdigest() for n in names},'binarySHA256':{'secretsbroker':'b'*64,'secretsbroker-resolve':'c'*64,'link':'d'*64},'gates':{g:True for g in required},'evidence':'private retained native evidence'}
             comment={'user':{'id':170312},'id':1,'html_url':'https://github.com/service-lasso/lasso-secretsbroker/issues/188#issuecomment-1'}
-            env=dict(os.environ,GITHUB_SHA=candidate,GITHUB_RUN_ID='123',MACOS11_NATIVE_REVIEWER_ID='170312')
+            env=dict(os.environ,GITHUB_SHA=candidate,GITHUB_RUN_ID='123',MACOS11_NATIVE_REVIEWER_ID='170312',CANDIDATE_VERSION='2026.10.5-aaaaaaa')
             variants=[('valid',{},True),('wrong-author',{'author':2},False),('wrong-sha',{'candidateSHA':'e'*40},False),('wrong-run',{'workflowRunID':'124'},False),('failed-gate',{'gate':False},False),('integer-pass',{'gate':1},False),('wrong-bytes',{'hash':True},False),('wrong-os',{'os':True},False)]
             for name,change,expected in variants:
                 with self.subTest(name=name):

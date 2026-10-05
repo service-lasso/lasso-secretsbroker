@@ -26,8 +26,11 @@ jobs:
     name: authorize-development-candidate
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bind.outputs.version }}
     steps:
       - name: Bind dispatch to protected develop head
+        id: bind
         shell: bash
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
@@ -39,6 +42,8 @@ jobs:
           test "${CANDIDATE_SHA}" = "${GITHUB_SHA}"
           gh api "repos/$GITHUB_REPOSITORY/environments/development-candidate" > environment.json
           python3 -c 'import json,sys; e=json.load(open("environment.json")); required=[r for r in e.get("protection_rules",[]) if r.get("type")=="required_reviewers"]; reviewers=required[0].get("reviewers",[]) if len(required)==1 else []; ok=e.get("name")=="development-candidate" and isinstance(reviewers,list) and len(reviewers)==1 and reviewers[0].get("type")=="User" and reviewers[0].get("reviewer",{}).get("id")==170312; sys.exit(0 if ok else "Existing development-candidate protection must require only named owner User 170312")'
+          version="$(date -u +%Y.%-m.%-d)-${CANDIDATE_SHA:0:7}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
   build:
     needs: authorize
@@ -261,6 +266,8 @@ jobs:
   compatibility:
     needs: authorize
     runs-on: ubuntu-latest
+    env:
+      SERVICE_LASSO_RELEASE_VERSION: ${{ needs.authorize.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
@@ -355,12 +362,13 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [build, compatibility, native-trust]
+    needs: [authorize, build, compatibility, native-trust]
     if: github.ref == 'refs/heads/develop' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: development-candidate
     env:
       MACOS11_NATIVE_REVIEWER_ID: 170312
+      CANDIDATE_VERSION: ${{ needs.authorize.outputs.version }}
     permissions:
       issues: read
       actions: read
@@ -446,8 +454,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          short_sha="${GITHUB_SHA::7}"
-          version="$(date -u +%Y.%-m.%-d)-${short_sha}"
+          version='${{ needs.authorize.outputs.version }}'
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Create immutable GitHub release

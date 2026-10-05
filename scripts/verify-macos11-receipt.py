@@ -9,6 +9,10 @@ asset_names=('secretsbroker-darwin-amd64-macos11.tar.gz','secretsbroker-darwin-a
 hashes={n:hashlib.sha256((assets_path/n).read_bytes()).hexdigest() for n in asset_names}
 provenance=json.loads((assets_path/'macos11-toolchain-provenance.json').read_text())
 if provenance['candidateSHA']!=candidate: raise SystemExit('Compatibility provenance candidate mismatch')
+manifest=json.loads((assets_path/'service-darwin-amd64-macos11.json').read_text())
+source=manifest.get('artifact',{}).get('source',{})
+if source.get('repo')!='service-lasso/lasso-secretsbroker' or source.get('type')!='github-release' or source.get('tag')!=os.environ['CANDIDATE_VERSION'] or 'channel' in source:
+    raise SystemExit('Compatibility manifest must pin exact candidate tag')
 binary_hashes={pathlib.Path(k).name:v for k,v in provenance['hashes'].items() if pathlib.Path(k).name in ('secretsbroker','secretsbroker-resolve','link')}
 required=('native-host-roots-chain','native-wrong-hostname','native-current-time-positive','native-current-time-negative','native-unknown-self-signed','go-custom-root-eku-pair','native-process-local-anchor-eku-pair','independent-concurrent-chain-ownership','live-trusted-https','cli-linkage-existing-exit-contract','broker-serve-bootstrap','signed-ipc-secret-resolution','core-admin-managed-flow','stop-restart-retention','zero-owned-processes','macho-imports-minos-signing')
 pages=json.loads(comments_path.read_text());comments=[c for page in pages for c in page] if pages and isinstance(pages[0],list) else pages
