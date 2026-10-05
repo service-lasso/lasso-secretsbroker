@@ -13,6 +13,11 @@ manifest=json.loads((assets_path/'service-darwin-amd64-macos11.json').read_text(
 source=manifest.get('artifact',{}).get('source',{})
 if source.get('repo')!='service-lasso/lasso-secretsbroker' or source.get('type')!='github-release' or source.get('tag')!=os.environ['CANDIDATE_VERSION'] or 'channel' in source:
     raise SystemExit('Compatibility manifest must pin exact candidate tag')
+environment=manifest.get('execconfig',{}).get('env',{})
+if (environment.get('SECRETSBROKER_MODE')!='production' or environment.get('SECRETSBROKER_TRANSPORT')!='auto'
+    or 'SECRETSBROKER_LISTEN' in environment or manifest.get('endpoints')
+    or manifest.get('healthcheck') or manifest.get('healthchecks')!=[{'id':'secretsbroker-process-health','type':'process','required':True,'retries':80,'interval':250}]):
+    raise SystemExit('Compatibility manifest must declare Core native IPC process health')
 binary_hashes={pathlib.Path(k).name:v for k,v in provenance['hashes'].items() if pathlib.Path(k).name in ('secretsbroker','secretsbroker-resolve','link')}
 required=('native-host-roots-chain','native-wrong-hostname','native-current-time-positive','native-current-time-negative','native-unknown-self-signed','go-custom-root-eku-pair','native-process-local-anchor-eku-pair','independent-concurrent-chain-ownership','live-trusted-https','cli-linkage-existing-exit-contract','broker-serve-bootstrap','signed-ipc-secret-resolution','core-admin-managed-flow','stop-restart-retention','zero-owned-processes','macho-imports-minos-signing')
 pages=json.loads(comments_path.read_text());comments=[c for page in pages for c in page] if pages and isinstance(pages[0],list) else pages
@@ -27,6 +32,16 @@ for comment in reversed(comments):
     if receipt.get('artifactSHA256')!=hashes or receipt.get('binarySHA256')!=binary_hashes: continue
     gates=receipt.get('gates',{})
     if set(gates)!=set(required) or any(gates[g] is not True for g in required): continue
+    # SPEC-194: the original 16 gates cannot be supplied by a curated transport overlay.
+    profile=receipt.get('coreProfile',{})
+    if not isinstance(profile,dict) or any(profile.get(key) is not True for key in
+        ('canonicalAdminBootstrap','signedSecretRefLookup','brokerRestartRetention','fullCoreReopenRetention')): continue
+    if profile!={'manifestSHA256':hashes['service-darwin-amd64-macos11.json'],
+                 'runtimeProfile':'unchanged-produced-manifest',
+                 'acquisitionOverride':'candidate-artifact-api-selector-only',
+                 'corePackage':'@service-lasso/service-lasso@2026.9.22-f3de461',
+                 'canonicalAdminBootstrap':True,'signedSecretRefLookup':True,
+                 'brokerRestartRetention':True,'fullCoreReopenRetention':True}: continue
     if not isinstance(receipt.get('evidence'),str) or not receipt['evidence'].strip(): continue
     receipt['githubComment']={'id':comment['id'],'url':comment['html_url'],'actualAuthorID':reviewer}
     output_path.write_text(json.dumps(receipt,indent=2)+'\n');print('Exact-candidate actual macOS 11 native receipt verified');break
