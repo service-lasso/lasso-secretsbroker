@@ -461,6 +461,12 @@ jobs:
             echo "Release $tag already exists and is immutable." >&2
             exit 1
           fi
+          ref_status=$(curl -sS -o existing-tag.json -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/tags/$tag")
+          test "$ref_status" = 404
+          # Atomic new lightweight ref; never reuse, force-update or overwrite tags.
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.sha)" = "$GITHUB_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.type)" = commit
           gh release create "$tag" \
             release-assets/secretsbroker-win32.zip \
             release-assets/secretsbroker-linux.tar.gz \
@@ -470,7 +476,7 @@ jobs:
             release-assets/secretsbroker-darwin.cdx.json \
             release-assets/service.json \
             release-assets/SHA256SUMS.txt \
-            --target "$GITHUB_SHA" \
+            --verify-tag \
             --title "$tag" \
             release-assets/secretsbroker-darwin-amd64-macos11.tar.gz \
             release-assets/secretsbroker-darwin-amd64-macos11.cdx.json \
@@ -489,6 +495,8 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ steps.version.outputs.version }}"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.sha)" = "$GITHUB_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.type)" = commit
           release_json="$(gh release view "$tag" --json tagName,name,targetCommitish,isDraft,isPrerelease,assets)"
           test "$(jq -r '.tagName' <<<"$release_json")" = "$tag"
           test "$(jq -r '.name' <<<"$release_json")" = "$tag"
