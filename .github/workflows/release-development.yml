@@ -484,6 +484,7 @@ jobs:
             release-assets/service.json \
             release-assets/SHA256SUMS.txt \
             --verify-tag \
+            --target "$GITHUB_SHA" \
             --title "$tag" \
             release-assets/secretsbroker-darwin-amd64-macos11.tar.gz \
             release-assets/secretsbroker-darwin-amd64-macos11.cdx.json \
