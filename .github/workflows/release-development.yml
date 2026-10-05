@@ -38,7 +38,7 @@ jobs:
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "${CANDIDATE_SHA}" = "${GITHUB_SHA}"
           gh api "repos/$GITHUB_REPOSITORY/environments/development-candidate" > environment.json
-          python3 -c 'import json,sys; e=json.load(open("environment.json")); required=[r for r in e.get("protection_rules",[]) if r.get("type")=="required_reviewers"]; ok=any(any(x.get("reviewer",{}).get("id")==170312 for x in r.get("reviewers",[])) for r in required); sys.exit(0 if ok else "Existing development-candidate protection must require named owner")'
+          python3 -c 'import json,sys; e=json.load(open("environment.json")); required=[r for r in e.get("protection_rules",[]) if r.get("type")=="required_reviewers"]; reviewers=required[0].get("reviewers",[]) if len(required)==1 else []; ok=e.get("name")=="development-candidate" and isinstance(reviewers,list) and len(reviewers)==1 and reviewers[0].get("type")=="User" and reviewers[0].get("reviewer",{}).get("id")==170312; sys.exit(0 if ok else "Existing development-candidate protection must require only named owner User 170312")'
 
   build:
     needs: authorize
