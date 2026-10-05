@@ -6,15 +6,24 @@ import (
  "encoding/hex"
  "encoding/json"
  "fmt"
+ "io"
  "net/http"
  "os"
+ "path/filepath"
  "reflect"
  "strconv"
  "sync"
  "time"
 )
 type Result struct { Accepted bool `json:"accepted"`; Error string `json:"error,omitempty"`; ChainSha256 [][]string `json:"chainSha256"`; RootsMode string `json:"rootsMode"`; RepeatedConcurrentStable bool `json:"repeatedConcurrentStable"`; Calls int `json:"calls"` }
-func cert(p string) *x509.Certificate { b,e:=os.ReadFile(p);if e!=nil{panic(e)};c,e:=x509.ParseCertificate(b);if e!=nil{panic(e)};return c }
+func cert(p string) *x509.Certificate {
+ absolute,e:=filepath.Abs(p);if e!=nil{panic(e)}
+ root,e:=os.OpenRoot(filepath.Dir(absolute));if e!=nil{panic(e)};defer root.Close()
+ file,e:=root.Open(filepath.Base(absolute));if e!=nil{panic(e)};defer file.Close()
+ b,e:=io.ReadAll(io.LimitReader(file,1048577));if e!=nil{panic(e)}
+ if len(b)>1048576{panic("certificate exceeds fixture size limit")}
+ c,e:=x509.ParseCertificate(b);if e!=nil{panic(e)};return c
+}
 func main(){
  if len(os.Args)==2 && os.Args[1]=="https" {
   client:=&http.Client{Timeout:20*time.Second};r,e:=client.Get("https://github.com/");if e!=nil{panic(e)};defer r.Body.Close()
