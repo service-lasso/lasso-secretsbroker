@@ -3,13 +3,15 @@
 import hashlib, json, pathlib, sys, tarfile, difflib
 
 root, source_archive, destination = map(pathlib.Path, sys.argv[1:])
-assert hashlib.sha256(source_archive.read_bytes()).hexdigest() == "4e39b98e42f946fa05ac8bc5b71877df97dbdb7cbb1a777b541667ad7117fd2e"
+if hashlib.sha256(source_archive.read_bytes()).hexdigest() != "4e39b98e42f946fa05ac8bc5b71877df97dbdb7cbb1a777b541667ad7117fd2e":
+    raise SystemExit("Official source archive mismatch")
 changes = {}
 paths = ["src/crypto/x509/internal/macos/security.go", "src/crypto/x509/internal/macos/security.s", "src/crypto/x509/root_darwin.go", "src/cmd/link/internal/ld/macho.go"]
 with tarfile.open(source_archive) as archive:
     for path in paths:
         pristine = archive.extractfile("go/" + path).read()
-        assert (root / path).read_bytes() == pristine, path
+        if (root / path).read_bytes() != pristine:
+            raise SystemExit("Official distribution/source mismatch: " + path)
         changes[path] = pristine.decode()
 p = paths[0]
 start = changes[p].index("//go:cgo_import_dynamic x509_SecTrustCopyCertificateChain")
@@ -54,11 +56,13 @@ new = '''	// This trust object is private to this invocation and has been evalua
 			return nil, err
 		}
 '''
-assert changes[p].count(old) == 1
+if changes[p].count(old) != 1:
+    raise SystemExit("Chain retrieval source context drift")
 changes[p] = changes[p].replace(old, new)
 p = paths[3]
 old = '\t\t\t\tversion = 12<<16 | 0<<8 | 0<<0 // 12.0.0\n'
-assert changes[p].count(old) == 1
+if changes[p].count(old) != 1:
+    raise SystemExit("Linker source context drift")
 changes[p] = changes[p].replace(old, old + '\t\t\t\t// Custom maintained-Go macOS 11 Intel profile: synthesized metadata\n\t\t\t\t// for internal linking only; no external SDK version is asserted.\n\t\t\t\tif ctxt.Arch.Family == sys.AMD64 {\n\t\t\t\t\tversion = 11 << 16 // minOS and synthetic SDK 11.0.0\n\t\t\t\t}\n')
 manifest, patch = {}, []
 for path, updated in changes.items():
