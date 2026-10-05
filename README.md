@@ -16,6 +16,30 @@ Service identity:
 
 The broker is intended to be a lean, local-first, Vault-like process managed by Service Lasso during an early bootstrap phase. Service Lasso core keeps only the tiny bootstrap client/state machine; this repo owns the actual broker daemon, CLI/API contract, storage, policy, audit, source adapters, and resolve/write-back behavior.
 
+## macOS runtime prerequisite
+
+The Go 1.26 Broker and resolver require **macOS 12 Monterey or newer**.
+The Darwin archive contains both Intel x86_64 and Apple arm64 executables in a
+universal binary; CPU architecture coverage does not imply older OS support.
+macOS 11 Big Sur cannot load these executables, including `--help`.
+
+Before executing either binary from a newly packaged Darwin archive, run:
+
+```sh
+sh ./check-macos-runtime.sh
+```
+
+For an existing archive without that helper, check `sw_vers -productVersion`
+first and require macOS 12 or newer. The helper reads the OS version and exits 2
+on an unsupported or unparseable version. It is a manual prerequisite check;
+Core's direct manifest launch does not invoke it automatically. A successful
+check proves only the version prerequisite, not Broker/bootstrap acceptance.
+
+Use an explicitly selected supported Mac for qualification. Preserve failed
+fixtures. OS upgrades and release publication require their own authorization.
+Do not substitute an old unsupported Go build, disable TLS verification, or
+patch system trust to bypass this prerequisite. See the [Go minimum requirements](https://go.dev/wiki/MinimumRequirements)
+and [runtime prerequisite contract](.governance/specs/SPEC-186-RUNTIME-PREREQUISITES.md).
 ## Architecture stance
 
 Default/local mode:
