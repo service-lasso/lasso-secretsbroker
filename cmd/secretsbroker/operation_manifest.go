@@ -124,6 +124,8 @@ func defaultOperationManifest() []OperationCapability {
 	localAndVault := []string{"local-encrypted-store", "vault", "openbao"}
 
 	return []OperationCapability{
+		manifestOperation(http.MethodPost, "/v1/file-grants", OperationMaturityExecutable, OperationClassificationMutation, true, true, true, OperationScopeBrokerLocal, local, "ram_only_launch_grant"),
+		manifestOperation(http.MethodPost, "/v1/file-grants/revoke", OperationMaturityExecutable, OperationClassificationMutation, true, false, false, OperationScopeBrokerLocal, local, "exact_ram_grant_revocation"),
 		manifestOperation(http.MethodGet, "/health", OperationMaturityReadOnly, OperationClassificationRead, false, false, false, OperationScopeBrokerLocal, nil, "liveness_only"),
 		manifestOperation(http.MethodGet, "/ready", OperationMaturityReadOnly, OperationClassificationRead, false, false, false, OperationScopeBrokerLocal, nil, "readiness_only"),
 		manifestOperation(http.MethodGet, "/status", OperationMaturityReadOnly, OperationClassificationRead, false, false, false, OperationScopeBrokerLocal, nil, "metadata_only"),

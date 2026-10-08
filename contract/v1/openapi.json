@@ -3065,6 +3065,85 @@
         ],
         "type": "object"
       },
+      "ramFileInput": {
+        "additionalProperties": true,
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "path"
+        ],
+        "type": "object"
+      },
+      "ramGrantRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ramFileInput"
+            },
+            "type": "array"
+          },
+          "identityLease": {
+            "$ref": "#/components/schemas/launchIdentityLease"
+          },
+          "instanceId": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "files",
+          "identityLease",
+          "instanceId",
+          "requestId",
+          "serviceId",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "ramGrantResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "baseUrl": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "baseUrl",
+          "token"
+        ],
+        "type": "object"
+      },
+      "ramRevokeRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
+      },
       "recoveryPolicyMetadata": {
         "additionalProperties": true,
         "properties": {
@@ -5314,6 +5393,141 @@
           "limitationCode": "metadata_only",
           "reasonCode": "implemented_read_only",
           "nextAction": "read_when_authorized"
+        }
+      }
+    },
+    "/v1/file-grants": {
+      "post": {
+        "operationId": "postv1_file_grants",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ramGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ramGrantResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ramGrantResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Create an in-memory launch file grant",
+        "x-capability": {
+          "operationId": "postv1_file_grants",
+          "method": "POST",
+          "path": "/v1/file-grants",
+          "maturity": "executable",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": true,
+          "auditRequired": true,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "ram_only_launch_grant",
+          "reasonCode": "implemented_executable",
+          "nextAction": "satisfy_runtime_preconditions"
+        }
+      }
+    },
+    "/v1/file-grants/revoke": {
+      "post": {
+        "operationId": "postv1_file_grants_revoke",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ramRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Exact grant revoked or already absent"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ramGrantResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Revoke the exact in-memory file grant",
+        "x-capability": {
+          "operationId": "postv1_file_grants_revoke",
+          "method": "POST",
+          "path": "/v1/file-grants/revoke",
+          "maturity": "executable",
+          "classification": "mutation",
+          "authenticationRequired": true,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "exact_ram_grant_revocation",
+          "reasonCode": "implemented_executable",
+          "nextAction": "satisfy_runtime_preconditions"
         }
       }
     },

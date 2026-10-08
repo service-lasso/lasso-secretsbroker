@@ -62,6 +62,8 @@ func contractRoutes() []contractRoute {
 		{Method: http.MethodPost, Path: "/v1/secrets", Summary: "Write a local secret", Auth: true, Request: writeSecretRequest{}, Response: writeSecretResponse{}},
 		{Method: http.MethodPost, Path: "/v1/writeback", Summary: "Capture a generated secret", Auth: true, Request: generatedSecretCaptureRequest{}, Response: generatedSecretCaptureResponse{}},
 		{Method: http.MethodPost, Path: "/v1/resolve", Summary: "Resolve a batch of secret references", Auth: true, Request: resolveRequest{}, Response: resolveResponse{}},
+		{Method: http.MethodPost, Path: "/v1/file-grants", Summary: "Create an in-memory launch file grant", Auth: true, Request: ramGrantRequest{}, Response: ramGrantResponse{}},
+		{Method: http.MethodPost, Path: "/v1/file-grants/revoke", Summary: "Revoke the exact in-memory file grant", Auth: true, Request: ramRevokeRequest{}, Response: ramGrantResponse{}},
 		{Method: http.MethodGet, Path: "/v1/kv/data/{path}", Summary: "Read OpenBao-compatible KV v2 secret data", Auth: true, Response: kvDataResponse{}, Query: kvContractQueryParameters(true, false)},
 		{Method: http.MethodPost, Path: "/v1/kv/data/{path}", Summary: "Write OpenBao-compatible KV v2 secret data", Auth: true, Request: kvWriteEnvelope{}, Response: kvWriteResponse{}, Query: kvContractQueryParameters(false, false)},
 		{Method: http.MethodPatch, Path: "/v1/kv/data/{path}", Summary: "Patch OpenBao-compatible KV v2 secret data", Auth: true, Request: kvWriteEnvelope{}, Response: kvWriteResponse{}, Query: kvContractQueryParameters(false, false)},
@@ -274,6 +276,14 @@ func renderOpenAPIContract(t *testing.T) []byte {
 			},
 		}
 		if route.Auth {
+			if route.Path == "/v1/file-grants" {
+				operation["responses"].(map[string]any)["201"] = operation["responses"].(map[string]any)["200"]
+				delete(operation["responses"].(map[string]any), "200")
+			}
+			if route.Path == "/v1/file-grants/revoke" {
+				operation["responses"].(map[string]any)["204"] = map[string]any{"description": "Exact grant revoked or already absent"}
+				delete(operation["responses"].(map[string]any), "200")
+			}
 			operation["security"] = []any{map[string]any{"localBearerToken": []any{}}, map[string]any{"localHeaderToken": []any{}}}
 		} else {
 			operation["security"] = []any{}
