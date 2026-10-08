@@ -44,12 +44,16 @@ type ramGrantResponse struct {
 	Token   string `json:"token"`
 }
 type ramGrant struct {
-	owner   string
-	files   map[string][]byte
-	size    int
-	created time.Time
+	owner    string
+	id       string
+	identity ramFileOwner
+	usage    map[string]*ramFileUsage
+	files    map[string][]byte
+	size     int
+	created  time.Time
 }
 type ramFileStore struct {
+	closed  bool
 	mu      sync.RWMutex
 	grants  map[[32]byte]*ramGrant
 	owners  map[string][32]byte
@@ -80,7 +84,7 @@ func validRAMFilePath(p string) bool {
 	return true
 }
 
-func (s *ramFileStore) create(owner string, inputs []ramFileInput) (ramGrantResponse, error) {
+func (s *ramFileStore) create(owner string, inputs []ramFileInput, identities ...ramFileOwner) (ramGrantResponse, error) {
 	if owner == "" || len(inputs) == 0 || len(inputs) > 128 {
 		return ramGrantResponse{}, errors.New("invalid file grant")
 	}
@@ -104,11 +108,19 @@ func (s *ramFileStore) create(owner string, inputs []ramFileInput) (ramGrantResp
 		}
 		files[f.Path] = []byte(f.Content)
 	}
-	raw := make([]byte, 32)
+	raw := make([]byte, 48)
 	if _, err := rand.Read(raw); err != nil {
 		return ramGrantResponse{}, errors.New("capability unavailable")
 	}
-	token := hex.EncodeToString(raw)
+	token := hex.EncodeToString(raw[:32])
+	identity := ramFileOwner{}
+	if len(identities) > 0 {
+		identity = identities[0]
+	}
+	usage := make(map[string]*ramFileUsage, len(files))
+	for name := range files {
+		usage[name] = &ramFileUsage{}
+	}
 	digest := sha256.Sum256([]byte(token))
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -117,13 +129,13 @@ func (s *ramFileStore) create(owner string, inputs []ramFileInput) (ramGrantResp
 	if exists {
 		previousSize = s.grants[previous].size
 	}
-	if s.baseURL == "" || (!exists && len(s.grants) >= maxRAMGrants) || s.bytes-previousSize+total > maxRAMStoreBytes {
+	if s.closed || s.baseURL == "" || (!exists && len(s.grants) >= maxRAMGrants) || s.bytes-previousSize+total > maxRAMStoreBytes {
 		return ramGrantResponse{}, errors.New("RAM provider unavailable or full")
 	}
 	if exists {
 		delete(s.grants, previous)
 	}
-	s.grants[digest] = &ramGrant{owner: owner, files: files, size: total, created: time.Now().UTC()}
+	s.grants[digest] = &ramGrant{owner: owner, id: hex.EncodeToString(raw[32:]), identity: identity, usage: usage, files: files, size: total, created: time.Now().UTC()}
 	s.owners[owner] = digest
 	s.bytes = s.bytes - previousSize + total
 	return ramGrantResponse{BaseURL: s.baseURL, Token: token}, nil
@@ -156,11 +168,13 @@ func (b *localBackend) startRAMWebDAV() (func(), error) {
 		store.grants = make(map[[32]byte]*ramGrant)
 		store.owners = make(map[string][32]byte)
 		store.bytes = 0
+		store.closed = true
 		store.mu.Unlock()
 	}, nil
 }
 
 func registerRAMFileHandlers(mux *http.ServeMux, b *localBackend, security localAPISecurity) {
+	registerRAMStatusHandler(mux, b, security)
 	mux.HandleFunc("/v1/file-grants", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeAPIError(w, 405, "method_not_allowed", "Use POST.", "invalid_ref", "")
@@ -193,7 +207,7 @@ func registerRAMFileHandlers(mux *http.ServeMux, b *localBackend, security local
 		}
 		// Length-prefix identity fields avoid concatenation aliases.
 		owner := fmt.Sprintf("%d:%s%d:%s%s", len(identity.WorkspaceID), identity.WorkspaceID, len(identity.ServiceID), identity.ServiceID, req.InstanceID)
-		grant, err := b.ramFiles.create(owner, req.Files)
+		grant, err := b.ramFiles.create(owner, req.Files, ramFileOwner{WorkspaceID: identity.WorkspaceID, ServiceID: identity.ServiceID})
 		if err != nil {
 			writeAPIError(w, 400, "invalid_file_grant", "File grant rejected by bounds or path policy.", "policy_denied", "")
 			return
@@ -316,7 +330,15 @@ func (s *ramFileStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", strconv.Itoa(len(content)))
 		w.WriteHeader(200)
 		if r.Method == http.MethodGet {
-			_, _ = w.Write(content)
+			n, err := w.Write(content)
+			usage := grant.usage[name]
+			usage.mu.Lock()
+			usage.servedBytes += uint64(n)
+			if err == nil && n == len(content) {
+				usage.downloads++
+				usage.lastAccess = time.Now().UTC()
+			}
+			usage.mu.Unlock()
 		}
 		return
 	}

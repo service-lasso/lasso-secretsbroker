@@ -3081,6 +3081,49 @@
         ],
         "type": "object"
       },
+      "ramFileMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "downloads": {
+            "type": "integer"
+          },
+          "grantId": {
+            "type": "string"
+          },
+          "lastAccessAt": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "servedBytes": {
+            "type": "integer"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "createdAt",
+          "downloads",
+          "grantId",
+          "path",
+          "servedBytes",
+          "serviceId",
+          "sizeBytes",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
       "ramGrantRequest": {
         "additionalProperties": true,
         "properties": {
@@ -3141,6 +3184,64 @@
         },
         "required": [
           "token"
+        ],
+        "type": "object"
+      },
+      "ramStatusResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "activeGrants": {
+            "type": "integer"
+          },
+          "capacityBytes": {
+            "type": "integer"
+          },
+          "downloads": {
+            "type": "integer"
+          },
+          "fileCount": {
+            "type": "integer"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ramFileMetadata"
+            },
+            "type": "array"
+          },
+          "generatedAt": {
+            "type": "string"
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "servedBytes": {
+            "type": "integer"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "usedBytes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "activeGrants",
+          "capacityBytes",
+          "downloads",
+          "fileCount",
+          "files",
+          "generatedAt",
+          "outcome",
+          "servedBytes",
+          "serviceId",
+          "state",
+          "usedBytes"
         ],
         "type": "object"
       },
@@ -5528,6 +5629,85 @@
           "limitationCode": "exact_ram_grant_revocation",
           "reasonCode": "implemented_executable",
           "nextAction": "satisfy_runtime_preconditions"
+        }
+      }
+    },
+    "/v1/file-grants/status": {
+      "get": {
+        "operationId": "getv1_file_grants_status",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ramStatusResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ramStatusResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Typed failure response"
+          }
+        },
+        "security": [
+          {
+            "localBearerToken": []
+          },
+          {
+            "localHeaderToken": []
+          }
+        ],
+        "summary": "Read metadata-only RAM WebDAV inventory",
+        "x-capability": {
+          "operationId": "getv1_file_grants_status",
+          "method": "GET",
+          "path": "/v1/file-grants/status",
+          "maturity": "read-only",
+          "classification": "read",
+          "authenticationRequired": true,
+          "policyRequired": false,
+          "auditRequired": false,
+          "scope": "broker-local",
+          "providerKinds": [
+            "local-encrypted-store"
+          ],
+          "completionMode": "synchronous",
+          "limitationCode": "ram_metadata_only",
+          "reasonCode": "implemented_read_only",
+          "nextAction": "read_when_authorized"
         }
       }
     },
