@@ -333,7 +333,9 @@ func (s *ramFileStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			n, err := w.Write(content)
 			usage := grant.usage[name]
 			usage.mu.Lock()
-			usage.servedBytes += uint64(n)
+			if n >= 0 {
+				usage.servedBytes += uint64(n)
+			}
 			if err == nil && n == len(content) {
 				usage.downloads++
 				usage.lastAccess = time.Now().UTC()

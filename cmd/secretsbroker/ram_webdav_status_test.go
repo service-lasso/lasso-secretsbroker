@@ -97,11 +97,16 @@ func TestRAMInventoryAuthenticationAccountingAndLifecycle(t *testing.T) {
 	}
 }
 
-type failedRAMWriter struct{ header http.Header }
+type failedRAMWriter struct {
+	header http.Header
+	count  int
+}
 
-func (w *failedRAMWriter) Header() http.Header     { return w.header }
-func (*failedRAMWriter) WriteHeader(int)           {}
-func (*failedRAMWriter) Write([]byte) (int, error) { return 2, errors.New("client disconnected") }
+func (w *failedRAMWriter) Header() http.Header { return w.header }
+func (*failedRAMWriter) WriteHeader(int)       {}
+func (w *failedRAMWriter) Write([]byte) (int, error) {
+	return w.count, errors.New("client disconnected")
+}
 
 func TestRAMInventoryFailedWritesDoNotCountDownloads(t *testing.T) {
 	b, _ := ramFixture(t)
@@ -111,7 +116,8 @@ func TestRAMInventoryFailedWritesDoNotCountDownloads(t *testing.T) {
 	}
 	r := httptest.NewRequest("GET", grant.BaseURL+"/"+grant.Token+"/a", nil)
 	r.RemoteAddr = "127.0.0.1:5000"
-	b.ramFiles.ServeHTTP(&failedRAMWriter{header: make(http.Header)}, r)
+	b.ramFiles.ServeHTTP(&failedRAMWriter{header: make(http.Header), count: 2}, r)
+	b.ramFiles.ServeHTTP(&failedRAMWriter{header: make(http.Header), count: -1}, r)
 	status := b.ramFiles.status(0, 100)
 	if status.Downloads != 0 || status.ServedBytes != 2 || status.Files[0].LastAccessAt != "" {
 		t.Fatal("failed read counted as completed")
