@@ -1,9 +1,29 @@
 # RAM secret-file delivery
 
+**DAV-6 (#201):** owner-corrected provisioning receives declared selector/ref
+bindings and secret-free file templates. Authorize all referenced secrets with
+the existing service/workspace/peer-bound lease, resolve internally, render
+once without recursively substituting secret values, enforce rendered bounds,
+and return a WebDAV directory with the grant. Missing/denied/locked required or
+used refs fail without replacing a prior grant. Values never appear in the
+grant response, metadata or persisted output. Legacy rendered-file inputs remain
+compatible, while Core's new default uses Broker resolution. Verify actual Echo
+reads through the returned path and negative authorization/rendering cases.
+
+DAV-6 verification: targeted RAM/contract tests, vet and pinned gosec passed on
+Windows; RAM tests passed as an actual Linux executable on Ubuntu. Real Core
+and the complete prepared Echo manifest consumed the file through the returned
+path, advanced safe counters and denied a missing required ref before spawn.
+The full Windows suite retained its previously tracked event-retention failure
+(`TestOperationalEventsRetainFilterAndStayMetadataOnly`, issue #199); this is
+not a full-suite green claim. Legacy rendered credentials remain literal when
+bindings are omitted; explicit bindings request Broker-owned provisioning.
+
 Issue #196; companion Core issue #1732. Approved owner requirements, 2026-10-08.
 
-**DAV-1:** Broker owns plaintext file bytes in RAM only. Core renders current scoped
-Broker values and submits outputs through the existing authenticated IPC API.
+**DAV-1:** Broker owns plaintext file bytes in RAM only. Core submits scoped refs
+and secret-free templates. Broker resolves and renders internally, returning the
+WebDAV directory. DAV-6 supersedes the original Core-rendered delivery contract.
 `POST /v1/file-grants` additionally consumes a fresh resolve launch lease bound
 to the service/workspace and, in production, the actual IPC peer. No public
 WebDAV route can create, change or delete files.
