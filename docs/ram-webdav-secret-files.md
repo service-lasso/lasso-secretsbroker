@@ -38,7 +38,11 @@ traversal/write denial; authenticated API authorization and secret-free persiste
 state. Source checks do not claim packaged release, deployment, application
 storage behaviour or independent assurance.
 
-Source qualification, 2026-10-08: the full Go suite and vet passed on Windows.
+Source qualification, 2026-10-08: one full Go suite run and vet passed on Windows.
+A later full repeat failed two unchanged event-retention/migration cases; both
+then passed three consecutive focused repetitions. New RAM and contract cases
+passed separately. This records repeatability limits rather than a wholly green
+latest full-suite claim.
 Real loopback HTTP grant tests also passed as a Linux executable on Ubuntu.
 An explicit native Windows `os.ReadFile` through the token UNC path passed with
 the existing WebClient, without drive mapping or machine configuration changes.
