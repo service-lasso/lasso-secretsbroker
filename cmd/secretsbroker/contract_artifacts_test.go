@@ -64,6 +64,7 @@ func contractRoutes() []contractRoute {
 		{Method: http.MethodPost, Path: "/v1/resolve", Summary: "Resolve a batch of secret references", Auth: true, Request: resolveRequest{}, Response: resolveResponse{}},
 		{Method: http.MethodPost, Path: "/v1/file-grants", Summary: "Create an in-memory launch file grant", Auth: true, Request: ramGrantRequest{}, Response: ramGrantResponse{}},
 		{Method: http.MethodPost, Path: "/v1/file-grants/revoke", Summary: "Revoke the exact in-memory file grant", Auth: true, Request: ramRevokeRequest{}, Response: ramGrantResponse{}},
+		{Method: http.MethodGet, Path: "/v1/file-grants/status", Summary: "Read metadata-only RAM WebDAV inventory", Auth: true, Response: ramStatusResponse{}, Query: []contractQueryParameter{{Name: "limit", Type: "integer"}, {Name: "cursor", Type: "integer"}}},
 		{Method: http.MethodGet, Path: "/v1/kv/data/{path}", Summary: "Read OpenBao-compatible KV v2 secret data", Auth: true, Response: kvDataResponse{}, Query: kvContractQueryParameters(true, false)},
 		{Method: http.MethodPost, Path: "/v1/kv/data/{path}", Summary: "Write OpenBao-compatible KV v2 secret data", Auth: true, Request: kvWriteEnvelope{}, Response: kvWriteResponse{}, Query: kvContractQueryParameters(false, false)},
 		{Method: http.MethodPatch, Path: "/v1/kv/data/{path}", Summary: "Patch OpenBao-compatible KV v2 secret data", Auth: true, Request: kvWriteEnvelope{}, Response: kvWriteResponse{}, Query: kvContractQueryParameters(false, false)},
