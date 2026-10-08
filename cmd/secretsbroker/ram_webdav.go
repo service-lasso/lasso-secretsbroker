@@ -35,13 +35,20 @@ type ramGrantRequest struct {
 	IdentityLease *launchIdentityLease `json:"identityLease"`
 	InstanceID    string               `json:"instanceId"`
 	Files         []ramFileInput       `json:"files"`
+	Bindings      []ramSecretBinding   `json:"bindings,omitempty"`
+}
+type ramSecretBinding struct {
+	Selector string `json:"selector"`
+	Ref      string `json:"ref"`
+	Required bool   `json:"required"`
 }
 type ramRevokeRequest struct {
 	Token string `json:"token"`
 }
 type ramGrantResponse struct {
-	BaseURL string `json:"baseUrl"`
-	Token   string `json:"token"`
+	BaseURL   string `json:"baseUrl"`
+	Token     string `json:"token"`
+	Directory string `json:"directory"`
 }
 type ramGrant struct {
 	owner    string
@@ -138,7 +145,7 @@ func (s *ramFileStore) create(owner string, inputs []ramFileInput, identities ..
 	s.grants[digest] = &ramGrant{owner: owner, id: hex.EncodeToString(raw[32:]), identity: identity, usage: usage, files: files, size: total, created: time.Now().UTC()}
 	s.owners[owner] = digest
 	s.bytes = s.bytes - previousSize + total
-	return ramGrantResponse{BaseURL: s.baseURL, Token: token}, nil
+	return ramGrantResponse{BaseURL: s.baseURL, Token: token, Directory: s.baseURL + "/" + token}, nil
 }
 
 func (s *ramFileStore) revoke(token string) {
@@ -188,7 +195,12 @@ func registerRAMFileHandlers(mux *http.ServeMux, b *localBackend, security local
 			writeDecodeError(w, err)
 			return
 		}
-		identity := resolveRequest{RequestID: req.RequestID, WorkspaceID: req.WorkspaceID, ServiceID: req.ServiceID, IdentityLease: req.IdentityLease}
+		refs, err := ramBindingRefs(req.Bindings)
+		if err != nil {
+			writeAPIError(w, 400, "invalid_file_grant", "Invalid secret bindings.", "invalid_ref", "")
+			return
+		}
+		identity := resolveRequest{RequestID: req.RequestID, WorkspaceID: req.WorkspaceID, ServiceID: req.ServiceID, IdentityLease: req.IdentityLease, Refs: refs}
 		if err := b.authorizeResolveLaunchLease(&identity, b.launchLeaseSigningKey(security.token), transportPeerIdentityFromContext(r.Context())); err != nil {
 			writeLaunchIdentityAPIError(w, err)
 			return
@@ -207,7 +219,12 @@ func registerRAMFileHandlers(mux *http.ServeMux, b *localBackend, security local
 		}
 		// Length-prefix identity fields avoid concatenation aliases.
 		owner := fmt.Sprintf("%d:%s%d:%s%s", len(identity.WorkspaceID), identity.WorkspaceID, len(identity.ServiceID), identity.ServiceID, req.InstanceID)
-		grant, err := b.ramFiles.create(owner, req.Files, ramFileOwner{WorkspaceID: identity.WorkspaceID, ServiceID: identity.ServiceID})
+		files, err := b.renderRAMSecretFiles(req.Files, req.Bindings, identity)
+		if err != nil {
+			writeAPIError(w, 400, "secret_file_provision_failed", "Secret-file inputs are unavailable or invalid.", "policy_denied", "")
+			return
+		}
+		grant, err := b.ramFiles.create(owner, files, ramFileOwner{WorkspaceID: identity.WorkspaceID, ServiceID: identity.ServiceID})
 		if err != nil {
 			writeAPIError(w, 400, "invalid_file_grant", "File grant rejected by bounds or path policy.", "policy_denied", "")
 			return

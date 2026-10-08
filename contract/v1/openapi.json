@@ -3127,6 +3127,12 @@
       "ramGrantRequest": {
         "additionalProperties": true,
         "properties": {
+          "bindings": {
+            "items": {
+              "$ref": "#/components/schemas/ramSecretBinding"
+            },
+            "type": "array"
+          },
           "files": {
             "items": {
               "$ref": "#/components/schemas/ramFileInput"
@@ -3165,12 +3171,16 @@
           "baseUrl": {
             "type": "string"
           },
+          "directory": {
+            "type": "string"
+          },
           "token": {
             "type": "string"
           }
         },
         "required": [
           "baseUrl",
+          "directory",
           "token"
         ],
         "type": "object"
@@ -3184,6 +3194,26 @@
         },
         "required": [
           "token"
+        ],
+        "type": "object"
+      },
+      "ramSecretBinding": {
+        "additionalProperties": true,
+        "properties": {
+          "ref": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "selector": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "required",
+          "selector"
         ],
         "type": "object"
       },
