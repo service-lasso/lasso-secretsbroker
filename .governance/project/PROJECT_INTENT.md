@@ -21,3 +21,7 @@ Keep ordinary modern artifacts and explicit Mac11 compatibility qualification
 separate; retain complete checksum/native/security/receipt gates and original
 published pins. This is prospective candidate preparation, not readiness proof.
 Core acceptance repair is issue1750, working with corrected Echo PR17.
+Independent review expands #203 under CAND-6 to packaging/harness failure
+propagation, compatibility input binding, malformed nonce refusal and atomic
+key-rotation recovery. Review is incomplete; no execution admission or candidate
+readiness follows from the preliminary findings.

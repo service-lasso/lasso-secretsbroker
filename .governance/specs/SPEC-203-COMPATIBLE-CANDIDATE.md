@@ -23,3 +23,9 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
 - CAND-5: Push each intentional commit; deliver through develop PR with exact
   source/review/artifact/test evidence. Coordinate Core1750 and Echo17 without
   mutating other workers or authorizing Core native effects through Broker proof.
+- CAND-6: Repair independent-review findings before qualification: propagate
+  Windows packaging/harness native failures; bind compatibility build provenance
+  to the clean source and copied/archive bytes; reject malformed GCM nonce sizes;
+  preserve the original key on failed rotation before store publication and the
+  recoverable pending wrapper after publication. Add negative regressions without
+  weakening existing assertions or creating local machine accounts.
