@@ -321,7 +321,7 @@ func visitStorePayloads(store *localStoreFile, visit func(secretPayload) (secret
 		if entry.KV != nil {
 			for index := range entry.KV.Versions {
 				version := &entry.KV.Versions[index]
-				if version.Destroyed {
+				if version.Destroyed && version.Payload == (secretPayload{}) {
 					continue
 				}
 				version.Payload, err = visit(version.Payload)

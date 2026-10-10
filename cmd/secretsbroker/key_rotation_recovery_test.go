@@ -56,6 +56,7 @@ func TestMasterKeyRotationMigratesAllSurvivingPayloadFamilies(t *testing.T) {
 		{Version: 1, Payload: makePayload(`{"value":"historical"}`)},
 		{Version: 2, Payload: makePayload(`{"value":"current"}`)},
 		{Version: 3, Destroyed: true},
+		{Version: 4, Destroyed: true, Payload: makePayload("surviving-destroyed-ciphertext")},
 	}}}
 	store, err := b.loadStore()
 	if err != nil {
@@ -90,8 +91,8 @@ func TestMasterKeyRotationMigratesAllSurvivingPayloadFamilies(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if count != 7 {
-		t.Fatalf("visited %d payloads, want 7", count)
+	if count != 8 {
+		t.Fatalf("visited %d payloads, want 8", count)
 	}
 	for version, expected := range map[int]string{1: "historical", 2: "current"} {
 		_, fields, err := b.localKVVersion(rotated.Secrets[entry.Ref], version)
@@ -101,6 +102,9 @@ func TestMasterKeyRotationMigratesAllSurvivingPayloadFamilies(t *testing.T) {
 	}
 	if rotated.Secrets[entry.Ref].KV.Versions[2].Payload != (secretPayload{}) {
 		t.Fatal("destroyed version resurrected")
+	}
+	if value, err := b.decrypt(rotated.Secrets[entry.Ref].KV.Versions[3].Payload); err != nil || value != "surviving-destroyed-ciphertext" {
+		t.Fatalf("surviving destroyed payload lost: %q %v", value, err)
 	}
 	for _, payload := range []secretPayload{rotated.Tombstones["removed"].Entry.Payload, rotated.Tombstones["removed"].Entry.KV.Versions[0].Payload, rotated.Rotations["orphaned-ledger"].Staged["staged"].Payload, rotated.Rotations["orphaned-ledger"].Retained["retained"].Payload} {
 		value, err := b.decrypt(payload)
@@ -172,7 +176,7 @@ func TestManagedRotationPreservesKeyAndWrapperAtPublicationBoundary(t *testing.T
 }
 
 func TestMasterKeyRotationRejectsCorruptRetainedPayloadBeforePublication(t *testing.T) {
-	for _, family := range []string{"kv-history", "tombstone-history", "staged", "retained"} {
+	for _, family := range []string{"kv-history", "destroyed-history", "tombstone-history", "staged", "retained"} {
 		t.Run(family, func(t *testing.T) {
 			b := testBackend(t)
 			oldKey := b.masterKey
@@ -186,6 +190,9 @@ func TestMasterKeyRotationRejectsCorruptRetainedPayloadBeforePublication(t *test
 			}
 			entry := secretEntry{Ref: "services/api/KEY", Payload: payload, KV: &kvSecretState{Versions: []kvVersionRecord{{Version: 1, Payload: secretPayload{Alg: "invalid"}}}}}
 			switch family {
+			case "destroyed-history":
+				entry.KV.Versions[0].Destroyed = true
+				store.Secrets[entry.Ref] = entry
 			case "kv-history":
 				store.Secrets[entry.Ref] = entry
 			case "tombstone-history":
