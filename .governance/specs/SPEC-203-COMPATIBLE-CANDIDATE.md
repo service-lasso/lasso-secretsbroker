@@ -29,3 +29,7 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
   preserve the original key on failed rotation before store publication and the
   recoverable pending wrapper after publication. Add negative regressions without
   weakening existing assertions or creating local machine accounts.
+- CAND-7: Retain the original Windows retention failure and all protected test
+  assertions. Add a bounded causal observer that reports each audit/projection
+  write error before considering a persistence repair; do not mask missing writes
+  with retries, changed retention counts or changed expected event identities.

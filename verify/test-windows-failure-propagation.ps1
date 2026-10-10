@@ -9,21 +9,30 @@ try {
   $bin = New-Item -ItemType Directory -Path (Join-Path $fixture 'bin')
   @'
 @echo off
-if "%1"=="build" (
-  echo synthetic binary> %4
-  exit /b 0
-)
-if "%2"=="./cmd/sbom" (
-  echo synthetic sbom> %4
-  if "%BROKER_TEST_FAIL%"=="sbom" exit /b 23
-  exit /b 0
-)
-if "%2"=="./cmd/releasearchive" (
-  echo partial archive> %6
-  if "%BROKER_TEST_FAIL%"=="archive" exit /b 29
-  exit /b 0
-)
+echo helper fail=%BROKER_TEST_FAIL% args=[%~1][%~2][%~3][%~4][%~5][%~6]>> "%BROKER_TEST_CALLS%"
+if "%~1"=="build" goto build
+if "%~2"=="./cmd/sbom" goto sbom
+if "%~2"=="./cmd/releasearchive" goto archive
 exit /b 99
+:build
+echo synthetic binary> "%~4"
+exit /b 0
+:sbom
+echo selected=sbom>> "%BROKER_TEST_CALLS%"
+echo synthetic sbom> "%~4"
+if "%BROKER_TEST_FAIL%"=="sbom" goto fail_sbom
+exit /b 0
+:fail_sbom
+echo exiting=23>> "%BROKER_TEST_CALLS%"
+exit /b 23
+:archive
+echo selected=archive>> "%BROKER_TEST_CALLS%"
+echo partial archive> "%~6"
+if "%BROKER_TEST_FAIL%"=="archive" goto fail_archive
+exit /b 0
+:fail_archive
+echo exiting=29>> "%BROKER_TEST_CALLS%"
+exit /b 29
 '@ | Set-Content -LiteralPath (Join-Path $bin.FullName 'go.cmd')
   @'
 @echo off
@@ -42,6 +51,22 @@ exit /b 0
     '{"artifact":{"path":"unused"}}' | Set-Content (Join-Path $root 'verify/service-harness.json')
     $env:BROKER_TEST_FAIL = $case
     $env:BROKER_TEST_CALLS = Join-Path $root 'calls.txt'
+    # Establish the real native exit before asking the copied production script
+    # to propagate it. Separate output prevents this preflight from satisfying
+    # any package/archive assertion below.
+    if ($case -in @('sbom', 'archive')) {
+      $command = if ($case -eq 'sbom') { './cmd/sbom' } else { './cmd/releasearchive' }
+      $preflight = Join-Path $root 'preflight-output'
+      if ($case -eq 'sbom') {
+        & (Join-Path $bin.FullName 'go.cmd') run $command --output $preflight
+      } else {
+        & (Join-Path $bin.FullName 'go.cmd') run $command --source unused --output $preflight
+      }
+      $nativeExit = $LASTEXITCODE
+      $expectedExit = @{sbom=23;archive=29}[$case]
+      "native exit=$nativeExit expected=$expectedExit" | Set-Content (Join-Path $root 'preflight.log')
+      if ($nativeExit -ne $expectedExit) { throw "Fixture native preflight failed in $case : $nativeExit" }
+    }
     $failure = $null
     try {
       if ($case -in @('sbom', 'archive', 'success')) {

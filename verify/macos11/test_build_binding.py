@@ -23,7 +23,7 @@ class BuildBinding(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(path.name.encode())
         doc = {'candidateSHA': 'a' * 40, 'sourceTree': 'b' * 40,
-               'hashes': {str(p.relative_to(root)) if p.is_relative_to(root) else str(p): binding.digest(p)
+               'hashes': {p.relative_to(root).as_posix() if p.is_relative_to(root) else str(p): binding.digest(p)
                           for p in files}}
         (owned / 'artifacts/provenance.json').write_text(json.dumps(doc))
         return root, owned, doc

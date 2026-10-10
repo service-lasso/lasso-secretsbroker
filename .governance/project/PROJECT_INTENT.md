@@ -25,3 +25,6 @@ Independent review expands #203 under CAND-6 to packaging/harness failure
 propagation, compatibility input binding, malformed nonce refusal and atomic
 key-rotation recovery. Review is incomplete; no execution admission or candidate
 readiness follows from the preliminary findings.
+The first frozen Windows Go suite exposed an operational-event retention failure.
+CAND-7 admits causal write-error observation before any persistence repair; the
+original retention test and expected identities remain unchanged.
