@@ -25,41 +25,41 @@ func writePrivateFileAtomically(path string, content []byte) error {
 
 func writePrivateFileAtomicallyWithProtection(path string, content []byte, protect func(string, bool) error) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil { // #nosec G703 -- callers authorize the destination; all writes use private temporary files and atomic replacement.
-		return err
+		return fmt.Errorf("atomic write create parent: %w", err)
 	}
 	if err := protect(filepath.Dir(path), true); err != nil {
-		return err
+		return fmt.Errorf("atomic write protect parent: %w", err)
 	}
 	temp, err := os.CreateTemp(filepath.Dir(path), ".secretsbroker-atomic-*")
 	if err != nil {
-		return err
+		return fmt.Errorf("atomic write create temporary file: %w", err)
 	}
 	tempPath := temp.Name()
 	defer os.Remove(tempPath)
 	if err := temp.Chmod(0o600); err != nil {
 		_ = temp.Close()
-		return err
+		return fmt.Errorf("atomic write chmod temporary file: %w", err)
 	}
 	if err := protect(tempPath, false); err != nil {
 		_ = temp.Close()
-		return err
+		return fmt.Errorf("atomic write protect temporary file: %w", err)
 	}
 	if _, err := temp.Write(content); err != nil {
 		_ = temp.Close()
-		return err
+		return fmt.Errorf("atomic write content: %w", err)
 	}
 	if err := temp.Sync(); err != nil {
 		_ = temp.Close()
-		return err
+		return fmt.Errorf("atomic write sync temporary file: %w", err)
 	}
 	if err := temp.Close(); err != nil {
-		return err
+		return fmt.Errorf("atomic write close temporary file: %w", err)
 	}
 	if err := replaceFileAtomically(tempPath, path); err != nil {
-		return err
+		return fmt.Errorf("atomic write replace destination: %w", err)
 	}
 	if err := protect(path, false); err != nil {
-		return &privateFilePublishedError{err: err}
+		return &privateFilePublishedError{err: fmt.Errorf("atomic write protect published destination: %w", err)}
 	}
 	return nil
 }
