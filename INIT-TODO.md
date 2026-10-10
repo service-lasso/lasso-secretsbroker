@@ -29,3 +29,5 @@ Issue #188 remains qualification-incomplete: prior Core fixture used curated
 lesson transport plus artifact selection. The unchanged public 9c profile fails
 canonical bootstrap with 503 despite a ready native Broker. Preserve prior binary
 native16/checksum evidence and immutable releases; neither proves raw integration.
+
+- [ ] #203 SPEC-203 compatible file-grants candidate: independent review, exact artifacts and original gates; no publication/deployment.

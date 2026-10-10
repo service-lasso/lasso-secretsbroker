@@ -16,3 +16,14 @@ Current scope/evidence/required parent gates: ISSUE-194-QUALIFICATION.md.
 Raw producer-profile Core integration remains qualification-incomplete; curated
 lesson runtime overlays do not satisfy it. Prior native binary and checksum
 evidence is retained without promoting it to raw-profile acceptance.
+
+## Compatible candidate preparation (#203, 2026-10-11)
+
+Owner authorizes preparation, independent review and testing, with no publication
+or deployment. SPEC-203 supplements existing SPEC-186/188/191/194 and DAV-6.
+Worktree chore/203-compatible-candidate is from actual developb0048353; existing
+remote fetch mapping does not update origin/develop and is not source authority.
+Keep ordinary modern artifacts and explicit Mac11 compatibility qualification
+separate; retain complete checksum/native/security/receipt gates and original
+published pins. This is prospective candidate preparation, not readiness proof.
+Core acceptance repair is issue1750, working with corrected Echo PR17.
