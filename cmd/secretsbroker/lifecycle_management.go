@@ -322,6 +322,10 @@ func (b *localBackend) restoreManagedBackupApply(req lifecycleOperationRequest) 
 }
 
 func (b *localBackend) rotateManagedMasterKey(req lifecycleOperationRequest) (lifecycleRotateResponse, error) {
+	return b.rotateManagedMasterKeyWithStoreWriter(req, b.saveStore)
+}
+
+func (b *localBackend) rotateManagedMasterKeyWithStoreWriter(req lifecycleOperationRequest, save func(localStoreFile) error) (lifecycleRotateResponse, error) {
 	res := lifecycleRotateResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "policy_denied", RequiresConfirmation: true, AuditStatus: "audit_unavailable", NextAction: "confirm_key_rotation"}
 	if err := validateLifecycleMutationRequest(req, true); err != nil || !validSafeMetadataID(req.ExpectedKeyID) {
 		return res, errLifecycleInvalidRequest
@@ -365,9 +369,11 @@ func (b *localBackend) rotateManagedMasterKey(req lifecycleOperationRequest) (li
 		return res, err
 	}
 	receipt := lifecycleOperationReceipt{Kind: "rotate", OperationID: req.OperationID, ExpectedKeyID: req.ExpectedKeyID, OldKeyID: masterKeyID(oldKey), NewKeyID: masterKeyID(newKey), KeyVersion: masterKeyVersion, SecretCount: len(store.Secrets), AppliedAt: b.now().UTC()}
-	rotated, err := b.rotateMasterKeyWithReceipt(newKey, &receipt)
+	rotated, err := b.rotateMasterKeyAndSave(newKey, &receipt, save)
 	if err != nil {
-		_ = os.Remove(pendingWrapper)
+		if !privateFileWasPublished(err) {
+			_ = os.Remove(pendingWrapper)
+		}
 		return res, err
 	}
 	if err := atomicReplacePrivateFile(pendingWrapper, b.wrapperPath); err != nil {

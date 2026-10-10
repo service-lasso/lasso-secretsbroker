@@ -1121,7 +1121,12 @@ func actorKindForAudit(serviceID string) string {
 }
 
 func (b *localBackend) encrypt(value string) (secretPayload, error) {
-	block, err := aes.NewCipher(b.key())
+	return encryptWithMasterKey(b.masterKey, value)
+}
+
+func encryptWithMasterKey(masterKey, value string) (secretPayload, error) {
+	key := sha256.Sum256([]byte(masterKey))
+	block, err := aes.NewCipher(key[:])
 	if err != nil {
 		return secretPayload{}, err
 	}
@@ -1134,7 +1139,7 @@ func (b *localBackend) encrypt(value string) (secretPayload, error) {
 		return secretPayload{}, err
 	}
 	ciphertext := gcm.Seal(nil, nonce, []byte(value), nil)
-	return secretPayload{Alg: "AES-256-GCM", KeyID: masterKeyID(b.masterKey), KeyVersion: masterKeyVersion, Nonce: base64.StdEncoding.EncodeToString(nonce), Ciphertext: base64.StdEncoding.EncodeToString(ciphertext)}, nil
+	return secretPayload{Alg: "AES-256-GCM", KeyID: masterKeyID(masterKey), KeyVersion: masterKeyVersion, Nonce: base64.StdEncoding.EncodeToString(nonce), Ciphertext: base64.StdEncoding.EncodeToString(ciphertext)}, nil
 }
 
 func (b *localBackend) decrypt(payload secretPayload) (string, error) {
@@ -1156,6 +1161,9 @@ func (b *localBackend) decrypt(payload secretPayload) (string, error) {
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return "", err
+	}
+	if len(nonce) != gcm.NonceSize() {
+		return "", errors.New("invalid encrypted payload nonce size")
 	}
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
