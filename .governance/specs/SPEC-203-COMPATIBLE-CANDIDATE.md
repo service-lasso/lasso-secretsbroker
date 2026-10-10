@@ -34,3 +34,10 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
   write error and wrap atomic-write failures with their operation while preserving
   the original error identity before considering a persistence repair; do not mask missing writes
   with retries, changed retention counts or changed expected event identities.
+- CAND-8: The original hosted vulnerability gate found ten reachable standard
+  library vulnerabilities fixed in Go 1.26.9. Upgrade the official candidate
+  minimum and explicit CI selection to 1.26.9 and deliberately rebase the separate
+  four-file Mac11 patch against verified 1.26.9 source/distribution bytes. Review
+  new preimages/postimages and all version/hash/provenance consumers before a fresh
+  owned rebuild. Preserve original security/native gates and historical failures;
+  no suppression, old linker reuse, publication or deployment is authorized.

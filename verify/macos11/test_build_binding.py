@@ -17,7 +17,7 @@ class BuildBinding(unittest.TestCase):
     def fixture(self, directory):
         root = pathlib.Path(directory) / 'root'
         owned = pathlib.Path(directory) / 'owned'
-        files = [root / name for name in ('go.mod', 'go.sum', 'toolchains/macos11/go1.26.8.patch')]
+        files = [root / name for name in ('go.mod', 'go.sum', 'toolchains/macos11/go1.26.9.patch')]
         files += [owned / 'artifacts' / name for name in ('secretsbroker', 'secretsbroker-resolve')]
         for path in files:
             path.parent.mkdir(parents=True, exist_ok=True)

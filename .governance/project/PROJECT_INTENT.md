@@ -28,3 +28,6 @@ readiness follows from the preliminary findings.
 The first frozen Windows Go suite exposed an operational-event retention failure.
 CAND-7 admits causal write-error observation before any persistence repair; the
 original retention test and expected identities remain unchanged.
+Original hosted security scans now require CAND-8: official and separately patched
+Mac11 candidates move to Go 1.26.9, with fresh immutable toolchain inputs and
+independent patch review. Historical 1.26.8 evidence cannot qualify the new build.

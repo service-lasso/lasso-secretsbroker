@@ -30,7 +30,7 @@ def inspect_inputs(root, owned):
     if (doc.get('candidateSHA'), doc.get('sourceTree')) != (head, tree):
         raise ValueError('Compatibility build does not match current source commit/tree')
     expected = doc['hashes']
-    required = ['go.mod', 'go.sum', 'toolchains/macos11/go1.26.8.patch']
+    required = ['go.mod', 'go.sum', 'toolchains/macos11/go1.26.9.patch']
     required += [str(owned / 'artifacts' / name)
                  for name in ('secretsbroker', 'secretsbroker-resolve')]
     if any(name not in expected for name in required):

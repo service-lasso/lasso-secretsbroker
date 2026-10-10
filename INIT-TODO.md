@@ -33,3 +33,4 @@ native16/checksum evidence and immutable releases; neither proves raw integratio
 - [ ] #203 SPEC-203 compatible file-grants candidate: independent review, exact artifacts and original gates; no publication/deployment.
 - [ ] #203 CAND-6: fix reviewed packaging/harness, input-binding, nonce and rotation error paths with original negative gates retained.
 - [ ] #203 CAND-7: diagnose original Windows event-retention failure with per-write error evidence; preserve original assertions.
+- [ ] #203 CAND-8: rebase official/Mac11 candidates to Go 1.26.9 and repeat original security/build/native gates with fresh inputs.
