@@ -31,3 +31,6 @@ original retention test and expected identities remain unchanged.
 Original hosted security scans now require CAND-8: official and separately patched
 Mac11 candidates move to Go 1.26.9, with fresh immutable toolchain inputs and
 independent patch review. Historical 1.26.8 evidence cannot qualify the new build.
+CAND-9 covers the Windows native path guard finding. CAND-10 prepares partial
+compatibility build evidence in hosted validation because the local WSL Python
+runtime is incompatible with its libc; shared-system repair is outside this task.

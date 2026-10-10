@@ -41,3 +41,13 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
   new preimages/postimages and all version/hash/provenance consumers before a fresh
   owned rebuild. Preserve original security/native gates and historical failures;
   no suppression, old linker reuse, publication or deployment is authorized.
+- CAND-9: Repair the Windows path-analysis finding using the existing final native
+  attribute query for directory/reparse checks, preserving ancestor refusal and
+  native errors. Add direct type, missing/NUL and direct/ancestor link regressions;
+  retain all original ACL/DPAPI tests and unchanged static-analysis gates.
+- CAND-10: An additive hosted validation job may prepare the custom compatibility
+  binaries on Linux with exact PR-head source, pinned tools, fresh private build
+  roots, original producer, Mach-O checks and exact-binary vulnerability scans.
+  Its downloadable output is explicitly partial producer evidence. It cannot
+  replace native16, supported-platform comparisons, complete package/checksum
+  acceptance, the owner receipt or publication authority. No publisher dispatch.

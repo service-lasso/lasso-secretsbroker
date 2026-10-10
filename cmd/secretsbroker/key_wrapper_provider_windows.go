@@ -5,7 +5,6 @@ package main
 import (
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -244,13 +243,6 @@ func rejectWindowsReparsePoint(path string, directory bool) error {
 	if err := rejectWindowsReparseTraversal(path); err != nil {
 		return err
 	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	if info.IsDir() != directory {
-		return errWrapperAccess
-	}
 	pathPtr, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return err
@@ -262,7 +254,7 @@ func rejectWindowsReparsePoint(path string, directory bool) error {
 	if attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
 		return errWrapperAccess
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
+	if (attributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0) != directory {
 		return errWrapperAccess
 	}
 	return nil
