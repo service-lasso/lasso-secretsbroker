@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,28 @@ import (
 	"testing"
 	"time"
 )
+
+func TestLocalBackendDecryptRejectsMalformedNonce(t *testing.T) {
+	backend := testBackend(t)
+	payload, err := backend.encrypt("original-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, size := range []int{0, 1, 11, 13, 24} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			invalid := payload
+			invalid.Nonce = base64.StdEncoding.EncodeToString(make([]byte, size))
+			value, err := backend.decrypt(invalid)
+			if err == nil || value != "" {
+				t.Fatalf("malformed nonce returned value %q and error %v", value, err)
+			}
+		})
+	}
+	value, err := backend.decrypt(payload)
+	if err != nil || value != "original-secret" {
+		t.Fatalf("valid original payload failed: %q, %v", value, err)
+	}
+}
 
 func TestLocalBackendWriteSeparatesMetadataAndEncryptedPayload(t *testing.T) {
 	backend := testBackend(t)

@@ -39,4 +39,10 @@ $doc | ConvertTo-Json -Depth 10 | Set-Content $resolvedContractPath
 
 $harness = Resolve-HarnessBinary
 & $harness validate-contract --contract $resolvedContractPath
+if ($LASTEXITCODE -ne 0) {
+  throw "Harness contract validation failed with exit code $LASTEXITCODE."
+}
 & $harness run --contract $resolvedContractPath --output-dir $runOutputDir
+if ($LASTEXITCODE -ne 0) {
+  throw "Harness verification failed with exit code $LASTEXITCODE."
+}

@@ -7,6 +7,7 @@ export GOTOOLCHAIN=local GOENV=off GOFLAGS= GOWORK=off GOOS=linux GOARCH=amd64 G
 export GOROOT="$OWNED/go" GOCACHE="$OWNED/cache" GOMODCACHE="$OWNED/modcache"
 export PATH="$GOROOT/bin:$PATH"
 STAGING="$ROOT/dist/secretsbroker-darwin-amd64-macos11"
+INPUTS="$(python3 "$ROOT/scripts/verify-compat-build.py" inputs "$ROOT" "$OWNED")"
 test ! -e "$STAGING"
 mkdir -p "$STAGING"
 cp "$OWNED/artifacts/secretsbroker" "$OWNED/artifacts/secretsbroker-resolve" "$STAGING/"
@@ -20,3 +21,4 @@ cd "$ROOT"
 go run ./cmd/sbom --output "$STAGING/sbom.cdx.json" --platform darwin-amd64-macos11
 cp "$STAGING/sbom.cdx.json" "$ROOT/dist/secretsbroker-darwin-amd64-macos11.cdx.json"
 go run ./cmd/releasearchive --source "$STAGING" --output "$ROOT/dist/secretsbroker-darwin-amd64-macos11.tar.gz" --format tar.gz
+python3 "$ROOT/scripts/verify-compat-build.py" archive "$ROOT" "$OWNED" "$INPUTS" "$STAGING" "$ROOT/dist/secretsbroker-darwin-amd64-macos11.tar.gz"
