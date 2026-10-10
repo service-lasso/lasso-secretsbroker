@@ -51,3 +51,11 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
   Its downloadable output is explicitly partial producer evidence. It cannot
   replace native16, supported-platform comparisons, complete package/checksum
   acceptance, the owner receipt or publication authority. No publisher dispatch.
+- CAND-11: The partial producer also builds the original custom trust probe,
+  binds its source/tool/environment/output identities separately and runs the
+  original compatibility packager with a date/full-source-bound prospective
+  version. Retain the archive/manifest/SBOM/provenance/prerequisite hashes without
+  manufacturing the missing native receipt or full thirteen-payload acceptance.
+  Native comparison must refuse zero probes and retain each original subprocess
+  outcome before interpretation; preserve all original trust predicates and101
+  independent calls. This strengthens empty-input refusal, not native admission.

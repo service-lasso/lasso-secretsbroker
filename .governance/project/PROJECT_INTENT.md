@@ -34,3 +34,6 @@ independent patch review. Historical 1.26.8 evidence cannot qualify the new buil
 CAND-9 covers the Windows native path guard finding. CAND-10 prepares partial
 compatibility build evidence in hosted validation because the local WSL Python
 runtime is incompatible with its libc; shared-system repair is outside this task.
+CAND-11 extends that partial output to the original compatibility archive and
+custom native-trust probe, with exact byte binding and zero-probe refusal. The
+owner native receipt and complete release qualification remain separate gates.
