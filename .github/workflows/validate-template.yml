@@ -30,6 +30,7 @@ jobs:
             previous_archive_name: secretsbroker-win32.zip
             previous_binary_name: secretsbroker.exe
             previous_archive_sha256: 0a268f8c26f90b2a0cdcb9e7b8c248e216490c2de99442b8da043d3b17ec1381
+            candidate_archive: secretsbroker-win32.zip
           - os: ubuntu-latest
             platform: linux
             archive_name: service-lasso-harness-linux-amd64.tar.gz
@@ -39,6 +40,7 @@ jobs:
             previous_archive_name: secretsbroker-linux.tar.gz
             previous_binary_name: secretsbroker
             previous_archive_sha256: b7365a34bce2b6ff392c44ba3df8e505e5b6f4642f242b0175d8d2e60e663754
+            candidate_archive: secretsbroker-linux.tar.gz
           - os: macos-14
             platform: darwin
             archive_name: service-lasso-harness-darwin-arm64.tar.gz
@@ -48,17 +50,45 @@ jobs:
             previous_archive_name: secretsbroker-darwin.tar.gz
             previous_binary_name: secretsbroker
             previous_archive_sha256: 21d4fa6518fa77a4d58df4bde9573d16b74b8dc026859d27c8727667acde4654
+            candidate_archive: secretsbroker-darwin.tar.gz
 
     runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.26.9'
+
+      - name: Retain exact candidate source and selected build tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $head = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $head -cne $env:EXPECTED_SHA) { throw 'Candidate head mismatch.' }
+          $tree = git rev-parse 'HEAD^{tree}'
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate tree unavailable.' }
+          $dirty = git status --porcelain --untracked-files=all
+          if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'Candidate source is not clean.' }
+          New-Item -ItemType Directory -Force output/verify | Out-Null
+          git archive --format=tar --output=output/verify/candidate-source.tar HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed.' }
+          $tools = foreach ($name in @('go','git','pwsh')) {
+            $selected = (Get-Command $name -CommandType Application -ErrorAction Stop).Source
+            @{name=$name;path=$selected;sha256=(Get-FileHash -LiteralPath $selected -Algorithm SHA256).Hash.ToLowerInvariant()}
+          }
+          $goVersion = go version
+          if ($LASTEXITCODE -ne 0) { throw 'Go identity unavailable.' }
+          @{candidateSHA=$head;sourceTree=$tree;sourceArchiveSHA256=(Get-FileHash output/verify/candidate-source.tar -Algorithm SHA256).Hash.ToLowerInvariant();tools=@($tools);goVersion=$goVersion;claim='Exact-source official candidate preparation; full native/publication qualification absent.'} |
+            ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 output/verify/candidate-inputs.json
 
       - name: Verify compatibility native profile and publication receipt contract
         run: python -B -m unittest discover -s verify/macos11 -p 'test_*.py' -v
@@ -227,6 +257,20 @@ jobs:
         with:
           name: verify-${{ matrix.platform }}
           path: output/verify
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Retain original official candidate payloads after validation
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: official-candidate-${{ matrix.platform }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            dist/${{ matrix.candidate_archive }}
+            dist/secretsbroker-${{ matrix.platform }}.cdx.json
+            service.json
+            output/verify/candidate-inputs.json
+            output/verify/candidate-source.tar
+            output/verify/go-vulnerability-binaries.json
           if-no-files-found: error
           retention-days: 90
 

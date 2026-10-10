@@ -37,3 +37,6 @@ runtime is incompatible with its libc; shared-system repair is outside this task
 CAND-11 extends that partial output to the original compatibility archive and
 custom native-trust probe, with exact byte binding and zero-probe refusal. The
 owner native receipt and complete release qualification remain separate gates.
+CAND-12 closes the official artifact-retention gap: exact-head platform validation
+retains original archives/SBOMs/manifest and input identity for seven-payload
+checksum verification. This does not create native or publication acceptance.

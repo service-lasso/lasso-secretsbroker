@@ -59,3 +59,10 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
   Native comparison must refuse zero probes and retain each original subprocess
   outcome before interpretation; preserve all original trust predicates and101
   independent calls. This strengthens empty-input refusal, not native admission.
+- CAND-12: Retain all seven original official payloads from exact candidate-head
+  platform validations, with source archive/tree and selected build tool hashes.
+  Keep the original package/scanner/test/harness gates. Aggregate only identical
+  candidate source and service-manifest bytes into a fresh official-only folder;
+  use original releasechecksums write/verify there. Compatibility stays separate
+  until its actual complete native receipt exists. No publication or bypass of
+  native16, Core F7, published-package gates or intermittent Windows failures.
