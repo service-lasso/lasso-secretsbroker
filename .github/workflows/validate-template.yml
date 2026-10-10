@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [ main ]
+    branches: [ develop ]
 
 permissions:
   contents: read
@@ -172,6 +172,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: .\scripts\package.ps1
+
+      - name: Verify Windows native failure propagation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\verify\test-windows-failure-propagation.ps1
 
       - name: Package Secrets Broker artifact (POSIX)
         if: runner.os != 'Windows'
