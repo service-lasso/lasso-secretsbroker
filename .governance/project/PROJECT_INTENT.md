@@ -40,3 +40,6 @@ owner native receipt and complete release qualification remain separate gates.
 CAND-12 closes the official artifact-retention gap: exact-head platform validation
 retains original archives/SBOMs/manifest and input identity for seven-payload
 checksum verification. This does not create native or publication acceptance.
+The 75c67c82 Windows artifact exposed a CAND-12 provenance defect: its SBOM
+selected the event's synthetic merge SHA despite exact-head checkout. Bind the
+official producer's version to EXPECTED_SHA and retain the original mismatch.

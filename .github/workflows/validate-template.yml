@@ -55,6 +55,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      SERVICE_LASSO_RELEASE_VERSION: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Check out repository

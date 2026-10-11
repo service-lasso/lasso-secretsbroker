@@ -66,3 +66,7 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
   use original releasechecksums write/verify there. Compatibility stays separate
   until its actual complete native receipt exists. No publication or bypass of
   native16, Core F7, published-package gates or intermittent Windows failures.
+  Official candidate SBOM versions must bind to that exact candidate head via
+  SERVICE_LASSO_RELEASE_VERSION. A pull-request event's synthetic merge SHA is
+  not the checked-out source identity. Retain mismatched original artifacts as
+  failed evidence; rebuild on the corrected workflow rather than relabel them.
