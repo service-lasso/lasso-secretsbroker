@@ -43,3 +43,6 @@ checksum verification. This does not create native or publication acceptance.
 The 75c67c82 Windows artifact exposed a CAND-12 provenance defect: its SBOM
 selected the event's synthetic merge SHA despite exact-head checkout. Bind the
 official producer's version to EXPECTED_SHA and retain the original mismatch.
+The 00519c4 Windows source archive then exposed ambient Git CRLF conversion in
+256 files, including the service manifest. CAND-12 explicitly materializes LF
+before building/retaining inputs, with identical archive conversion settings.

@@ -70,3 +70,7 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
   SERVICE_LASSO_RELEASE_VERSION. A pull-request event's synthetic merge SHA is
   not the checked-out source identity. Retain mismatched original artifacts as
   failed evidence; rebuild on the corrected workflow rather than relabel them.
+  Candidate preparation must materialize consistent LF source bytes before
+  building and archiving, explicitly disabling ambient Git CRLF conversion.
+  Preserve the 00519c4 Windows source-archive mismatch as failed evidence; no
+  verification-time newline normalization can make mismatched payloads qualify.

@@ -75,12 +75,15 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $head = git rev-parse HEAD
           if ($LASTEXITCODE -ne 0 -or $head -cne $env:EXPECTED_SHA) { throw 'Candidate head mismatch.' }
+          # Materialize the same source bytes on every candidate platform.
+          git -c core.autocrlf=false -c core.eol=lf checkout-index --force --all
+          if ($LASTEXITCODE -ne 0) { throw 'Canonical candidate checkout failed.' }
           $tree = git rev-parse 'HEAD^{tree}'
           if ($LASTEXITCODE -ne 0) { throw 'Candidate tree unavailable.' }
           $dirty = git status --porcelain --untracked-files=all
           if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'Candidate source is not clean.' }
           New-Item -ItemType Directory -Force output/verify | Out-Null
-          git archive --format=tar --output=output/verify/candidate-source.tar HEAD
+          git -c core.autocrlf=false -c core.eol=lf archive --format=tar --output=output/verify/candidate-source.tar HEAD
           if ($LASTEXITCODE -ne 0) { throw 'Source archive failed.' }
           $tools = foreach ($name in @('go','git','pwsh')) {
             $selected = (Get-Command $name -CommandType Application -ErrorAction Stop).Source
