@@ -74,3 +74,7 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
   building and archiving, explicitly disabling ambient Git CRLF conversion.
   Preserve the 00519c4 Windows source-archive mismatch as failed evidence; no
   verification-time newline normalization can make mismatched payloads qualify.
+  Keep the same conversion settings in fresh-checkout local Git configuration
+  for subsequent cleanliness checks; retain 1e817af's original cleanliness
+  refusal. Changing only checkout-index command settings leaves Git's later
+  index comparison under conflicting ambient conversion rules.

@@ -76,6 +76,10 @@ jobs:
           $head = git rev-parse HEAD
           if ($LASTEXITCODE -ne 0 -or $head -cne $env:EXPECTED_SHA) { throw 'Candidate head mismatch.' }
           # Materialize the same source bytes on every candidate platform.
+          git config --local core.autocrlf false
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate Git conversion configuration failed.' }
+          git config --local core.eol lf
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate Git line-ending configuration failed.' }
           git -c core.autocrlf=false -c core.eol=lf checkout-index --force --all
           if ($LASTEXITCODE -ne 0) { throw 'Canonical candidate checkout failed.' }
           $tree = git rev-parse 'HEAD^{tree}'
