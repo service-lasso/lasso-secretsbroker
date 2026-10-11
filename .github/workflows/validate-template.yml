@@ -85,7 +85,14 @@ jobs:
           $tree = git rev-parse 'HEAD^{tree}'
           if ($LASTEXITCODE -ne 0) { throw 'Candidate tree unavailable.' }
           $dirty = git status --porcelain --untracked-files=all
-          if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'Candidate source is not clean.' }
+          $statusExit = $LASTEXITCODE
+          if ($statusExit -ne 0 -or $dirty) {
+            New-Item -ItemType Directory -Force output/verify | Out-Null
+            @{statusExit=$statusExit;status=@($dirty)} | ConvertTo-Json -Depth 3 | Set-Content -Encoding utf8 output/verify/candidate-cleanliness-failure.json
+            git ls-files --eol | Set-Content -Encoding utf8 output/verify/candidate-index-eol.txt
+            git diff --raw --no-ext-diff | Set-Content -Encoding utf8 output/verify/candidate-diff-raw.txt
+            throw 'Candidate source is not clean; original status retained.'
+          }
           New-Item -ItemType Directory -Force output/verify | Out-Null
           git -c core.autocrlf=false -c core.eol=lf archive --format=tar --output=output/verify/candidate-source.tar HEAD
           if ($LASTEXITCODE -ne 0) { throw 'Source archive failed.' }

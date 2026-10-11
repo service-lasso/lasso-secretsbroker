@@ -78,3 +78,8 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
   for subsequent cleanliness checks; retain 1e817af's original cleanliness
   refusal. Changing only checkout-index command settings leaves Git's later
   index comparison under conflicting ambient conversion rules.
+  The b9673db refusal disproves sufficiency of local converter alignment; the
+  isolated two-file Windows reproduction was clean with and without index-stat
+  updates. Retain actual failing status, index EOL and raw diff before refusal
+  in fresh automatic validation. No further cleanliness repair is selected
+  until those original observations identify the affected files/condition.
