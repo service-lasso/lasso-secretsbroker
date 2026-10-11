@@ -80,7 +80,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Candidate Git conversion configuration failed.' }
           git config --local core.eol lf
           if ($LASTEXITCODE -ne 0) { throw 'Candidate Git line-ending configuration failed.' }
-          git -c core.autocrlf=false -c core.eol=lf checkout-index --force --all
+          git -c core.autocrlf=false -c core.eol=lf checkout-index --force --all --index
           if ($LASTEXITCODE -ne 0) { throw 'Canonical candidate checkout failed.' }
           $tree = git rev-parse 'HEAD^{tree}'
           if ($LASTEXITCODE -ne 0) { throw 'Candidate tree unavailable.' }

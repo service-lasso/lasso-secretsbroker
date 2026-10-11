@@ -83,3 +83,10 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
   updates. Retain actual failing status, index EOL and raw diff before refusal
   in fresh automatic validation. No further cleanliness repair is selected
   until those original observations identify the affected files/condition.
+  The retained 246a4c2 status identifies256 changed paths with matching index/
+  working EOL. A new isolated cached-CRLF-baseline probe reproduces the refusal:
+  final LF materialization without index-stat update reports both files dirty;
+  the identical LF bytes with checkout-index --index remain clean. Select that
+  index-stat update for fresh hosted candidate materialization, preserving exact
+  source/artifact comparison and the original cleanliness gate. Hosted success
+  and byte readback remain required; the local fixture is causal evidence only.
