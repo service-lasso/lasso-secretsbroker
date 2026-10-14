@@ -34,6 +34,9 @@ Copy-Item -Force (Join-Path $root 'service.json') (Join-Path $staging 'service.j
 Push-Location $root
 try {
   go run ./cmd/sbom --output (Join-Path $staging 'sbom.cdx.json') --platform win32
+  if ($LASTEXITCODE -ne 0) {
+    throw "SBOM generation failed with exit code $LASTEXITCODE."
+  }
 }
 finally {
   Pop-Location
@@ -44,6 +47,11 @@ if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
 Push-Location $root
 try {
   go run ./cmd/releasearchive --source $staging --output $zipPath --format zip
+  if ($LASTEXITCODE -ne 0) {
+    # A failed archive must never remain available as a candidate payload.
+    if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+    throw "Release archive generation failed with exit code $LASTEXITCODE."
+  }
 }
 finally {
   Pop-Location

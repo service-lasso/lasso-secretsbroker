@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [ main ]
+    branches: [ develop ]
 
 permissions:
   contents: read
@@ -30,6 +30,7 @@ jobs:
             previous_archive_name: secretsbroker-win32.zip
             previous_binary_name: secretsbroker.exe
             previous_archive_sha256: 0a268f8c26f90b2a0cdcb9e7b8c248e216490c2de99442b8da043d3b17ec1381
+            candidate_archive: secretsbroker-win32.zip
           - os: ubuntu-latest
             platform: linux
             archive_name: service-lasso-harness-linux-amd64.tar.gz
@@ -39,6 +40,7 @@ jobs:
             previous_archive_name: secretsbroker-linux.tar.gz
             previous_binary_name: secretsbroker
             previous_archive_sha256: b7365a34bce2b6ff392c44ba3df8e505e5b6f4642f242b0175d8d2e60e663754
+            candidate_archive: secretsbroker-linux.tar.gz
           - os: macos-14
             platform: darwin
             archive_name: service-lasso-harness-darwin-arm64.tar.gz
@@ -48,20 +50,66 @@ jobs:
             previous_archive_name: secretsbroker-darwin.tar.gz
             previous_binary_name: secretsbroker
             previous_archive_sha256: 21d4fa6518fa77a4d58df4bde9573d16b74b8dc026859d27c8727667acde4654
+            candidate_archive: secretsbroker-darwin.tar.gz
 
     runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      SERVICE_LASSO_RELEASE_VERSION: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version-file: go.mod
+          go-version: '1.26.9'
+
+      - name: Retain exact candidate source and selected build tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $head = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $head -cne $env:EXPECTED_SHA) { throw 'Candidate head mismatch.' }
+          # Materialize the same source bytes on every candidate platform.
+          git config --local core.autocrlf false
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate Git conversion configuration failed.' }
+          git config --local core.eol lf
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate Git line-ending configuration failed.' }
+          git -c core.autocrlf=false -c core.eol=lf checkout-index --force --all --index
+          if ($LASTEXITCODE -ne 0) { throw 'Canonical candidate checkout failed.' }
+          $tree = git rev-parse 'HEAD^{tree}'
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate tree unavailable.' }
+          $dirty = git status --porcelain --untracked-files=all
+          $statusExit = $LASTEXITCODE
+          if ($statusExit -ne 0 -or $dirty) {
+            New-Item -ItemType Directory -Force output/verify | Out-Null
+            @{statusExit=$statusExit;status=@($dirty)} | ConvertTo-Json -Depth 3 | Set-Content -Encoding utf8 output/verify/candidate-cleanliness-failure.json
+            git ls-files --eol | Set-Content -Encoding utf8 output/verify/candidate-index-eol.txt
+            git diff --raw --no-ext-diff | Set-Content -Encoding utf8 output/verify/candidate-diff-raw.txt
+            throw 'Candidate source is not clean; original status retained.'
+          }
+          New-Item -ItemType Directory -Force output/verify | Out-Null
+          git -c core.autocrlf=false -c core.eol=lf archive --format=tar --output=output/verify/candidate-source.tar HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed.' }
+          $tools = foreach ($name in @('go','git','pwsh')) {
+            $selected = (Get-Command $name -CommandType Application -ErrorAction Stop).Source
+            @{name=$name;path=$selected;sha256=(Get-FileHash -LiteralPath $selected -Algorithm SHA256).Hash.ToLowerInvariant()}
+          }
+          $goVersion = go version
+          if ($LASTEXITCODE -ne 0) { throw 'Go identity unavailable.' }
+          @{candidateSHA=$head;sourceTree=$tree;sourceArchiveSHA256=(Get-FileHash output/verify/candidate-source.tar -Algorithm SHA256).Hash.ToLowerInvariant();tools=@($tools);goVersion=$goVersion;claim='Exact-source official candidate preparation; full native/publication qualification absent.'} |
+            ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 output/verify/candidate-inputs.json
 
       - name: Verify compatibility native profile and publication receipt contract
         run: python -B -m unittest discover -s verify/macos11 -p 'test_*.py' -v
+
+      - name: Refuse native trust comparison without a probe
+        run: node --test verify/macos11/compare-zero-probe.test.mjs
 
       - name: Download released service-lasso-harness binary
         env:
@@ -173,6 +221,11 @@ jobs:
         shell: pwsh
         run: .\scripts\package.ps1
 
+      - name: Verify Windows native failure propagation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\verify\test-windows-failure-propagation.ps1
+
       - name: Package Secrets Broker artifact (POSIX)
         if: runner.os != 'Windows'
         shell: bash
@@ -219,5 +272,150 @@ jobs:
         with:
           name: verify-${{ matrix.platform }}
           path: output/verify
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Retain original official candidate payloads after validation
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: official-candidate-${{ matrix.platform }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            dist/${{ matrix.candidate_archive }}
+            dist/secretsbroker-${{ matrix.platform }}.cdx.json
+            service.json
+            output/verify/candidate-inputs.json
+            output/verify/candidate-source.tar
+            output/verify/go-vulnerability-binaries.json
+          if-no-files-found: error
+          retention-days: 90
+
+  compatibility-producer:
+    name: Prepare partial Intel macOS 11 compatibility candidate
+    if: (github.event_name == 'pull_request' && github.base_ref == 'develop') || github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact candidate source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up official scanner Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.9'
+
+      - name: Record actual producer inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          mkdir "$RUNNER_TEMP/broker203-evidence" "$RUNNER_TEMP/broker203-home" "$RUNNER_TEMP/broker203-temp"
+          export CANDIDATE_VERSION="$(date -u +%Y.%-m.%-d)-${EXPECTED_SHA:0:7}"
+          echo "CANDIDATE_VERSION=$CANDIDATE_VERSION" >> "$GITHUB_ENV"
+          git archive --format=tar --output="$RUNNER_TEMP/broker203-evidence/source.tar" HEAD
+          python3 - "$RUNNER_TEMP/broker203-evidence" <<'PY'
+          import hashlib,json,os,pathlib,shutil,subprocess,sys
+          output=pathlib.Path(sys.argv[1])
+          def sha(p): return hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+          files=[]
+          for row in subprocess.check_output(['git','ls-files','--stage'],text=True).splitlines():
+              metadata,name=row.split('\t',1)
+              mode,blob,stage=metadata.split()
+              if mode=='120000' or stage!='0': raise SystemExit('Redirected/conflicted source')
+              files.append({'path':name,'blob':blob,'sha256':sha(name)})
+          tools=[]
+          for name in ('go','python3','bash','git','curl','tar','patch','sha256sum'):
+              selected=shutil.which(name) if name=='go' else shutil.which(name,path='/usr/bin:/bin')
+              path=pathlib.Path(selected).resolve()
+              tools.append({'name':name,'phase':'scanner' if name=='go' else 'producer','path':str(path),'sha256':sha(path)})
+          python=pathlib.Path(sys.executable).resolve()
+          tools.append({'name':'input-recorder-python','path':str(python),'sha256':sha(python)})
+          doc={'candidateSHA':os.environ['EXPECTED_SHA'],'candidateVersion':os.environ['CANDIDATE_VERSION'],'sourceTree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'source':files,'tools':tools,'pythonVersion':sys.version,'goVersion':subprocess.check_output(['go','version'],text=True).strip(),'sourceArchiveSHA256':sha(output/'source.tar'),'claim':'Partial compatibility producer only; native16, supported native comparisons, complete package inventory and owner receipt remain required.'}
+          (output/'inputs.json').write_text(json.dumps(doc,indent=2)+'\n')
+          PY
+
+      - name: Build fresh owned compatibility binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP/broker203-home" TMPDIR="$RUNNER_TEMP/broker203-temp" \
+            GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+            bash scripts/build-macos11-compat.sh "$RUNNER_TEMP/broker203-compat" \
+            > "$RUNNER_TEMP/broker203-evidence/producer.stdout.log" \
+            2> "$RUNNER_TEMP/broker203-evidence/producer.stderr.log"
+
+      - name: Build original custom trust probe and compatibility archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          owned="$RUNNER_TEMP/broker203-compat"
+          env -i PATH="$owned/go/bin:/usr/bin:/bin" HOME="$RUNNER_TEMP/broker203-home" TMPDIR="$RUNNER_TEMP/broker203-temp" \
+            GOENV=off GOFLAGS= GOWORK=off GOTOOLCHAIN=local GOROOT="$owned/go" GOCACHE="$owned/cache" GOMODCACHE="$owned/modcache" \
+            GOOS=darwin GOARCH=amd64 GOAMD64=v1 CGO_ENABLED=0 \
+            go build -x -work -trimpath -ldflags=-linkmode=internal \
+            -o "$RUNNER_TEMP/broker203-evidence/custom-trust-probe" verify/macos11/go-trust-probe.go \
+            > "$RUNNER_TEMP/broker203-evidence/probe-build.stdout.log" \
+            2> "$RUNNER_TEMP/broker203-evidence/probe-build.stderr.log"
+          env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP/broker203-home" TMPDIR="$RUNNER_TEMP/broker203-temp" \
+            GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null SERVICE_LASSO_RELEASE_VERSION="$CANDIDATE_VERSION" \
+            bash scripts/package-macos11-compat.sh "$owned" \
+            > "$RUNNER_TEMP/broker203-evidence/package.stdout.log" \
+            2> "$RUNNER_TEMP/broker203-evidence/package.stderr.log"
+          cp "$owned/artifacts/provenance.json" dist/macos11-toolchain-provenance.json
+          cp "$RUNNER_TEMP/broker203-evidence/custom-trust-probe" dist/macos11-go-trust-probe-amd64
+          cp scripts/check-macos11-compat-runtime.sh "$RUNNER_TEMP/broker203-evidence/check-macos11-compat-runtime.sh"
+          python3 - "$RUNNER_TEMP/broker203-evidence" "$owned" <<'PY'
+          import hashlib,json,os,pathlib,sys
+          output,owned=map(pathlib.Path,sys.argv[1:])
+          def sha(p): return hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+          files=['secretsbroker-darwin-amd64-macos11.tar.gz','service-darwin-amd64-macos11.json','secretsbroker-darwin-amd64-macos11.cdx.json','macos11-toolchain-provenance.json','macos11-go-trust-probe-amd64']
+          probe={'candidateSHA':os.environ['EXPECTED_SHA'],'sourceSHA256':sha('verify/macos11/go-trust-probe.go'),'goSHA256':sha(owned/'go/bin/go'),'linkerSHA256':sha(owned/'go/pkg/tool/linux_amd64/link'),'producerProvenanceSHA256':sha(owned/'artifacts/provenance.json'),'binarySHA256':sha(output/'custom-trust-probe'),'buildLogSHA256':sha(output/'probe-build.stderr.log'),'command':'go build -x -work -trimpath -ldflags=-linkmode=internal -o custom-trust-probe verify/macos11/go-trust-probe.go','environment':{'GOENV':'off','GOFLAGS':'','GOWORK':'off','GOTOOLCHAIN':'local','GOROOT':str(owned/'go'),'GOCACHE':str(owned/'cache'),'GOMODCACHE':str(owned/'modcache'),'GOOS':'darwin','GOARCH':'amd64','GOAMD64':'v1','CGO_ENABLED':'0'},'packageHashes':{name:sha(pathlib.Path('dist')/name) for name in files},'extraEvidenceHashes':{'check-macos11-compat-runtime.sh':sha(output/'check-macos11-compat-runtime.sh')},'claim':'Partial five compatibility payloads; native receipt and official seven-payload/full thirteen-payload qualification absent.'}
+          (output/'probe-and-package.json').write_text(json.dumps(probe,indent=2)+'\n')
+          payloads=output/'compatibility-payloads'
+          payloads.mkdir()
+          for name in files:
+              (payloads/name).write_bytes((pathlib.Path('dist')/name).read_bytes())
+          PY
+
+      - name: Check exact Mach-O metadata and scan exact produced binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/check-compat-macho.py \
+            "$RUNNER_TEMP/broker203-compat/artifacts/secretsbroker" \
+            "$RUNNER_TEMP/broker203-compat/artifacts/secretsbroker-resolve" \
+            "$RUNNER_TEMP/broker203-evidence/custom-trust-probe" \
+            > "$RUNNER_TEMP/broker203-evidence/macho.json"
+          sh -n scripts/check-macos11-compat-runtime.sh
+          scanner_go="$(dirname "$(command -v go)")"
+          env -i PATH="$scanner_go:/usr/bin:/bin" HOME="$RUNNER_TEMP/broker203-home" TMPDIR="$RUNNER_TEMP/broker203-temp" \
+            GOENV=off GOWORK=off GOTOOLCHAIN=local GOFLAGS= CGO_ENABLED=0 \
+            GOCACHE="$RUNNER_TEMP/broker203-scanner-cache" GOMODCACHE="$RUNNER_TEMP/broker203-scanner-modules" \
+            GOPROXY=https://proxy.golang.org,direct GOSUMDB=sum.golang.org \
+            bash scripts/verify-go-binaries.sh "$RUNNER_TEMP/broker203-evidence/binary-vulnerabilities.json" \
+            "$RUNNER_TEMP/broker203-compat/artifacts/secretsbroker" \
+            "$RUNNER_TEMP/broker203-compat/artifacts/secretsbroker-resolve" \
+            "$RUNNER_TEMP/broker203-evidence/custom-trust-probe" \
+            > "$RUNNER_TEMP/broker203-evidence/scanner.stdout.log" \
+            2> "$RUNNER_TEMP/broker203-evidence/scanner.stderr.log"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Retain partial producer artifacts and original logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: compatibility-producer-partial-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/broker203-evidence
+            ${{ runner.temp }}/broker203-compat/artifacts
+            ${{ runner.temp }}/broker203-compat/linker-build.log
+            ${{ runner.temp }}/broker203-compat/secretsbroker-build.log
+            ${{ runner.temp }}/broker203-compat/secretsbroker-resolve-build.log
           if-no-files-found: error
           retention-days: 90

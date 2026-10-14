@@ -243,6 +243,10 @@ func (b *localBackend) rotateMasterKey(newMasterKey string) (keyRotateResponse, 
 }
 
 func (b *localBackend) rotateMasterKeyWithReceipt(newMasterKey string, receipt *lifecycleOperationReceipt) (keyRotateResponse, error) {
+	return b.rotateMasterKeyAndSave(newMasterKey, receipt, b.saveStore)
+}
+
+func (b *localBackend) rotateMasterKeyAndSave(newMasterKey string, receipt *lifecycleOperationReceipt, save func(localStoreFile) error) (keyRotateResponse, error) {
 	b.storeMutationMu.Lock()
 	defer b.storeMutationMu.Unlock()
 	newMasterKey = strings.TrimSpace(newMasterKey)
@@ -258,45 +262,24 @@ func (b *localBackend) rotateMasterKeyWithReceipt(newMasterKey string, receipt *
 		_ = b.audit("key_rotate", "", "degraded", "", "")
 		return keyRotateResponse{}, errBackendDegraded
 	}
-	plaintext := make(map[string]string, len(store.Secrets))
-	for ref, entry := range store.Secrets {
-		value, err := b.decrypt(entry.Payload)
-		if err != nil {
-			_ = b.audit("key_rotate", ref, "degraded", "", "")
-			return keyRotateResponse{}, errInvalidBackupKey
-		}
-		plaintext[ref] = value
-	}
-	tombstonePlaintext := make(map[string]string, len(store.Tombstones))
-	for ref, tombstone := range store.Tombstones {
-		value, err := b.decrypt(tombstone.Entry.Payload)
-		if err != nil {
-			_ = b.audit("key_rotate", ref, "degraded", "", "")
-			return keyRotateResponse{}, errInvalidBackupKey
-		}
-		tombstonePlaintext[ref] = value
-	}
 	oldKeyID := masterKeyID(b.masterKey)
-	b.masterKey = newMasterKey
-	for ref, value := range plaintext {
-		entry := store.Secrets[ref]
-		payload, err := b.encrypt(value)
+	// Stage every surviving payload under the new key without changing the live
+	// key. This includes KV history and staged/retained rotation versions.
+	if err := visitStorePayloads(&store, func(payload secretPayload) (secretPayload, error) {
+		value, err := b.decrypt(payload)
 		if err != nil {
-			_ = b.audit("key_rotate", ref, "degraded", "", "")
-			return keyRotateResponse{}, err
+			return secretPayload{}, errInvalidBackupKey
 		}
-		entry.Payload = payload
+		return encryptWithMasterKey(newMasterKey, value)
+	}); err != nil {
+		_ = b.audit("key_rotate", "", "degraded", "", "")
+		return keyRotateResponse{}, err
+	}
+	for ref, entry := range store.Secrets {
 		entry.Metadata.UpdatedAt = b.now()
 		store.Secrets[ref] = entry
 	}
-	for ref, value := range tombstonePlaintext {
-		tombstone := store.Tombstones[ref]
-		payload, err := b.encrypt(value)
-		if err != nil {
-			_ = b.audit("key_rotate", ref, "degraded", "", "")
-			return keyRotateResponse{}, err
-		}
-		tombstone.Entry.Payload = payload
+	for ref, tombstone := range store.Tombstones {
 		tombstone.Entry.Metadata.UpdatedAt = b.now()
 		store.Tombstones[ref] = tombstone
 	}
@@ -309,24 +292,70 @@ func (b *localBackend) rotateMasterKeyWithReceipt(newMasterKey string, receipt *
 		}
 		store.LifecycleOps[receipt.OperationID] = *receipt
 	}
-	if err := b.saveStore(store); err != nil {
+	if err := save(store); err != nil {
+		if privateFileWasPublished(err) {
+			b.masterKey = newMasterKey
+		}
 		_ = b.audit("key_rotate", "", "degraded", "", "")
-		return keyRotateResponse{}, errBackendDegraded
+		return keyRotateResponse{}, fmt.Errorf("%w: %w", errBackendDegraded, err)
 	}
+	b.masterKey = newMasterKey
 	_ = b.audit("key_rotate", "", "ready", "", "")
 	return keyRotateResponse{ServiceID: serviceID, APIVersion: apiVersion, Outcome: "ready", RotatedAt: b.now(), OldKeyID: oldKeyID, NewKeyID: masterKeyID(newMasterKey), StoreKeyVersion: masterKeyVersion, SecretCount: len(store.Secrets)}, nil
 }
 
 func (b *localBackend) verifyStoreDecryptable(store localStoreFile) error {
-	for _, entry := range store.Secrets {
-		if _, err := b.decrypt(entry.Payload); err != nil {
+	return visitStorePayloads(&store, func(payload secretPayload) (secretPayload, error) {
+		_, err := b.decrypt(payload)
+		return payload, err
+	})
+}
+
+func visitStorePayloads(store *localStoreFile, visit func(secretPayload) (secretPayload, error)) error {
+	entryPayloads := func(entry *secretEntry) error {
+		var err error
+		entry.Payload, err = visit(entry.Payload)
+		if err != nil {
 			return err
 		}
+		if entry.KV != nil {
+			for index := range entry.KV.Versions {
+				version := &entry.KV.Versions[index]
+				if version.Destroyed && version.Payload == (secretPayload{}) {
+					continue
+				}
+				version.Payload, err = visit(version.Payload)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	}
-	for _, tombstone := range store.Tombstones {
-		if _, err := b.decrypt(tombstone.Entry.Payload); err != nil {
+	for ref, entry := range store.Secrets {
+		if err := entryPayloads(&entry); err != nil {
 			return err
 		}
+		store.Secrets[ref] = entry
+	}
+	for ref, tombstone := range store.Tombstones {
+		if err := entryPayloads(&tombstone.Entry); err != nil {
+			return err
+		}
+		store.Tombstones[ref] = tombstone
+	}
+	for ref, ledger := range store.Rotations {
+		for _, versions := range []map[string]rotationStoredVersion{ledger.Staged, ledger.Retained} {
+			for id, version := range versions {
+				payload, err := visit(version.Payload)
+				if err != nil {
+					return err
+				}
+				version.Payload = payload
+				versions[id] = version
+			}
+		}
+		store.Rotations[ref] = ledger
 	}
 	return nil
 }

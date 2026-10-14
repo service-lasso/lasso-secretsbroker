@@ -29,3 +29,11 @@ Issue #188 remains qualification-incomplete: prior Core fixture used curated
 lesson transport plus artifact selection. The unchanged public 9c profile fails
 canonical bootstrap with 503 despite a ready native Broker. Preserve prior binary
 native16/checksum evidence and immutable releases; neither proves raw integration.
+
+- [ ] #203 SPEC-203 compatible file-grants candidate: independent review, exact artifacts and original gates; no publication/deployment.
+- [ ] #203 CAND-6: fix reviewed packaging/harness, input-binding, nonce and rotation error paths with original negative gates retained.
+- [ ] #203 CAND-7: diagnose original Windows event-retention failure with per-write error evidence; preserve original assertions.
+- [ ] #203 CAND-8: rebase official/Mac11 candidates to Go 1.26.9 and repeat original security/build/native gates with fresh inputs.
+- [ ] #203 CAND-9/10: repair Windows native path guard; prepare independently reviewed partial compatibility producer evidence in hosted validation.
+- [ ] #203 CAND-11: original compatibility archive/custom probe; zero-probe refusal and retained native observations, with full native receipt still required.
+- [ ] CAND-12: retain exact-head official seven payloads and run original checksum inventory verification separately from incomplete compatibility qualification.

@@ -15,7 +15,7 @@ def compatibility_profile(original, tag, candidate):
     doc['artifact']['platforms']['darwin']['assetName'] = 'secretsbroker-darwin-amd64-macos11.tar.gz'
     doc['artifact']['source'].pop('channel', None)
     doc['artifact']['source']['tag'] = tag
-    doc['description'] += (' Explicit custom maintained-Go 1.26.8 compatibility profile; '
+    doc['description'] += (' Explicit custom maintained-Go 1.26.9 compatibility profile; '
                            'select only on Intel macOS 11. Core-managed authenticated native IPC; '
                            'select the default manifest for ARM64.')
     environment = doc['execconfig']['env']

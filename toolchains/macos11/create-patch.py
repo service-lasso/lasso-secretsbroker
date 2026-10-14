@@ -3,7 +3,7 @@
 import hashlib, json, pathlib, sys, tarfile, difflib
 
 root, source_archive, destination = map(pathlib.Path, sys.argv[1:])
-if hashlib.sha256(source_archive.read_bytes()).hexdigest() != "4e39b98e42f946fa05ac8bc5b71877df97dbdb7cbb1a777b541667ad7117fd2e":
+if hashlib.sha256(source_archive.read_bytes()).hexdigest() != "9735d7dcdb65b35d3fa577f04064737c03b89cf1a2b71e6e69fe2f3c6f9fd4ca":
     raise SystemExit("Official source archive mismatch")
 changes = {}
 paths = ["src/crypto/x509/internal/macos/security.go", "src/crypto/x509/internal/macos/security.s", "src/crypto/x509/root_darwin.go", "src/cmd/link/internal/ld/macho.go"]
@@ -70,5 +70,5 @@ for path, updated in changes.items():
     manifest[path] = {"before": hashlib.sha256(original).hexdigest(), "after": hashlib.sha256(updated.encode()).hexdigest()}
     patch.extend(difflib.unified_diff(original.decode().splitlines(True), updated.splitlines(True), "a/" + path, "b/" + path))
 destination.mkdir(parents=True, exist_ok=True)
-(destination / "go1.26.8.patch").write_text("".join(patch))
-(destination / "source-hashes.json").write_text(json.dumps(manifest, indent=2) + "\n")
+(destination / "go1.26.9.patch").write_text("".join(patch), encoding="utf-8", newline="\n")
+(destination / "source-hashes.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")

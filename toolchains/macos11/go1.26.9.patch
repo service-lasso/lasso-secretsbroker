@@ -1,0 +1,81 @@
+--- a/src/crypto/x509/internal/macos/security.go
++++ b/src/crypto/x509/internal/macos/security.go
+@@ -135,13 +135,22 @@
+ }
+ func x509_SecCertificateCopyData_trampoline()
+ 
+-//go:cgo_import_dynamic x509_SecTrustCopyCertificateChain SecTrustCopyCertificateChain "/System/Library/Frameworks/Security.framework/Versions/A/Security"
++//go:cgo_import_dynamic x509_SecTrustGetCertificateCount SecTrustGetCertificateCount "/System/Library/Frameworks/Security.framework/Versions/A/Security"
+ 
+-func SecTrustCopyCertificateChain(trustObj CFRef) (CFRef, error) {
+-	ret := syscall(abi.FuncPCABI0(x509_SecTrustCopyCertificateChain_trampoline), uintptr(trustObj), 0, 0, 0, 0, 0)
++func SecTrustGetCertificateCount(trustObj CFRef) int {
++	return int(syscall(abi.FuncPCABI0(x509_SecTrustGetCertificateCount_trampoline), uintptr(trustObj), 0, 0, 0, 0, 0))
++}
++func x509_SecTrustGetCertificateCount_trampoline()
++
++//go:cgo_import_dynamic x509_SecTrustGetCertificateAtIndex SecTrustGetCertificateAtIndex "/System/Library/Frameworks/Security.framework/Versions/A/Security"
++
++// SecTrustGetCertificateAtIndex returns a borrowed reference. The caller must
++// evaluate its private trust object first and copy DER before releasing it.
++func SecTrustGetCertificateAtIndex(trustObj CFRef, i int) (CFRef, error) {
++	ret := syscall(abi.FuncPCABI0(x509_SecTrustGetCertificateAtIndex_trampoline), uintptr(trustObj), uintptr(i), 0, 0, 0, 0)
+ 	if ret == 0 {
+-		return 0, OSStatus{"SecTrustCopyCertificateChain", int32(ret)}
++		return 0, errors.New("x509: invalid borrowed certificate object")
+ 	}
+ 	return CFRef(ret), nil
+ }
+-func x509_SecTrustCopyCertificateChain_trampoline()
++func x509_SecTrustGetCertificateAtIndex_trampoline()
+--- a/src/crypto/x509/internal/macos/security.s
++++ b/src/crypto/x509/internal/macos/security.s
+@@ -23,5 +23,7 @@
+ 	JMP x509_SecTrustEvaluateWithError(SB)
+ TEXT ·x509_SecCertificateCopyData_trampoline(SB),NOSPLIT,$0-0
+ 	JMP x509_SecCertificateCopyData(SB)
+-TEXT ·x509_SecTrustCopyCertificateChain_trampoline(SB),NOSPLIT,$0-0
+-	JMP x509_SecTrustCopyCertificateChain(SB)
++TEXT ·x509_SecTrustGetCertificateCount_trampoline(SB),NOSPLIT,$0-0
++	JMP x509_SecTrustGetCertificateCount(SB)
++TEXT ·x509_SecTrustGetCertificateAtIndex_trampoline(SB),NOSPLIT,$0-0
++	JMP x509_SecTrustGetCertificateAtIndex(SB)
+--- a/src/crypto/x509/root_darwin.go
++++ b/src/crypto/x509/root_darwin.go
+@@ -73,13 +73,15 @@
+ 	}
+ 
+ 	chain := [][]*Certificate{{}}
+-	chainRef, err := macos.SecTrustCopyCertificateChain(trustObj)
+-	if err != nil {
+-		return nil, err
+-	}
+-	defer macos.CFRelease(chainRef)
+-	for i := 0; i < macos.CFArrayGetCount(chainRef); i++ {
+-		certRef := macos.CFArrayGetValueAtIndex(chainRef, i)
++	// This trust object is private to this invocation and has been evaluated.
++	// Chain entries are borrowed; exportCertificate copies DER while trustObj
++	// remains alive. Never release borrowed certificate references separately.
++	count := macos.SecTrustGetCertificateCount(trustObj)
++	for i := 0; i < count; i++ {
++		certRef, err := macos.SecTrustGetCertificateAtIndex(trustObj, i)
++		if err != nil {
++			return nil, err
++		}
+ 		cert, err := exportCertificate(certRef)
+ 		if err != nil {
+ 			return nil, err
+--- a/src/cmd/link/internal/ld/macho.go
++++ b/src/cmd/link/internal/ld/macho.go
+@@ -438,6 +438,11 @@
+ 				// macOS version, but we haven't tested if going higher than Go's oldest
+ 				// supported macOS version could cause new problems.
+ 				version = 12<<16 | 0<<8 | 0<<0 // 12.0.0
++				// Custom maintained-Go macOS 11 Intel profile: synthesized metadata
++				// for internal linking only; no external SDK version is asserted.
++				if ctxt.Arch.Family == sys.AMD64 {
++					version = 11 << 16 // minOS and synthetic SDK 11.0.0
++				}
+ 			}
+ 			ml := newMachoLoad(ctxt.Arch, imacho.LC_BUILD_VERSION, 4)
+ 			ml.data[0] = uint32(machoPlatform)
