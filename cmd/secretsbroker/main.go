@@ -248,6 +248,9 @@ func defaultCapabilities() CapabilitiesResponse {
 			"POST /v1/secrets",
 			"POST /v1/writeback",
 			"POST /v1/resolve",
+			"POST /v1/file-grants",
+			"POST /v1/file-grants/revoke",
+			"GET /v1/file-grants/status",
 			"GET|POST|PATCH /v1/kv/data/{path}",
 			"GET /v1/kv/metadata/{path}",
 			"POST /v1/kv/delete/{path}",
@@ -290,6 +293,7 @@ func defaultCapabilities() CapabilitiesResponse {
 		},
 		Operations: defaultOperationManifest(),
 		Features: []string{
+			"ram-webdav-secret-files",
 			"liveness",
 			"readiness",
 			"status",
@@ -459,6 +463,11 @@ func serve(args []string) error {
 		return err
 	}
 	defer cleanup()
+	closeRAMFiles, err := backend.startRAMWebDAV()
+	if err != nil {
+		return err
+	}
+	defer closeRAMFiles()
 
 	server := &http.Server{
 		Handler:           newHandler(stateView, backend, localAPISecurity{token: *apiToken}),
@@ -541,6 +550,7 @@ func newHandler(state runtimeState, backend *localBackend, security localAPISecu
 			security.audit = backend.audit
 		}
 		registerLocalStoreHandlers(mux, backend, security)
+		registerRAMFileHandlers(mux, backend, security)
 		registerKVHandlers(mux, backend, security)
 		registerSourceRegistryHandlers(mux, backend)
 		registerSecretsManagementHandlers(mux, backend, security)

@@ -1,13 +1,17 @@
 # Packaging
 
+## Canonical operator guidance
+
+Start with [docs/service-authoring/overview.md](https://github.com/service-lasso/service-lasso/blob/develop/docs/service-authoring/overview.md) and [docs/service-authoring/05-validate-release.md](https://github.com/service-lasso/service-lasso/blob/develop/docs/service-authoring/05-validate-release.md) for the shared Service Lasso reader journey. This page retains Broker-owned command, API and security contracts; follow those contracts when configuring this component. Migration: [Broker #182](https://github.com/service-lasso/lasso-secretsbroker/issues/182), [Core #1420](https://github.com/service-lasso/service-lasso/issues/1420), source reviewed at `fc6fc7b481dc8f9b6657a5d397a73b4a88384e2b`. Source documentation does not prove installed-release, provider or platform acceptance.
+
 Reference packaging scripts:
 - `scripts/package.ps1`
 - `scripts/package.sh`
 
-Current first-pass direction:
-- package the minimal sample service into a release artifact under `dist/`
-- include `service.json`, runtime payload, and config
-- use the produced artifact as the thing later consumed by the shared harness
+Current Broker payload (the packaging scripts are authoritative):
+- build `secretsbroker` and `secretsbroker-resolve` into platform archives under `dist/`
+- include `service.json`, both binaries, `config/` and `sbom.cdx.json`; emit a companion CycloneDX file under `dist/`
+- Windows uses a ZIP; Linux amd64 and universal macOS use tar.gz. macOS builds amd64 and arm64 binaries and verifies both with `lipo` before archiving. Local packaging creates artifacts and does not publish a release.
 
 ## App Artifact Modes
 

@@ -149,3 +149,163 @@ func mutateChecksumLines(t *testing.T, dir string, mutate func([]string) []strin
 		t.Fatal(err)
 	}
 }
+
+func TestCompatibilityInventory(t *testing.T) {
+	dir := createCompatibilityFixture(t)
+	if err := run("write-compat", dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := run("verify-compat", dir); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, checksumManifestName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(strings.Split(strings.TrimSpace(string(data)), "\n")); got != 13 {
+		t.Fatalf("got %d rows, want 13", got)
+	}
+	// Ordinary mode detects the compatibility set and cannot silently omit it.
+	if err := run("verify", dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCompatibilityInventoryRejectsInvalidEvidence(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*testing.T, string)
+	}{
+		{"missing compatibility row", func(t *testing.T, d string) {
+			mutateChecksumLines(t, d, func(lines []string) []string { return lines[1:] })
+		}},
+		{"duplicate", func(t *testing.T, d string) {
+			mutateChecksumLines(t, d, func(lines []string) []string { return append(lines, lines[0]) })
+		}},
+		{"unexpected row", func(t *testing.T, d string) {
+			mutateChecksumLines(t, d, func(lines []string) []string { return append(lines, strings.Repeat("0", 64)+"  unexpected") })
+		}},
+		{"path row", func(t *testing.T, d string) {
+			mutateChecksumLines(t, d, func(lines []string) []string { lines[0] = strings.Repeat("0", 64) + "  ../service.json"; return lines })
+		}},
+		{"unexpected file", func(t *testing.T, d string) {
+			if err := os.WriteFile(filepath.Join(d, "unexpected"), []byte("x"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	}
+	for _, name := range compatibilityAssetNames {
+		asset := name
+		tests = append(tests, struct {
+			name   string
+			mutate func(*testing.T, string)
+		}{"tampered " + asset, func(t *testing.T, d string) {
+			if err := os.WriteFile(filepath.Join(d, asset), []byte("tampered"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}})
+		tests = append(tests, struct {
+			name   string
+			mutate func(*testing.T, string)
+		}{"missing " + asset, func(t *testing.T, d string) {
+			if err := os.Remove(filepath.Join(d, asset)); err != nil {
+				t.Fatal(err)
+			}
+		}})
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			d := createCompatibilityFixture(t)
+			if err := run("write-compat", d); err != nil {
+				t.Fatal(err)
+			}
+			test.mutate(t, d)
+			if err := run("verify-compat", d); err == nil {
+				t.Fatal("accepted invalid compatibility evidence")
+			}
+		})
+	}
+}
+
+func TestCompatibilityInventoryCannotDowngrade(t *testing.T) {
+	for _, mode := range []string{"write-compat", "verify-compat"} {
+		t.Run(mode, func(t *testing.T) {
+			d := createReleaseFixture(t)
+			if err := run("write", d); err != nil {
+				t.Fatal(err)
+			}
+			if err := run(mode, d); err == nil {
+				t.Fatal("accepted missing entire compatibility set")
+			}
+		})
+	}
+	for _, name := range compatibilityAssetNames {
+		t.Run(name, func(t *testing.T) {
+			d := createReleaseFixture(t)
+			if err := os.WriteFile(filepath.Join(d, name), []byte("partial"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := run("write", d); err == nil {
+				t.Fatal("accepted partial compatibility inventory")
+			}
+		})
+	}
+}
+
+func TestCompatibilityInventoryRejectsSymlink(t *testing.T) {
+	for _, name := range append(append([]string(nil), compatibilityAssetNames...), checksumManifestName) {
+		t.Run(name, func(t *testing.T) {
+			d := createCompatibilityFixture(t)
+			if err := run("write-compat", d); err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(t.TempDir(), "target")
+			original, err := os.ReadFile(filepath.Join(d, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.WriteFile(target, original, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Remove(filepath.Join(d, name)); err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Symlink(target, filepath.Join(d, name)); err != nil {
+				t.Skipf("symlink unsupported: %v", err)
+			}
+			for _, mode := range []string{"write-compat", "verify-compat"} {
+				if err = run(mode, d); err == nil {
+					t.Fatalf("%s accepted symlink", mode)
+				}
+			}
+		})
+	}
+}
+
+func createCompatibilityFixture(t *testing.T) string {
+	t.Helper()
+	d := createReleaseFixture(t)
+	for _, name := range compatibilityAssetNames {
+		if err := os.WriteFile(filepath.Join(d, name), []byte("compatibility "+name), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return d
+}
+
+func TestCompatibilityRejectsOldSevenRowManifest(t *testing.T) {
+	d := createReleaseFixture(t)
+	if err := run("write", d); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range compatibilityAssetNames {
+		if err := os.WriteFile(filepath.Join(d, name), []byte("compatibility "+name), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, mode := range []string{"verify", "verify-compat"} {
+		if err := run(mode, d); err == nil {
+			t.Fatalf("%s accepted defective seven-row manifest beside thirteen payloads", mode)
+		}
+	}
+}

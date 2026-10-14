@@ -1,0 +1,18 @@
+{
+  "src/crypto/x509/internal/macos/security.go": {
+    "before": "1ba9ecfaa2764ecf63f324c8fc424b06a7191e61da1f94e30f62c78af8c4422a",
+    "after": "58bda352cb982c00a2a0d31c29aed30d4d0603faaa316efeece7d321ab93b629"
+  },
+  "src/crypto/x509/internal/macos/security.s": {
+    "before": "1bcdb3e38afa2cbb67357e402019d3302ef100b1da2e444ad5c996a5e3dabbfa",
+    "after": "60ee69bdad6ad3e5bdd101a72a3aa1e77f4e56fffe4eec4f6bdb48f141433a7b"
+  },
+  "src/crypto/x509/root_darwin.go": {
+    "before": "a8845e3fbe2a0950fd6605b62b7c600059fc61a697a830d904fcabbf4ce9fd64",
+    "after": "2565d68f3dea27fe1757aa68c477c812be2e72c1fd87f83b55bc19337b5d96e2"
+  },
+  "src/cmd/link/internal/ld/macho.go": {
+    "before": "d4e9e1711cac34e589df459b432de4fe2a74b3fbe5acdd14ec5acc73e75ca465",
+    "after": "cce086351fe20843b093e41ade56bf83b3d1317ce52517acfbec46bebf163b0c"
+  }
+}

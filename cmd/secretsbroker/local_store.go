@@ -42,6 +42,7 @@ var (
 )
 
 type localBackend struct {
+	ramFiles                 *ramFileStore
 	storePath                string
 	auditPath                string
 	eventPath                string

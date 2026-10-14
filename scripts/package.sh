@@ -40,6 +40,11 @@ mkdir -p "$STAGING"
   fi
 )
 
+if [[ "$PLATFORM" == "darwin" ]]; then
+  cp "$ROOT/scripts/check-macos-runtime.sh" "$STAGING/check-macos-runtime.sh"
+  chmod +x "$STAGING/check-macos-runtime.sh"
+fi
+
 cp -R "$ROOT/config" "$STAGING/config"
 cp "$ROOT/service.json" "$STAGING/service.json"
 (cd "$ROOT" && go run ./cmd/sbom --output "$STAGING/sbom.cdx.json" --platform "$PLATFORM")

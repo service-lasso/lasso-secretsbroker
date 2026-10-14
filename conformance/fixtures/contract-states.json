@@ -34,6 +34,9 @@
           "POST /v1/secrets",
           "POST /v1/writeback",
           "POST /v1/resolve",
+          "POST /v1/file-grants",
+          "POST /v1/file-grants/revoke",
+          "GET /v1/file-grants/status",
           "GET|POST|PATCH /v1/kv/data/{path}",
           "GET /v1/kv/metadata/{path}",
           "POST /v1/kv/delete/{path}",
@@ -75,6 +78,60 @@
           "CLI secretsbroker admin launch-lease issue"
         ],
         "operations": [
+          {
+            "operationId": "postv1_file_grants",
+            "method": "POST",
+            "path": "/v1/file-grants",
+            "maturity": "executable",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": true,
+            "auditRequired": true,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "ram_only_launch_grant",
+            "reasonCode": "implemented_executable",
+            "nextAction": "satisfy_runtime_preconditions"
+          },
+          {
+            "operationId": "postv1_file_grants_revoke",
+            "method": "POST",
+            "path": "/v1/file-grants/revoke",
+            "maturity": "executable",
+            "classification": "mutation",
+            "authenticationRequired": true,
+            "policyRequired": false,
+            "auditRequired": false,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "exact_ram_grant_revocation",
+            "reasonCode": "implemented_executable",
+            "nextAction": "satisfy_runtime_preconditions"
+          },
+          {
+            "operationId": "getv1_file_grants_status",
+            "method": "GET",
+            "path": "/v1/file-grants/status",
+            "maturity": "read-only",
+            "classification": "read",
+            "authenticationRequired": true,
+            "policyRequired": false,
+            "auditRequired": false,
+            "scope": "broker-local",
+            "providerKinds": [
+              "local-encrypted-store"
+            ],
+            "completionMode": "synchronous",
+            "limitationCode": "ram_metadata_only",
+            "reasonCode": "implemented_read_only",
+            "nextAction": "read_when_authorized"
+          },
           {
             "operationId": "gethealth",
             "method": "GET",
@@ -1339,6 +1396,7 @@
           }
         ],
         "features": [
+          "ram-webdav-secret-files",
           "liveness",
           "readiness",
           "status",
