@@ -1,5 +1,13 @@
 # Project intent
 
+## Develop dependency maintenance (#219, 2026-10-15)
+
+Recreate dependency PRs #205-#211 from current develop under active SPEC-219
+DEP-1..DEP-5, preserving current source and publication contracts. Correct both
+Dependabot target branches to develop. Owner authorizes exact-head source merges
+while excluding CI; no tests/runtime/release qualification follows. Release
+promotion, publication, deployment and Core release PR #1577 remain outside scope.
+
 ## Vault-to-file ownership (#201)
 
 Owner correction: Broker receives scoped references and file templates,
