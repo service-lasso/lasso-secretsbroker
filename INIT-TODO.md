@@ -37,3 +37,8 @@ native16/checksum evidence and immutable releases; neither proves raw integratio
 - [ ] #203 CAND-9/10: repair Windows native path guard; prepare independently reviewed partial compatibility producer evidence in hosted validation.
 - [ ] #203 CAND-11: original compatibility archive/custom probe; zero-probe refusal and retained native observations, with full native receipt still required.
 - [ ] CAND-12: retain exact-head official seven payloads and run original checksum inventory verification separately from incomplete compatibility qualification.
+# Dependency maintenance #219
+
+- [ ] SPEC-219 DEP-1..DEP-3: recreate and merge seven exact-version develop PRs.
+- [x] SPEC-219 DEP-4: correct Dependabot targeting to develop.
+- [ ] SPEC-219 DEP-5: verify all landings and record replacement links in #219.
