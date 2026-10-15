@@ -39,6 +39,6 @@ native16/checksum evidence and immutable releases; neither proves raw integratio
 - [ ] CAND-12: retain exact-head official seven payloads and run original checksum inventory verification separately from incomplete compatibility qualification.
 # Dependency maintenance #219
 
-- [ ] SPEC-219 DEP-1..DEP-3: recreate and merge seven exact-version develop PRs.
+- [x] SPEC-219 DEP-1..DEP-3 source: recreate all seven exact-version updates from develop; #220-#225 merged, final analyze update on this branch.
 - [x] SPEC-219 DEP-4: correct Dependabot targeting to develop.
-- [ ] SPEC-219 DEP-5: verify all landings and record replacement links in #219.
+- SPEC-219 DEP-5: per-update scoped diff and whitespace checks passed; issue #219 records replacement links, final develop ancestry verification and closure.
