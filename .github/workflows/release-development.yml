@@ -251,7 +251,7 @@ jobs:
         run: bash ./scripts/verify.sh
 
       - name: Upload packaged artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: secretsbroker-${{ matrix.platform }}
           path: |
@@ -262,7 +262,7 @@ jobs:
 
       - name: Upload verify artifacts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: verify-${{ matrix.platform }}
           path: output/verify
@@ -305,7 +305,7 @@ jobs:
       - name: Scan exact compatibility binaries
         shell: bash
         run: bash scripts/verify-go-binaries.sh output/verify/compat-vulnerabilities.json dist/secretsbroker-darwin-amd64-macos11/secretsbroker dist/secretsbroker-darwin-amd64-macos11/secretsbroker-resolve
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: secretsbroker-compatibility
           path: |
@@ -315,7 +315,7 @@ jobs:
             dist/macos11-toolchain-provenance.json
             dist/macos11-go-trust-probe-amd64
           if-no-files-found: error
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-trust-probes
           path: output/native-probes
@@ -360,7 +360,7 @@ jobs:
           node output/native-matrix/prepare-fixtures-r2.mjs
           node output/native-matrix/compare.mjs "$PWD/output/native-probes/official-${{ matrix.arch }}" "$PWD/output/native-probes/custom-${{ matrix.arch }}"
           go test ./...
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: native-trust-${{ matrix.arch }}
