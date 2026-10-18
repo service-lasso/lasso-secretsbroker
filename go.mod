@@ -4,7 +4,7 @@ go 1.26.9
 
 require (
 	filippo.io/age v1.3.2
-	github.com/Microsoft/go-winio v0.6.3
+	github.com/Microsoft/go-winio v0.6.4
 	golang.org/x/sys v0.49.0
 )
 
