@@ -8,7 +8,7 @@ Parent feedback: service-lasso/lasso-serviceadmin#97
 
 This roadmap classifies advanced platform capabilities raised during Secrets Broker feedback so they do not get mixed into UI or operational-control implementation issues without a security and product boundary.
 
-The broker remains local-first. Vault, OpenBao, HSMs, identity providers, GitHub sync, and other enterprise systems may sit behind or beside the stable `@secretsbroker` contract, but Service Lasso should not imply parity with those systems unless a capability is explicitly implemented, integrated, validated, and documented.
+The broker remains local-first when no OpenBao source is enabled. When an enabled OpenBao source maps a ref, resolve and the KV v2 facade prefer OpenBao; the local encrypted store remains the fallback. Vault, OpenBao, HSMs, identity providers, GitHub sync, and other enterprise systems may sit behind or beside the stable `@secretsbroker` contract, but Service Lasso should not imply parity with those systems unless a capability is explicitly implemented, integrated, validated, and documented.
 
 The focused readiness assessment for HSM support, FIPS compliance, MFA, and automated credential rotation is documented in `docs/enterprise-security-readiness.md`.
 
