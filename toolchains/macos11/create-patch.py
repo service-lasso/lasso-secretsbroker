@@ -70,5 +70,5 @@ for path, updated in changes.items():
     manifest[path] = {"before": hashlib.sha256(original).hexdigest(), "after": hashlib.sha256(updated.encode()).hexdigest()}
     patch.extend(difflib.unified_diff(original.decode().splitlines(True), updated.splitlines(True), "a/" + path, "b/" + path))
 destination.mkdir(parents=True, exist_ok=True)
-(destination / "go1.26.9.patch").write_text("".join(patch), encoding="utf-8", newline="\n")
+(destination / "go1.26.10.patch").write_text("".join(patch), encoding="utf-8", newline="\n")
 (destination / "source-hashes.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")

@@ -14,7 +14,7 @@ cp "$OWNED/artifacts/secretsbroker" "$OWNED/artifacts/secretsbroker-resolve" "$S
 cp "$OWNED/artifacts/provenance.json" "$STAGING/toolchain-provenance.json"
 cp -R "$ROOT/config" "$STAGING/config"
 python3 "$ROOT/scripts/macos11-compat-profile.py" "$ROOT/service.json" "$STAGING/service.json" "$ROOT/dist/service-darwin-amd64-macos11.json" "$RELEASE_VERSION" "$OWNED/artifacts/provenance.json"
-printf '%s\n' 'Custom maintained-Go 1.26.9 Darwin Intel compatibility variant. Private four-file upstream delta; not official Go macOS 11 support. See toolchain-provenance.json.' > "$STAGING/COMPATIBILITY.txt"
+printf '%s\n' 'Custom maintained-Go 1.26.10 Darwin Intel compatibility variant. Private four-file upstream delta; not official Go macOS 11 support. See toolchain-provenance.json.' > "$STAGING/COMPATIBILITY.txt"
 cp "$ROOT/scripts/check-macos11-compat-runtime.sh" "$STAGING/check-macos-runtime.sh"
 chmod +x "$STAGING/"secretsbroker* "$STAGING/check-macos-runtime.sh"
 cd "$ROOT"
