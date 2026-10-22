@@ -139,7 +139,21 @@ func (cfg sourceConfigFile) enabledSources() []sourceConfig {
 }
 
 func (cfg sourceConfigFile) resolve(ref string) sourceResolveResult {
+	return cfg.resolveMatching(ref, func(sourceConfig) bool { return true })
+}
+
+func (cfg sourceConfigFile) resolveKind(ref, kind string) sourceResolveResult {
+	kind = strings.ToLower(strings.TrimSpace(kind))
+	return cfg.resolveMatching(ref, func(source sourceConfig) bool {
+		return strings.ToLower(strings.TrimSpace(source.Kind)) == kind
+	})
+}
+
+func (cfg sourceConfigFile) resolveMatching(ref string, match func(sourceConfig) bool) sourceResolveResult {
 	for _, source := range cfg.enabledSources() {
+		if !match(source) {
+			continue
+		}
 		refCfg, ok := source.Refs[ref]
 		if !ok {
 			continue
@@ -151,6 +165,25 @@ func (cfg sourceConfigFile) resolve(ref string) sourceResolveResult {
 		return result
 	}
 	return sourceResolveResult{Found: false, Outcome: "missing_ref", Message: "Secret ref was not found.", Lifecycle: normalizeSourceLifecycle("missing_ref")}
+}
+
+func (b *localBackend) preferredOpenBaoSourceID() string {
+	if b == nil {
+		return ""
+	}
+	for _, source := range b.sources.enabledSources() {
+		if strings.EqualFold(strings.TrimSpace(source.Kind), "openbao") {
+			return source.SourceID
+		}
+	}
+	return ""
+}
+
+func (b *localBackend) defaultKVV2SourceID() string {
+	if preferred := b.preferredOpenBaoSourceID(); preferred != "" {
+		return preferred
+	}
+	return "local"
 }
 
 func (s sourceConfig) resolve(ref string, refCfg sourceRefConfig) sourceResolveResult {

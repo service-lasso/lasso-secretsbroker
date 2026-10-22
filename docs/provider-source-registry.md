@@ -161,9 +161,7 @@ A source can claim namespaces:
 }
 ```
 
-Resolution should choose the highest-priority enabled source whose namespace mapping matches the ref.
-
-The local store can act as default fallback with namespace `*`.
+Resolution prefers an enabled OpenBao source whose ref mapping matches the ref. If OpenBao has no mapping, the local store acts as the default fallback with namespace `*`, followed by other enabled sources by priority. An OpenBao-mapped ref that fails is returned as a failure rather than falling back to local storage.
 
 ## Reconnect/source-auth transitions
 
