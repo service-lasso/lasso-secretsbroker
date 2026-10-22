@@ -35,12 +35,13 @@ preparation and independent review (2026-10-11); publication/deployment prohibit
   the original error identity before considering a persistence repair; do not mask missing writes
   with retries, changed retention counts or changed expected event identities.
 - CAND-8: The original hosted vulnerability gate found ten reachable standard
-  library vulnerabilities fixed in Go 1.26.9. Upgrade the official candidate
-  minimum and explicit CI selection to 1.26.9 and deliberately rebase the separate
-  four-file Mac11 patch against verified 1.26.9 source/distribution bytes. Review
-  new preimages/postimages and all version/hash/provenance consumers before a fresh
-  owned rebuild. Preserve original security/native gates and historical failures;
-  no suppression, old linker reuse, publication or deployment is authorized.
+  library vulnerabilities fixed in Go 1.26.9; GO-2026-6809 subsequently requires
+  Go 1.26.10. Upgrade the official candidate minimum and explicit CI selection to
+  1.26.10 and deliberately rebase the separate four-file Mac11 patch against
+  verified 1.26.10 source/distribution bytes. Review new preimages/postimages and
+  all version/hash/provenance consumers before a fresh owned rebuild. Preserve
+  original security/native gates and historical failures; no suppression, old
+  linker reuse, publication or deployment is authorized.
 - CAND-9: Repair the Windows path-analysis finding using the existing final native
   attribute query for directory/reparse checks, preserving ancestor refusal and
   native errors. Add direct type, missing/NUL and direct/ancestor link regressions;
