@@ -1,6 +1,6 @@
 # Explicit maintained-Go Intel macOS 11 variant
 
-This is a custom compatibility variant based on maintained official Go 1.26.9.
+This is a custom compatibility variant based on maintained official Go 1.26.10.
 It restores evaluated native certificate-chain enumeration through borrowed legacy
 Apple references and sets synthesized internal Intel minOS/SDK metadata to 11/11.
 It does not claim official Go support for macOS 11. ARM64 remains minOS 12, and

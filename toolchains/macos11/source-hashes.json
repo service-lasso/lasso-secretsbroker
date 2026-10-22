@@ -8,8 +8,8 @@
     "after": "60ee69bdad6ad3e5bdd101a72a3aa1e77f4e56fffe4eec4f6bdb48f141433a7b"
   },
   "src/crypto/x509/root_darwin.go": {
-    "before": "a8845e3fbe2a0950fd6605b62b7c600059fc61a697a830d904fcabbf4ce9fd64",
-    "after": "2565d68f3dea27fe1757aa68c477c812be2e72c1fd87f83b55bc19337b5d96e2"
+    "before": "b6d9c56fffd642198a684b14c814b44a7c8c4a63d13db4d7606a8d62aee66c37",
+    "after": "9d8c551238ea74ef2a75db779042a827df0f3bc446e5b3b614e97f5be77cd71b"
   },
   "src/cmd/link/internal/ld/macho.go": {
     "before": "d4e9e1711cac34e589df459b432de4fe2a74b3fbe5acdd14ec5acc73e75ca465",
