@@ -140,7 +140,7 @@ func (b *localBackend) serveKVData(w http.ResponseWriter, r *http.Request, secur
 	if !security.require(w, r) {
 		return
 	}
-	path, sourceID, mount, err := parseKVRequest(r, "/v1/kv/data/")
+	path, sourceID, mount, err := parseKVRequest(r, "/v1/kv/data/", b.defaultKVV2SourceID())
 	if err != nil {
 		writeKVErrors(w, http.StatusBadRequest, err.Error())
 		return
@@ -199,7 +199,7 @@ func (b *localBackend) serveKVMetadata(w http.ResponseWriter, r *http.Request, s
 	if !security.require(w, r) {
 		return
 	}
-	path, sourceID, mount, err := parseKVRequest(r, "/v1/kv/metadata/")
+	path, sourceID, mount, err := parseKVRequest(r, "/v1/kv/metadata/", b.defaultKVV2SourceID())
 	if err != nil {
 		writeKVErrors(w, http.StatusBadRequest, err.Error())
 		return
@@ -254,7 +254,7 @@ func (b *localBackend) serveKVDelete(w http.ResponseWriter, r *http.Request, sec
 		op = "undelete"
 		auditName = "kv-undelete"
 	}
-	path, sourceID, mount, err := parseKVRequest(r, prefix)
+	path, sourceID, mount, err := parseKVRequest(r, prefix, b.defaultKVV2SourceID())
 	if err != nil {
 		writeKVErrors(w, http.StatusBadRequest, err.Error())
 		return
@@ -672,7 +672,7 @@ func kvMetadataFromRecord(record kvVersionRecord) kvVersionMetadata {
 	}
 }
 
-func parseKVRequest(r *http.Request, prefix string) (path, sourceID, mount string, err error) {
+func parseKVRequest(r *http.Request, prefix, defaultSourceID string) (path, sourceID, mount string, err error) {
 	raw := strings.TrimPrefix(r.URL.Path, strings.TrimSuffix(prefix, "/"))
 	path = strings.Trim(raw, "/")
 	if strings.Contains(path, "{path}") {
@@ -692,6 +692,9 @@ func parseKVRequest(r *http.Request, prefix string) (path, sourceID, mount strin
 		path = trimmed
 	}
 	sourceID = strings.TrimSpace(r.URL.Query().Get("source"))
+	if sourceID == "" {
+		sourceID = strings.TrimSpace(defaultSourceID)
+	}
 	switch sourceID {
 	case "", "local", "local-encrypted-store":
 		sourceID = "local"

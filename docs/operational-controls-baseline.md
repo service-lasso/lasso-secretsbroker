@@ -7,7 +7,7 @@ Issue: #56
 
 This baseline groups policy assignment, audit logging, telemetry, events, filtering, and lockout into one operational-control model for Secrets Broker. These controls protect the same boundary: a Service Lasso-managed service should be able to resolve only the refs it is allowed to use, and every sensitive management or runtime decision should be explainable without exposing raw secret material.
 
-The baseline is intentionally local-first. Vault, OpenBao, and other providers may provide stronger enterprise features behind the broker, but Service Lasso talks to the stable `@secretsbroker` contract.
+The baseline is intentionally local-first when no OpenBao source is enabled. When an enabled OpenBao source maps a ref, resolve and the KV v2 facade prefer OpenBao, with the local encrypted store as fallback. Vault, OpenBao, and other providers may provide stronger enterprise features behind the broker, but Service Lasso talks to the stable `@secretsbroker` contract.
 
 ## Safety rules
 
