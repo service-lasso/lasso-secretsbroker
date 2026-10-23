@@ -13,9 +13,9 @@ Service Admin / Service Lasso
         v
   @secretsbroker /v1/kv/*
         |
-        +-- local encrypted store (default, ?source=local)
+        +-- OpenBao or Vault KV v2 (preferred when an enabled openbao source exists)
         |
-        +-- OpenBao or Vault KV v2 (?source=<sourceId>&mount=secret)
+        +-- local encrypted store (fallback, ?source=local)
 ```
 
 This is not an ACL/policy engine and it does not auto-onboard env vars.
@@ -36,8 +36,10 @@ All routes require the local API token when configured.
 
 Query parameters:
 
-- `source` defaults to `local`. A configured Vault/OpenBao `sourceId` proxies
-  the request to `{address}/v1/{mount}/...` with `X-Vault-Token`.
+- `source` defaults to the highest-priority enabled `openbao` source. If no
+  OpenBao source is enabled it defaults to `local`. Pass `?source=local` to
+  force the local encrypted store. A configured Vault/OpenBao `sourceId`
+  proxies the request to `{address}/v1/{mount}/...` with `X-Vault-Token`.
 - `mount` defaults to `secret`, or the source `mount` field when set.
 - `version` selects a historic version on GET data.
 - `list=true` lists immediate child keys only.

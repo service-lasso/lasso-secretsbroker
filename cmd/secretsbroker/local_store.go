@@ -904,29 +904,38 @@ func (b *localBackend) resolve(req resolveRequest) resolveResponse {
 			result.Outcome = "degraded"
 			result.Message = "Local store could not be read."
 		default:
-			entry, ok := store.Secrets[ref]
-			if !ok {
-				sourceResult := b.sources.resolve(ref)
-				if sourceResult.Found {
-					result.Outcome = sourceResult.Outcome
-					result.Message = sourceResult.Message
-					_ = b.auditSourceLifecycle(ref, sourceResult, req.ServiceID, req.RequestID)
-					if sourceResult.Outcome == "ready" {
-						result.Value = sourceResult.Value
-						result.Metadata = &SecretMetadata{SourceID: sourceResult.SourceID, Version: "source"}
+			// An enabled OpenBao source is the preferred secrets source. Only
+			// fall back to the local encrypted store when OpenBao has no
+			// mapping for this ref.
+			sourceResult := b.sources.resolveKind(ref, "openbao")
+			fromSource := sourceResult.Found
+			if !fromSource {
+				if entry, ok := store.Secrets[ref]; ok {
+					if value, err := b.decrypt(entry.Payload); err != nil {
+						result.Outcome = "degraded"
+						result.Message = "Secret payload could not be decrypted."
+					} else {
+						metadata := entry.Metadata
+						result.Outcome = "ready"
+						result.Value = value
+						result.Metadata = &metadata
 					}
 				} else {
-					result.Outcome = "missing_ref"
-					result.Message = "Secret ref was not found."
+					sourceResult = b.sources.resolve(ref)
+					fromSource = sourceResult.Found
 				}
-			} else if value, err := b.decrypt(entry.Payload); err != nil {
-				result.Outcome = "degraded"
-				result.Message = "Secret payload could not be decrypted."
-			} else {
-				metadata := entry.Metadata
-				result.Outcome = "ready"
-				result.Value = value
-				result.Metadata = &metadata
+			}
+			if fromSource {
+				result.Outcome = sourceResult.Outcome
+				result.Message = sourceResult.Message
+				_ = b.auditSourceLifecycle(ref, sourceResult, req.ServiceID, req.RequestID)
+				if sourceResult.Outcome == "ready" {
+					result.Value = sourceResult.Value
+					result.Metadata = &SecretMetadata{SourceID: sourceResult.SourceID, Version: "source"}
+				}
+			} else if result.Outcome == "" {
+				result.Outcome = "missing_ref"
+				result.Message = "Secret ref was not found."
 			}
 		}
 		_ = b.audit("resolve", ref, result.Outcome, req.ServiceID, req.RequestID)

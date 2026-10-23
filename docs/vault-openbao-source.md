@@ -54,6 +54,18 @@ OpenBao uses the same API shape for this MVP:
 { "kind": "openbao" }
 ```
 
+## Resolution preference
+
+When an enabled `openbao` source maps a ref, `POST /v1/resolve` selects OpenBao
+before the local encrypted store. If OpenBao has no mapping for the ref, the
+local store and other configured sources remain fallback. If OpenBao has a
+mapping but is unavailable, unauthenticated, or missing the ref, resolution
+returns that failure and never silently substitutes a local value.
+
+The OpenBao source does not need to be the highest-priority source overall; it
+is consulted first. Among multiple enabled OpenBao sources, the lowest
+`priority` number wins.
+
 ## Capability and operation model
 
 Vault/OpenBao capability/status output follows the shared adapter contract in `docs/external-adapter-contract.md`:
@@ -68,9 +80,11 @@ Vault/OpenBao capability/status output follows the shared adapter contract in `d
 - General write/update, rotate/reset and policy apply on the management
   dry-run/apply routes remain local-store-only or planned.
 - Operator create/read/update/delete of secret *data* uses the OpenBao-compatible
-  KV v2 facade (`/v1/kv/*`). That facade writes the local encrypted store by
-  default and proxies the same JSON to a configured `vault` or `openbao` source
-  when `?source=<sourceId>` is set. See `docs/kv-v2.md`.
+  KV v2 facade (`/v1/kv/*`). That facade prefers the highest-priority enabled
+  `openbao` source by default, proxies the same JSON to that source, and keeps
+  the local encrypted store as the fallback. `?source=local` selects the local
+  store explicitly and `?source=<sourceId>` selects a specific source. See
+  `docs/kv-v2.md`.
 - `value-search` is intentionally not advertised for Vault/OpenBao.
 
 Service Admin must use the connection-scoped operation manifest. Vault/OpenBao
