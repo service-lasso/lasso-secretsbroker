@@ -184,7 +184,7 @@ jobs:
 
       - name: Run gosec static analysis
         shell: bash
-        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.29.0 ./...
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.28.0 ./...
 
       - name: Run Go static analysis
         shell: bash
