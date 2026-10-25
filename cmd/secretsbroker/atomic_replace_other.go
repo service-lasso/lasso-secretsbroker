@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 )
 
+func transientReplaceError(error) bool { return false }
+
 func replaceFileAtomically(source, target string) error {
 	return renamePrivateFile(source, target)
 }

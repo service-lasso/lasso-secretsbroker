@@ -5,7 +5,26 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
+
+// Seam for the bounded Windows transient-denial retry; production uses the
+// platform replacement directly.
+var replaceFileAtomicallyImpl = replaceFileAtomically
+
+const atomicReplaceAttempts = 5
+
+func replaceFileAtomicallyRetrying(source, target string) error {
+	delay := 10 * time.Millisecond
+	for attempt := 1; ; attempt++ {
+		err := replaceFileAtomicallyImpl(source, target)
+		if err == nil || attempt >= atomicReplaceAttempts || !transientReplaceError(err) {
+			return err
+		}
+		time.Sleep(delay)
+		delay *= 2
+	}
+}
 
 // A protection failure after replacement must not be mistaken for an unchanged
 // destination. Recovery callers must retain the key/wrapper for published bytes.
@@ -55,7 +74,7 @@ func writePrivateFileAtomicallyWithProtection(path string, content []byte, prote
 	if err := temp.Close(); err != nil {
 		return fmt.Errorf("atomic write close temporary file: %w", err)
 	}
-	if err := replaceFileAtomically(tempPath, path); err != nil {
+	if err := replaceFileAtomicallyRetrying(tempPath, path); err != nil {
 		return fmt.Errorf("atomic write replace destination: %w", err)
 	}
 	if err := protect(path, false); err != nil {

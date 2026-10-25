@@ -2,7 +2,21 @@
 
 package main
 
-import "golang.org/x/sys/windows"
+import (
+	"errors"
+
+	"golang.org/x/sys/windows"
+)
+
+// A scanner, indexer, or another process can briefly hold the freshly written
+// temporary file or the destination, which MoveFileEx reports as an access or
+// sharing denial. Those denials are transient; a bounded retry preserves the
+// single atomic replacement instead of failing the audit write.
+func transientReplaceError(err error) bool {
+	return errors.Is(err, windows.ERROR_ACCESS_DENIED) ||
+		errors.Is(err, windows.ERROR_SHARING_VIOLATION) ||
+		errors.Is(err, windows.ERROR_LOCK_VIOLATION)
+}
 
 func replaceFileAtomically(source, target string) error {
 	sourcePtr, err := windows.UTF16PtrFromString(source)
