@@ -5,7 +5,7 @@ go 1.26.10
 require (
 	filippo.io/age v1.3.2
 	github.com/Microsoft/go-winio v0.6.4
-	golang.org/x/sys v0.49.0
+	golang.org/x/sys v0.50.0
 )
 
 require (
